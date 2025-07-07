@@ -1,16 +1,11 @@
-import { Box, Button, Heading } from '@chakra-ui/react'
-import { useState } from 'react'
-
 function App() {
-  const [count, setCount] = useState(0)
-
   return (
-    <Box textAlign="center" mt="20">
-      <Heading color="teal.500">¡Hola desde Chakra UI!</Heading>
-      <Button mt={6} colorScheme="teal" onClick={() => setCount(count + 1)}>
-        Clics: {count}
-      </Button>
-    </Box>
+    <div className="min-h-screen flex items-center justify-center bg-gray-100">
+      <div className="text-center p-8 bg-white rounded shadow">
+        <h1 className="text-2xl font-bold text-blue-600 mb-4">¡Hola desde Tailwind!</h1>
+        <p className="text-gray-700">Este es un starter limpio de React + Tailwind + Vite.</p>
+      </div>
+    </div>
   )
 }
 
