@@ -1,4 +1,4 @@
-import { Button, Heading, Box } from '@chakra-ui/react'
+import { Box, Button, Heading } from '@chakra-ui/react'
 import { useState } from 'react'
 
 function App() {
