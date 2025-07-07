@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client'
 import App from './App'
 import { ChakraProvider, extendTheme } from '@chakra-ui/react'
 
-// Crear un tema mínimo para evitar error con _config
+// Este paso es CLAVE para evitar el error de _config
 const theme = extendTheme({})
 
 ReactDOM.createRoot(document.getElementById('root')).render(
