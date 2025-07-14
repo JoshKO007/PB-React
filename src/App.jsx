@@ -14,13 +14,13 @@ function App() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#fefcfb] text-gray-800 font-hand-drawn">
-      {/* Header con líneas irregulares */}
-      <header className="border-b-4 border-black p-6 relative">
+    <div className="min-h-screen bg-[#fdf6e3] text-gray-800 font-hand-drawn flex flex-col items-center">
+      {/* Header centrado con líneas irregulares */}
+      <header className="w-full max-w-4xl border-b-4 border-black py-6 px-4 relative text-center">
         <h1 className="text-4xl sm:text-5xl tracking-wide mb-2 hand-drawn-title">
           Arte de Luna
         </h1>
-        <nav className="mt-4 flex gap-4 flex-wrap">
+        <nav className="mt-4 flex flex-wrap justify-center gap-4">
           {menu.map((item, index) => (
             <span
               key={index}
@@ -37,7 +37,7 @@ function App() {
       </header>
 
       {/* Hero principal */}
-      <main className="px-6 py-16 text-center">
+      <main className="w-full max-w-3xl px-6 py-16 text-center">
         <h2 className="text-3xl sm:text-4xl font-semibold mb-6">
           Bienvenid@ al universo visual de Luna
         </h2>
@@ -50,7 +50,7 @@ function App() {
       </main>
 
       {/* Pie de página simple */}
-      <footer className="text-center p-6 border-t-2 border-black">
+      <footer className="w-full max-w-4xl text-center p-6 border-t-2 border-black">
         <p className="text-sm">&copy; 2025 Arte de Luna. Todos los derechos reservados.</p>
       </footer>
     </div>
