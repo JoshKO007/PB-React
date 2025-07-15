@@ -1,7 +1,7 @@
 // src/App.jsx
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import TextTransition, { presets } from 'react-text-transition';
+import { useNavigate } from "react-router-dom";
 import {
   Home,
   Image as ImageIcon,
@@ -11,7 +11,8 @@ import {
   Mail,
   LogIn,
   UserPlus,
-  Settings
+  Settings,
+  LogOut
 } from 'lucide-react';
 
 const productos = [
@@ -39,13 +40,23 @@ export default function App() {
   const [hovered, setHovered] = useState(null);
   const [index, setIndex] = useState(0);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [usuarioActivo, setUsuarioActivo] = useState(null);
+  const [cerrandoSesion, setCerrandoSesion] = useState(false);
   const userMenuTimeout = useRef(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const interval = setInterval(() => {
       setIndex((prev) => (prev + 1) % productos.length);
     }, 4000);
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const sesion = JSON.parse(localStorage.getItem('sesionActiva'));
+    if (sesion?.usuario) {
+      setUsuarioActivo(sesion);
+    }
   }, []);
 
   const handleUserMouseEnter = () => {
@@ -59,6 +70,16 @@ export default function App() {
     }, 300);
   };
 
+  const cerrarSesion = () => {
+    setCerrandoSesion(true);
+    setTimeout(() => {
+      localStorage.removeItem('sesionActiva');
+      setUsuarioActivo(null);
+      setCerrandoSesion(false);
+      navigate('/');
+    }, 5000);
+  };
+
   const menu = [
     { label: "Inicio", icon: <Home size={28} /> },
     { label: "Galería", icon: <ImageIcon size={24} /> },
@@ -70,6 +91,13 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#f9f4ef] text-[#333333] font-sans flex flex-col items-center">
+      {cerrandoSesion && (
+        <div className="fixed inset-0 z-50 bg-white/70 backdrop-blur-md flex flex-col items-center justify-center">
+          <div className="w-16 h-16 border-4 border-[#a16207] border-t-transparent rounded-full animate-spin mb-4"></div>
+          <p className="text-[#a16207] font-semibold text-lg">Cerrando sesión...</p>
+        </div>
+      )}
+
       <motion.header
         initial={{ opacity: 0, y: -30 }}
         animate={{ opacity: 1, y: 0 }}
@@ -77,24 +105,12 @@ export default function App() {
         className="w-full text-center relative px-6 py-4 border-b border-gray-300 bg-white/60 backdrop-blur-md shadow-xl rounded-b-xl"
       >
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.3, duration: 0.8 }}
-            className="flex items-center gap-4"
-          >
+          <motion.div className="flex items-center gap-4">
             <img src="/logo.png" alt="Logo" className="h-28" />
-            <motion.div
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ type: 'spring', stiffness: 200, damping: 20, delay: 0.8 }}
-              className="text-3xl font-semibold leading-tight font-serif italic"
-            >
-              <div className="leading-none">
-                <div>Cámara</div>
-                <div>descompuesta</div>
-              </div>
-            </motion.div>
+            <div className="text-3xl font-semibold leading-tight font-serif italic">
+              <div>Cámara</div>
+              <div>descompuesta</div>
+            </div>
           </motion.div>
 
           <nav className="flex flex-wrap justify-center gap-4 sm:gap-6 text-base sm:text-lg font-medium">
@@ -116,34 +132,70 @@ export default function App() {
             ))}
           </nav>
 
-          <div
-            className="relative"
-            onMouseEnter={handleUserMouseEnter}
-            onMouseLeave={handleUserMouseLeave}
-          >
-            <button className="p-3 rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md hover:shadow-lg flex items-center">
-              <User size={40} className="text-[#333333]" />
-            </button>
-            <AnimatePresence>
-              {showUserMenu && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="absolute right-0 mt-2 w-60 bg-white border border-gray-200 rounded-lg shadow-xl py-3 text-left z-50"
-                >
-                  <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
-                    <LogIn size={16} className="mr-2" /> Iniciar sesión
-                  </button>
-                  <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
-                    <UserPlus size={16} className="mr-2" /> Crear cuenta
-                  </button>
-                  <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
-                    <Settings size={16} className="mr-2" /> Configuración
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
+          <div className="flex items-center gap-4">
+            {usuarioActivo && (
+              <button
+                onClick={() => navigate('/carrito')}
+                className="p-3 rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md hover:shadow-lg flex items-center"
+                title="Carrito"
+              >
+                <ShoppingBag size={28} className="text-[#a16207]" />
+              </button>
+            )}
+            <div
+              className="relative"
+              onMouseEnter={handleUserMouseEnter}
+              onMouseLeave={handleUserMouseLeave}
+            >
+              <button className="p-3 rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md hover:shadow-lg flex items-center">
+                <User size={40} className="text-[#333333]" />
+              </button>
+              <AnimatePresence>
+                {showUserMenu && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="absolute right-0 mt-2 w-60 bg-white border border-gray-200 rounded-lg shadow-xl py-3 text-left z-50"
+                  >
+                    {usuarioActivo ? (
+                      <>
+                        <div className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-gray-800">
+                          <User size={16} /> {usuarioActivo.nombre || usuarioActivo.usuario}
+                        </div>
+                        <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                          <User size={16} className="mr-2" /> Información de cuenta
+                        </button>
+                        <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                          <Mail size={16} className="mr-2" /> Direcciones
+                        </button>
+                        <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                          <Settings size={16} className="mr-2" /> Configuración
+                        </button>
+                        <button
+                          onClick={cerrarSesion}
+                          className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100 text-red-600"
+                        >
+                          <LogOut size={16} className="mr-2" /> Cerrar sesión
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button onClick={() => navigate('/iniciar-sesion')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                          <LogIn size={16} className="mr-2" /> Iniciar sesión
+                        </button>
+                        <button onClick={() => navigate('/registro')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                          <UserPlus size={16} className="mr-2" /> Crear cuenta
+                        </button>
+                        <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                          <Settings size={16} className="mr-2" /> Configuración
+                        </button>
+                      </>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
       </motion.header>

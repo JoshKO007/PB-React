@@ -1,10 +1,20 @@
+// src/main.jsx
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import App from "./App";
+import InicioSesion from "./pages/inicioSesion";
+import Registro from "./pages/Registro"; 
 import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <App />
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<App />} />
+        <Route path="/iniciar-sesion" element={<InicioSesion />} />
+        <Route path="/registro" element={<Registro />} />
+      </Routes>
+    </BrowserRouter>
   </React.StrictMode>
 );
