@@ -108,9 +108,9 @@ export default function App() {
   initial={{ opacity: 0, y: -30 }}
   animate={{ opacity: 1, y: 0 }}
   transition={{ duration: 0.8 }}
-  className="w-full text-center relative px-6 py-4 border-b border-gray-300 bg-white/60 backdrop-blur-md shadow-xl rounded-b-xl"
+  className="w-full text-center relative z-50 px-6 py-4 border-b border-gray-300 bg-white/60 backdrop-blur-md shadow-xl rounded-b-xl"
 >
-  <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
+  <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6 relative z-50">
     <motion.div className="flex items-center gap-4">
       <img src="/logo.png" alt="Logo" className="h-28" />
       <div className="text-3xl font-semibold leading-tight font-serif italic">
@@ -139,8 +139,8 @@ export default function App() {
       ))}
     </nav>
 
-    <div className="relative flex items-center gap-2">
-      {/* Botón Usuario con menú */}
+    {/* Usuario y carrito */}
+    <div className="relative z-[999] flex items-center gap-2">
       <div
         onMouseEnter={() => {
           clearTimeout(userMenuTimeout.current);
@@ -169,7 +169,7 @@ export default function App() {
                   setShowUserMenu(false);
                 }, 300);
               }}
-              className="absolute right-0 mt-2 w-60 bg-white border border-gray-200 rounded-lg shadow-xl py-3 text-left z-50"
+              className="absolute right-0 mt-2 w-60 bg-white border border-gray-200 rounded-lg shadow-xl py-3 text-left z-[9999]"
             >
               {usuarioActivo ? (
                 <>
@@ -210,7 +210,6 @@ export default function App() {
         </AnimatePresence>
       </div>
 
-      {/* Botón Carrito */}
       {usuarioActivo && (
         <button
           onClick={() => navigate('/carrito')}
@@ -223,6 +222,7 @@ export default function App() {
     </div>
   </div>
 </motion.header>
+
 
 
 
