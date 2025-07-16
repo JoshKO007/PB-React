@@ -1,9 +1,8 @@
-// src/pages/InicioSesion.jsx
 import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LogIn, Home, Image as ImageIcon, ShoppingBag, User, Newspaper,
-  Mail, UserPlus, Settings, Eye, EyeOff,   Brush, Video
+  Mail, UserPlus, Settings, Eye, EyeOff, Brush, Video
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import sha256 from 'crypto-js/sha256';
@@ -31,12 +30,13 @@ export default function InicioSesion() {
     setSuccessMsg('');
 
     const hashedPassword = sha256(password).toString();
+    const esEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(usuario);
 
     try {
       const { data: user, error } = await supabase
         .from('usuarios')
         .select('*')
-        .eq('usuario', usuario)
+        .eq(esEmail ? 'email' : 'usuario', usuario)
         .eq('password', hashedPassword)
         .single();
 
@@ -44,8 +44,8 @@ export default function InicioSesion() {
         setErrorMsg('Usuario o contraseña incorrectos');
       } else {
         setSuccessMsg('Sesión iniciada correctamente');
-        setTimeout(() => navigate('/'), 1500);
         localStorage.setItem('sesionActiva', JSON.stringify(user));
+        setTimeout(() => navigate('/'), 1500);
       }
     } catch (error) {
       setErrorMsg('Error al conectar con el servidor');
@@ -63,117 +63,94 @@ export default function InicioSesion() {
     }, 300);
   };
 
-  const menu = [
-    {
-    label: "Inicio",
-    icon: <Home size={28} />,
-    onClick: () => navigate('registro')
-    },
-    { label: "Galería", icon: <ImageIcon size={24} /> },
-    { label: "Tienda", icon: <ShoppingBag size={24} /> },
-    { label: "Sobre la artista", icon: <User size={24} /> },
-    { label: "Prensa", icon: <Newspaper size={24} /> },
-    { label: "Contacto", icon: <Mail size={24} /> }
-  ];
-
   return (
     <div className="min-h-screen bg-[#f9f4ef] text-[#333333] font-sans flex flex-col">
       {/* Header */}
-<motion.header
-  initial={{ opacity: 0, y: -30 }}
-  animate={{ opacity: 1, y: 0 }}
-  transition={{ duration: 0.8 }}
-  className="w-full text-center relative px-6 py-4 border-b border-gray-300 bg-white/60 backdrop-blur-md shadow-xl rounded-b-xl"
->
-  <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
-    <motion.div className="flex items-center gap-4">
-      <img src="/logo.png" alt="Logo" className="h-28" />
-      <div className="text-3xl font-semibold leading-tight font-serif italic">
-        <div>Cámara</div>
-        <div>descompuesta</div>
-      </div>
-    </motion.div>
+      <motion.header
+        initial={{ opacity: 0, y: -30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8 }}
+        className="w-full text-center relative px-6 py-4 border-b border-gray-300 bg-white/60 backdrop-blur-md shadow-xl rounded-b-xl"
+      >
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
+          <motion.div className="flex items-center gap-4">
+            <img src="/logo.png" alt="Logo" className="h-28" />
+            <div className="text-3xl font-semibold leading-tight font-serif italic">
+              <div>Cámara</div>
+              <div>descompuesta</div>
+            </div>
+          </motion.div>
 
-    <nav className="flex flex-wrap justify-center gap-4 sm:gap-6 text-base sm:text-lg font-medium">
-      {[
-            {
-            label: "Inicio",
-            icon: <Home size={28} />,
-            onClick: () => navigate('/')
-            },
-        { label: "Galería", icon: <ImageIcon size={24} /> },
-        { label: "Videos", icon: <Video size={24} /> },
-        { label: "Tienda", icon: <ShoppingBag size={24} /> },
-        { label: "Restauración", icon: <Brush size={24} /> },
-        { label: "Sobre la artista", icon: <User size={24} /> },
-        { label: "Contacto", icon: <Mail size={24} /> }
-      ].map((item, index) => (
+          <nav className="flex flex-wrap justify-center gap-4 sm:gap-6 text-base sm:text-lg font-medium">
+            {[
+              { label: "Inicio", icon: <Home size={28} />, onClick: () => navigate('/') },
+              { label: "Galería", icon: <ImageIcon size={24} /> },
+              { label: "Videos", icon: <Video size={24} /> },
+              { label: "Tienda", icon: <ShoppingBag size={24} /> },
+              { label: "Restauración", icon: <Brush size={24} /> },
+              { label: "Sobre la artista", icon: <User size={24} /> },
+              { label: "Contacto", icon: <Mail size={24} /> }
+            ].map((item, index) => (
+              <motion.span
+                key={index}
+                onMouseEnter={() => setHovered(index)}
+                onMouseLeave={() => setHovered(null)}
+                onClick={item.onClick}
+                className={`flex flex-col items-center gap-1 cursor-pointer px-3 py-1 transition-all duration-300 ease-out
+                  ${hovered === index
+                    ? 'bg-white/50 backdrop-blur-sm shadow-inner rounded-md scale-105 underline underline-offset-4'
+                    : 'hover:bg-white/30 hover:backdrop-blur-sm hover:shadow-sm hover:rounded-md'
+                  }`}
+                whileHover={{ scale: 1.05 }}
+              >
+                <div className="text-[#a16207]">{item.icon}</div>
+                <span className="text-sm sm:text-base">{item.label}</span>
+              </motion.span>
+            ))}
+          </nav>
 
-        <motion.span
-            key={index}
-            onMouseEnter={() => setHovered(index)}
-            onMouseLeave={() => setHovered(null)}
-            onClick={item.onClick} // <-- aquí está la clave
-            className={`flex flex-col items-center gap-1 cursor-pointer px-3 py-1 transition-all duration-300 ease-out
-            ${hovered === index
-                ? 'bg-white/50 backdrop-blur-sm shadow-inner rounded-md scale-105 underline underline-offset-4'
-                : 'hover:bg-white/30 hover:backdrop-blur-sm hover:shadow-sm hover:rounded-md'
-            }`}
-            whileHover={{ scale: 1.05 }}
-        >
-            <div className="text-[#a16207]">{item.icon}</div>
-            <span className="text-sm sm:text-base">{item.label}</span>
-        </motion.span>
-
-
-      ))}
-    </nav>
-
-    <div className="relative">
-      <div className="flex items-center gap-2">
-        {/* Botón Usuario */}
-        <div
-          onMouseEnter={handleUserMouseEnter}
-          onMouseLeave={handleUserMouseLeave}
-        >
-          <button className="p-3 rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md hover:shadow-lg flex items-center">
-            <User size={40} className="text-[#333333]" />
-          </button>
-          <AnimatePresence>
-            {showUserMenu && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
+          <div className="relative">
+            <div className="flex items-center gap-2">
+              <div
                 onMouseEnter={handleUserMouseEnter}
                 onMouseLeave={handleUserMouseLeave}
-                className="absolute right-0 mt-2 w-60 bg-white border border-gray-200 rounded-lg shadow-xl py-3 text-left z-50"
               >
-                <button
-                  className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100"
-                  onClick={() => navigate('/iniciar-sesion')}
-                >
-                  <LogIn size={16} className="mr-2" /> Iniciar sesión
+                <button className="p-3 rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md hover:shadow-lg flex items-center">
+                  <User size={40} className="text-[#333333]" />
                 </button>
-                <button 
-                    className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100"
-                    onClick={() => navigate('/registro')}
-                >
-                  <UserPlus size={16} className="mr-2" /> Crear cuenta
-                </button>
-                <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
-                  <Settings size={16} className="mr-2" /> Configuración
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                <AnimatePresence>
+                  {showUserMenu && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      onMouseEnter={handleUserMouseEnter}
+                      onMouseLeave={handleUserMouseLeave}
+                      className="absolute right-0 mt-2 w-60 bg-white border border-gray-200 rounded-lg shadow-xl py-3 text-left z-50"
+                    >
+                      <button
+                        className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100"
+                        onClick={() => navigate('/iniciar-sesion')}
+                      >
+                        <LogIn size={16} className="mr-2" /> Iniciar sesión
+                      </button>
+                      <button
+                        className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100"
+                        onClick={() => navigate('/registro')}
+                      >
+                        <UserPlus size={16} className="mr-2" /> Crear cuenta
+                      </button>
+                      <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                        <Settings size={16} className="mr-2" /> Configuración
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
-  </div>
-</motion.header>
-
-
+      </motion.header>
 
       {/* Formulario */}
       <div className="flex-1 flex items-center justify-center px-4 py-16">
@@ -192,7 +169,7 @@ export default function InicioSesion() {
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label htmlFor="usuario" className="block text-sm font-medium text-gray-700">
-                Nombre de usuario
+                Usuario o correo electrónico
               </label>
               <input
                 type="text"
@@ -242,6 +219,15 @@ export default function InicioSesion() {
             ¿No tienes cuenta?{' '}
             <Link to="/registro" className="text-[#a16207] font-medium hover:underline">
               Crea una aquí
+            </Link>
+          </div>
+
+          <div className="text-center mt-4">
+            <Link
+              to="/recuerdo"
+              className="text-sm text-[#a16207] font-medium hover:underline"
+            >
+              ¿Olvidaste tu contraseña?
             </Link>
           </div>
         </motion.div>
