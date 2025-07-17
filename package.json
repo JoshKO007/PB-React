@@ -10,6 +10,9 @@
   "dependencies": {
     "@emailjs/browser": "^4.4.1",
     "@supabase/supabase-js": "^2.51.0",
+    "@tsparticles/all": "^3.8.1",
+    "@tsparticles/engine": "^3.8.1",
+    "@tsparticles/react": "^3.0.0",
     "crypto-js": "^4.2.0",
     "emailjs-com": "^3.2.0",
     "framer-motion": "^12.23.5",

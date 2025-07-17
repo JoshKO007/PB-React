@@ -87,7 +87,9 @@ export default function App() {
       icon: <Home size={28} />,
       onClick: () => navigate('/')
     },
-    { label: "Galería", icon: <ImageIcon size={24} /> },
+    { label: "Galería", 
+      icon: <ImageIcon size={24} /> ,
+      onClick: () => navigate('/galeria')},
     { label: "Videos", icon: <Video size={24} /> },                     
     { label: "Tienda", icon: <ShoppingBag size={24} /> },
     { label: "Restauración", icon: <Brush size={24} /> },               
