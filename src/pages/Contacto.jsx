@@ -268,70 +268,80 @@ function FormularioContacto() {
       });
   };
 
-  return (
-    <motion.form
-      ref={form}
-      onSubmit={enviarCorreo}
-      initial={{ opacity: 0, y: 30 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      transition={{ duration: 0.7 }}
-      className="bg-white/80 backdrop-blur-md border border-gray-200 p-8 rounded-2xl shadow-xl max-w-2xl mx-auto text-left relative overflow-hidden"
-    >
-      <div className="mb-6">
-        <h3 className="text-2xl sm:text-3xl font-bold text-[#a16207]">Escríbeme un mensaje</h3>
-        <p className="text-sm text-gray-600 mt-2">Responderé tan pronto como sea posible. Todos los campos son obligatorios.</p>
+return (
+  <motion.form
+    ref={form}
+    onSubmit={enviarCorreo}
+    initial={{ opacity: 0, y: 30 }}
+    whileInView={{ opacity: 1, y: 0 }}
+    viewport={{ once: true }}
+    transition={{ duration: 0.7 }}
+    className="relative z-[10] bg-white/80 backdrop-blur-md border border-gray-200 p-8 rounded-2xl shadow-xl max-w-2xl mx-auto text-left"
+  >
+    <div className="mb-6">
+      <h3 className="text-2xl sm:text-3xl font-bold text-[#a16207]">Escríbeme un mensaje</h3>
+      <p className="text-sm text-gray-600 mt-2">
+        Responderé tan pronto como sea posible. Todos los campos son obligatorios.
+      </p>
+    </div>
+
+    <div className="space-y-5">
+      <div className="flex items-center gap-3">
+        <User size={18} className="text-[#a16207]" />
+        <input
+          type="text"
+          name="from_name"
+          placeholder="Tu nombre completo"
+          required
+          className="w-full p-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#a16207]/40"
+        />
       </div>
 
-      <div className="space-y-5">
-        <div className="flex items-center gap-3">
-          <User size={18} className="text-[#a16207]" />
-          <input
-            type="text"
-            name="from_name"
-            placeholder="Tu nombre completo"
-            required
-            className="w-full p-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#a16207]/40"
-          />
-        </div>
-
-        <div className="flex items-center gap-3">
-          <Mail size={18} className="text-[#a16207]" />
-          <input
-            type="email"
-            name="reply_to"
-            placeholder="Tu correo electrónico"
-            required
-            className="w-full p-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#a16207]/40"
-          />
-        </div>
-
-        <div className="flex items-start gap-3">
-          <Brush size={18} className="text-[#a16207] mt-2" />
-          <textarea
-            name="message"
-            rows="5"
-            placeholder="Tu mensaje artístico, consulta o saludo"
-            required
-            className="w-full p-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#a16207]/40 resize-none"
-          />
-        </div>
-
-        <hr className="my-4 border-t border-gray-200" />
-
-        <button
-          type="submit"
-          disabled={cargando}
-          className="bg-[#a16207] text-white font-semibold py-2 px-6 rounded-md hover:bg-[#854c00] transition-all flex items-center justify-center gap-2 w-full"
-        >
-          {cargando ? 'Enviando...' : 'Enviar mensaje'}
-          <Send size={18} />
-        </button>
-
-        {enviado && <p className="text-green-600 font-medium mt-2 text-center">¡Mensaje enviado con éxito!</p>}
-        {error && <p className="text-red-600 font-medium mt-2 text-center">Ocurrió un error al enviar. Intenta más tarde.</p>}
+      <div className="flex items-center gap-3">
+        <Mail size={18} className="text-[#a16207]" />
+        <input
+          type="email"
+          name="reply_to"
+          placeholder="Tu correo electrónico"
+          required
+          className="w-full p-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#a16207]/40"
+        />
       </div>
 
-    </motion.form>
-  );
+      <div className="flex items-start gap-3">
+        <Brush size={18} className="text-[#a16207] mt-2" />
+        <textarea
+          name="message"
+          rows="5"
+          placeholder="Tu mensaje artístico, consulta o saludo"
+          required
+          className="w-full p-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#a16207]/40 resize-none"
+        />
+      </div>
+
+      <hr className="my-4 border-t border-gray-200" />
+
+      <button
+        type="submit"
+        disabled={cargando}
+        className="bg-[#a16207] text-white font-semibold py-2 px-6 rounded-md hover:bg-[#854c00] transition-all flex items-center justify-center gap-2 w-full"
+      >
+        {cargando ? 'Enviando...' : 'Enviar mensaje'}
+        <Send size={18} />
+      </button>
+
+      {enviado && (
+        <p className="text-green-600 font-medium mt-2 text-center">
+          ¡Mensaje enviado con éxito!
+        </p>
+      )}
+      {error && (
+        <p className="text-red-600 font-medium mt-2 text-center">
+          Ocurrió un error al enviar. Intenta más tarde.
+        </p>
+      )}
+    </div>
+  </motion.form>
+);
+
 }
