@@ -58,11 +58,12 @@ export default function Galeria() {
     utterance.lang = 'es-MX';
 
     const voces = window.speechSynthesis.getVoices();
-    const vozApple = voces.find(v => v.name.toLowerCase().includes("paulina") || v.name.toLowerCase().includes("mónica"));
-    if (vozApple) utterance.voice = vozApple;
+    const vozNatural = voces.find(v => v.lang === 'es-MX' && v.name.toLowerCase().includes('paulina'));
+    if (vozNatural) utterance.voice = vozNatural;
 
     utterance.rate = 0.9;
     utterance.pitch = 1;
+
     window.speechSynthesis.speak(utterance);
   };
 
@@ -116,7 +117,7 @@ export default function Galeria() {
       <FondoParticulas />
       <audio ref={audioRef} src="/audio/fondo.mp3" loop />
 
-      {/* Diálogo de activación del narrador */}
+      {/* Diálogo narrador */}
       <AnimatePresence>
         {mostrarDialogo && (
           <motion.div
@@ -162,7 +163,7 @@ export default function Galeria() {
         <LogOut size={22} />
       </button>
 
-      {/* Botones verticales (narrador y música) */}
+      {/* Botones verticales */}
       <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-4">
         {/* Narrador */}
         <div className="group flex flex-row-reverse items-center gap-2">
@@ -194,7 +195,7 @@ export default function Galeria() {
         </div>
       </div>
 
-      {/* Tutorial simbólico */}
+      {/* Tutorial */}
       <AnimatePresence>
         {mostrarTutorial && (
           <motion.div
@@ -203,31 +204,45 @@ export default function Galeria() {
             exit={{ opacity: 0 }}
             className="absolute bottom-8 w-full flex justify-center items-center z-40 pointer-events-none"
           >
+            {/* Flechas PC */}
             <div className="hidden md:flex gap-6 text-white text-5xl font-bold">
-              <motion.div className="bg-white/10 rounded-full px-6 py-3 border border-white/30" animate={{ y: [0, -10, 0] }} transition={{ repeat: Infinity, duration: 1.5 }}>
+              <motion.div
+                className="bg-white/10 rounded-full px-6 py-3 border border-white/30"
+                initial={{ y: -10 }}
+                animate={{ y: 0 }}
+                transition={{ duration: 1, repeat: Infinity, repeatType: "mirror" }}
+              >
                 ←
               </motion.div>
-              <motion.div className="bg-white/10 rounded-full px-6 py-3 border border-white/30" animate={{ y: [0, -10, 0] }} transition={{ repeat: Infinity, duration: 1.5, delay: 0.3 }}>
+              <motion.div
+                className="bg-white/10 rounded-full px-6 py-3 border border-white/30"
+                initial={{ y: -10 }}
+                animate={{ y: 0 }}
+                transition={{ duration: 1, repeat: Infinity, repeatType: "mirror", delay: 0.2 }}
+              >
                 →
               </motion.div>
             </div>
+            {/* Swipe móvil */}
             <motion.img
               src="/Mano.gif"
               alt="Swipe tutorial"
               className="w-20 h-20 md:hidden opacity-90"
-              animate={{ y: [0, 10, 0] }}
-              transition={{ duration: 1.5, repeat: Infinity }}
+              initial={{ y: -10 }}
+              animate={{ y: 10 }}
+              transition={{ duration: 1.2, repeat: Infinity, repeatType: "mirror" }}
             />
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Galería de obras */}
+      {/* CONTENIDO */}
       <div className="relative z-10 min-h-screen flex items-center justify-center px-4 py-20">
         <div className="max-w-6xl w-full flex flex-col md:flex-row items-center justify-between gap-12">
+          {/* Botón anterior solo visible en escritorio */}
           <button
             onClick={anterior}
-            className="text-white text-4xl md:text-5xl px-6 py-2 hover:scale-110 transition transform z-20"
+            className="hidden md:block text-white text-4xl md:text-5xl px-6 py-2 hover:scale-110 transition transform z-20"
           >
             ‹
           </button>
@@ -263,9 +278,10 @@ export default function Galeria() {
             </AnimatePresence>
           </div>
 
+          {/* Botón siguiente solo visible en escritorio */}
           <button
             onClick={siguiente}
-            className="text-white text-4xl md:text-5xl px-6 py-2 hover:scale-110 transition transform z-20"
+            className="hidden md:block text-white text-4xl md:text-5xl px-6 py-2 hover:scale-110 transition transform z-20"
           >
             ›
           </button>
