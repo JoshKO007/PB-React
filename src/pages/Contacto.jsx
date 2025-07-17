@@ -1,0 +1,338 @@
+import { useState, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from "react-router-dom";
+import {
+  Home, Image as ImageIcon, Video, ShoppingBag, Brush, User, Mail,
+  LogIn, UserPlus, Settings, LogOut, Instagram, Facebook, Twitter, Send
+} from 'lucide-react';
+import emailjs from 'emailjs-com';
+
+export default function SobreArtista() {
+  const [hovered, setHovered] = useState(null);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [usuarioActivo, setUsuarioActivo] = useState(null);
+  const [cerrandoSesion, setCerrandoSesion] = useState(false);
+  const userMenuTimeout = useRef(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const sesion = JSON.parse(localStorage.getItem('sesionActiva'));
+    if (sesion?.usuario) setUsuarioActivo(sesion);
+  }, []);
+
+  const cerrarSesion = () => {
+    setCerrandoSesion(true);
+    setTimeout(() => {
+      localStorage.removeItem('sesionActiva');
+      setUsuarioActivo(null);
+      setCerrandoSesion(false);
+      navigate('/');
+    }, 5000);
+  };
+
+  const menu = [
+    { label: "Inicio", icon: <Home size={28} />, onClick: () => navigate('/') },
+    { label: "Galería", icon: <ImageIcon size={24} />, onClick: () => navigate('/galeria') },
+    { label: "Videos", icon: <Video size={24} /> },
+    { label: "Tienda", icon: <ShoppingBag size={24} /> },
+    { label: "Restauración", icon: <Brush size={24} /> },
+    { label: "Sobre la artista", icon: <User size={24} />, onClick: () => navigate('/artista') },
+    { label: "Contacto", icon: <Mail size={24} /> }
+  ];
+
+  return (
+    <div className="min-h-screen bg-[#f9f4ef] text-[#333333] font-sans flex flex-col">
+      {cerrandoSesion && (
+        <div className="fixed inset-0 z-50 bg-white/70 backdrop-blur-md flex flex-col items-center justify-center">
+          <div className="w-16 h-16 border-4 border-[#a16207] border-t-transparent rounded-full animate-spin mb-4"></div>
+          <p className="text-[#a16207] font-semibold text-lg">Cerrando sesión...</p>
+        </div>
+      )}
+
+      {/* Header */}
+      <motion.header
+        initial={{ opacity: 0, y: -30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8 }}
+        className="w-full text-center relative z-50 px-6 py-4 border-b border-gray-300 bg-white/60 backdrop-blur-md shadow-xl rounded-b-xl"
+      >
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6 relative z-50">
+          <motion.div className="flex items-center gap-4">
+            <img src="/logo.png" alt="Logo" className="h-28" />
+            <div className="text-3xl font-semibold leading-tight font-serif italic">
+              <div>Cámara</div>
+              <div>descompuesta</div>
+            </div>
+          </motion.div>
+
+          <nav className="flex flex-wrap justify-center gap-4 sm:gap-6 text-base sm:text-lg font-medium">
+            {menu.map((item, index) => (
+              <motion.span
+                key={index}
+                onMouseEnter={() => setHovered(index)}
+                onMouseLeave={() => setHovered(null)}
+                onClick={item.onClick}
+                className={`flex flex-col items-center gap-1 cursor-pointer px-3 py-1 transition-all duration-300 ease-out
+                  ${hovered === index
+                    ? 'bg-white/50 backdrop-blur-sm shadow-inner rounded-md scale-105 underline underline-offset-4'
+                    : 'hover:bg-white/30 hover:backdrop-blur-sm hover:shadow-sm hover:rounded-md'
+                  }`}
+                whileHover={{ scale: 1.05 }}
+              >
+                <div className="text-[#a16207]">{item.icon}</div>
+                <span className="text-sm sm:text-base">{item.label}</span>
+              </motion.span>
+            ))}
+          </nav>
+
+          <div className="relative z-[999] flex items-center gap-2">
+            <div
+              onMouseEnter={() => {
+                clearTimeout(userMenuTimeout.current);
+                setShowUserMenu(true);
+              }}
+              onMouseLeave={() => {
+                userMenuTimeout.current = setTimeout(() => {
+                  setShowUserMenu(false);
+                }, 300);
+              }}
+              className="relative"
+            >
+              <button className="p-3 rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md hover:shadow-lg flex items-center">
+                <User size={40} className="text-[#333333]" />
+              </button>
+
+              <AnimatePresence>
+                {showUserMenu && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="absolute right-0 mt-2 w-60 bg-white border border-gray-200 rounded-lg shadow-xl py-3 text-left z-[9999]"
+                  >
+                    {usuarioActivo ? (
+                          <>
+                            <div className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-gray-800">
+                              <User size={16} /> {usuarioActivo.nombre || usuarioActivo.usuario}
+                            </div>
+                            <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                              <User size={16} className="mr-2" /> Información de cuenta
+                            </button>
+                            <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                              <Mail size={16} className="mr-2" /> Direcciones
+                            </button>
+                            <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                              <Settings size={16} className="mr-2" /> Configuración
+                            </button>
+                            <button
+                              onClick={cerrarSesion}
+                              className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100 text-red-600"
+                            >
+                              <LogOut size={16} className="mr-2" /> Cerrar sesión
+                            </button>
+                          </>
+                    ) : (
+                      <>
+                        <button onClick={() => navigate('/iniciar-sesion')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                          <LogIn size={16} className="mr-2" /> Iniciar sesión
+                        </button>
+                        <button onClick={() => navigate('/registro')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                          <UserPlus size={16} className="mr-2" /> Crear cuenta
+                        </button>
+                      </>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {usuarioActivo && (
+              <button
+                onClick={() => navigate('/carrito')}
+                className="p-2 rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md hover:shadow-lg flex items-center"
+                title="Carrito"
+              >
+                <ShoppingBag size={22} className="text-[#a16207]" />
+              </button>
+            )}
+          </div>
+        </div>
+      </motion.header>
+
+<section className="bg-[#f9f4ef] text-[#333333] py-5 px-6 relative overflow-hidden">
+  <motion.div
+    initial={{ opacity: 0, y: 50 }}
+    whileInView={{ opacity: 1, y: 0 }}
+    viewport={{ once: true }}
+    transition={{ duration: 0.8 }}
+    className="max-w-4xl mx-auto text-center"
+  >
+    {/* Encabezado y descripción */}
+    <div className="mt-8 text-center">
+      <h2 className="text-4xl sm:text-5xl font-bold mb-3 tracking-tight text-[#a16207]">
+        Ponte en contacto
+      </h2>
+      <p className="text-base text-gray-700 mb-1">
+        ¿Tienes dudas, propuestas o quieres conectar? Escríbeme o visita mis redes sociales:
+      </p>
+      <p className="text-sm text-gray-500 leading-snug">
+        Actualmente trabajando desde <span className="font-semibold text-[#a16207]">México, CDMX</span><br />
+        Disponible para colaboraciones, encargos y exposiciones en todo el país.
+      </p>
+    </div>
+
+    {/* Íconos de redes */}
+    <div className="flex justify-center items-center gap-4 text-[#a16207] mt-6 mb-4">
+      <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="p-3 rounded-full bg-white/80 hover:bg-white transition-all duration-300 shadow-md hover:shadow-lg backdrop-blur-md border border-gray-200" title="Instagram">
+        <Instagram size={22} />
+      </a>
+      <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" className="p-3 rounded-full bg-white/80 hover:bg-white transition-all duration-300 shadow-md hover:shadow-lg backdrop-blur-md border border-gray-200" title="Facebook">
+        <Facebook size={22} />
+      </a>
+      <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="p-3 rounded-full bg-white/80 hover:bg-white transition-all duration-300 shadow-md hover:shadow-lg backdrop-blur-md border border-gray-200" title="Twitter">
+        <Twitter size={22} />
+      </a>
+    </div>
+
+    {/* Formulario */}
+    <FormularioContacto />
+
+    {/* Nota de disponibilidad */}
+    <p className="text-sm text-gray-500 italic mt-4">
+      * Respondo la mayoría de los mensajes en un plazo de 24 a 48 horas hábiles.
+    </p>
+
+    {/* Fondos decorativos */}
+    <motion.div
+      initial={{ opacity: 0 }}
+      whileInView={{ opacity: 0.08 }}
+      transition={{ duration: 1.5 }}
+      className="absolute -top-10 -left-10 w-[300px] h-[300px] bg-gradient-to-br from-[#a16207] to-transparent rounded-full blur-3xl"
+    />
+    <motion.div
+      initial={{ opacity: 0 }}
+      whileInView={{ opacity: 0.08 }}
+      transition={{ duration: 1.5, delay: 0.3 }}
+      className="absolute bottom-0 right-0 w-[200px] h-[200px] bg-gradient-to-tr from-[#a16207] to-transparent rounded-full blur-2xl"
+    />
+  </motion.div>
+</section>
+
+
+<div className="mt-12 mb-20 text-center max-w-xl mx-auto">
+  <blockquote className="italic text-gray-700 text-lg border-l-4 border-[#a16207] pl-4">
+    “Cada mensaje que llega es un nuevo encuentro, una posible historia por restaurar.”
+  </blockquote>
+</div>
+
+
+      {/* Footer */}
+      <footer className="w-full py-6 border-t border-gray-300 text-center mt-auto bg-white">
+        <div className="max-w-6xl mx-auto px-6">
+          <p className="text-sm">&copy; 2025 Cámara descompuesta. Todos los derechos reservados.</p>
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+
+function FormularioContacto() {
+  const form = useRef();
+  const [enviado, setEnviado] = useState(false);
+  const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState(false);
+
+  const enviarCorreo = (e) => {
+    e.preventDefault();
+    setCargando(true);
+    setError(false);
+
+    emailjs
+      .sendForm(
+        'service_558lyos',       // Tu servicio
+        'template_ilrx0ic',      // Tu plantilla
+        form.current,
+        'IocrxeuloEX0NF9le'      // Tu Public Key
+      )
+      .then(() => {
+        setEnviado(true);
+        setCargando(false);
+        form.current.reset();
+        setTimeout(() => setEnviado(false), 5000);
+      })
+      .catch((err) => {
+        console.error('Error al enviar correo:', err);
+        setError(true);
+        setCargando(false);
+      });
+  };
+
+  return (
+    <motion.form
+      ref={form}
+      onSubmit={enviarCorreo}
+      initial={{ opacity: 0, y: 30 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.7 }}
+      className="bg-white/80 backdrop-blur-md border border-gray-200 p-8 rounded-2xl shadow-xl max-w-2xl mx-auto text-left relative overflow-hidden"
+    >
+      <div className="mb-6">
+        <h3 className="text-2xl sm:text-3xl font-bold text-[#a16207]">Escríbeme un mensaje</h3>
+        <p className="text-sm text-gray-600 mt-2">Responderé tan pronto como sea posible. Todos los campos son obligatorios.</p>
+      </div>
+
+      <div className="space-y-5">
+        <div className="flex items-center gap-3">
+          <User size={18} className="text-[#a16207]" />
+          <input
+            type="text"
+            name="from_name"
+            placeholder="Tu nombre completo"
+            required
+            className="w-full p-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#a16207]/40"
+          />
+        </div>
+
+        <div className="flex items-center gap-3">
+          <Mail size={18} className="text-[#a16207]" />
+          <input
+            type="email"
+            name="reply_to"
+            placeholder="Tu correo electrónico"
+            required
+            className="w-full p-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#a16207]/40"
+          />
+        </div>
+
+        <div className="flex items-start gap-3">
+          <Brush size={18} className="text-[#a16207] mt-2" />
+          <textarea
+            name="message"
+            rows="5"
+            placeholder="Tu mensaje artístico, consulta o saludo"
+            required
+            className="w-full p-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#a16207]/40 resize-none"
+          />
+        </div>
+
+        <hr className="my-4 border-t border-gray-200" />
+
+        <button
+          type="submit"
+          disabled={cargando}
+          className="bg-[#a16207] text-white font-semibold py-2 px-6 rounded-md hover:bg-[#854c00] transition-all flex items-center justify-center gap-2 w-full"
+        >
+          {cargando ? 'Enviando...' : 'Enviar mensaje'}
+          <Send size={18} />
+        </button>
+
+        {enviado && <p className="text-green-600 font-medium mt-2 text-center">¡Mensaje enviado con éxito!</p>}
+        {error && <p className="text-red-600 font-medium mt-2 text-center">Ocurrió un error al enviar. Intenta más tarde.</p>}
+      </div>
+
+      <div className="absolute bottom-0 left-0 w-full h-12 bg-gradient-to-r from-[#a16207]/10 via-transparent to-[#a16207]/10 pointer-events-none"></div>
+    </motion.form>
+  );
+}

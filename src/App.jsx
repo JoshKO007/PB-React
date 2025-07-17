@@ -93,8 +93,12 @@ export default function App() {
     { label: "Videos", icon: <Video size={24} /> },                     
     { label: "Tienda", icon: <ShoppingBag size={24} /> },
     { label: "Restauración", icon: <Brush size={24} /> },               
-    { label: "Sobre la artista", icon: <User size={24} /> },
-    { label: "Contacto", icon: <Mail size={24} /> }
+    { label: "Sobre la artista", 
+      icon: <User size={24} />,
+      onClick: () => navigate('/artista') }, 
+    { label: "Contacto", 
+      icon: <Mail size={24} />,
+     onClick: () => navigate('/contacto') }, 
   ];
   
   return (
