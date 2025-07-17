@@ -332,7 +332,6 @@ function FormularioContacto() {
         {error && <p className="text-red-600 font-medium mt-2 text-center">Ocurrió un error al enviar. Intenta más tarde.</p>}
       </div>
 
-      <div className="absolute bottom-0 left-0 w-full h-12 bg-gradient-to-r from-[#a16207]/10 via-transparent to-[#a16207]/10 pointer-events-none"></div>
     </motion.form>
   );
 }
