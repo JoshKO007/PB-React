@@ -351,7 +351,7 @@ export default function App() {
       {/* Footer */}
       <footer className="w-full py-6 border-t border-gray-300 text-center mt-auto">
         <div className="max-w-6xl mx-auto px-6">
-          <p className="text-sm">&copy; 2025 Cámara descompuesta. Todos los derechos reservados.</p>
+          <p className="text-sm">&copy; 2025 Arte - Restauración - Visuales. Todos los derechos reservados.</p>
         </div>
       </footer>
     </div>
