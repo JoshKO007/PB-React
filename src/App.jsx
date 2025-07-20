@@ -116,25 +116,23 @@ export default function App() {
   transition={{ duration: 0.8 }}
   className="w-full text-center relative z-50 px-6 py-4 border-b border-gray-300 bg-[#f0eae2]/80 backdrop-blur-md shadow-xl rounded-b-xl"
 >
-  <div className="max-w-7xl mx-auto w-full flex flex-col gap-4 relative z-40">
-    {/* Sección 1: Logo + Título + Usuario/Carrito */}
+  <div className="max-w-7xl mx-auto w-full flex flex-col gap-2 relative z-40">
+
+    {/* Sección superior: Logo + Título + Iconos */}
     <div className="flex justify-between items-center w-full relative">
-      {/* Logo + Título + Autor */}
+      {/* Logo + Título */}
       <div className="flex items-center gap-4">
         <img src="/logo.png" alt="Logo" className="h-16" />
-        <div className="relative">
-          <div className="text-lg sm:text-xl font-semibold font-serif italic text-[#3b4d63] tracking-wide">
-            ARTE - RESTAURACIÓN - VISUALES
-          </div>
-          <div className="absolute right-0 -bottom-5 text-sm italic text-gray-600">
-            por: Laura García
-          </div>
+         <div className="flex gap-6 text-xl sm:text-2xl font-semibold font-serif italic text-[#3b4d63] tracking-wide">
+            <span></span>
+            <span>ARTE</span>
+            <span>RESTAURACIÓN</span>
+            <span>VISUALES</span>
         </div>
       </div>
 
-      {/* Iconos: Usuario y Carrito */}
+      {/* Iconos de usuario y carrito */}
       <div className="flex items-center gap-2 pr-2">
-        {/* Usuario */}
         <div
           onMouseEnter={handleUserMouseEnter}
           onMouseLeave={handleUserMouseLeave}
@@ -193,7 +191,7 @@ export default function App() {
           </AnimatePresence>
         </div>
 
-        {/* Carrito (si hay sesión activa) */}
+        {/* Carrito */}
         {usuarioActivo && (
           <button
             onClick={() => navigate('/carrito')}
@@ -206,11 +204,18 @@ export default function App() {
       </div>
     </div>
 
-    <div className="w-full border-t border-gray-500 opacity-60" />
+
+    <div className="w-full border-t border-gray-500 opacity-70" />
+    <div className="w-full border-t-2 border-gray-500 opacity-70 mt-[2px]" />
 
 
-    {/* Sección 2: Navegación */}
-    <nav className="flex flex-wrap justify-center gap-4 sm:gap-6 text-base sm:text-lg font-medium">
+    {/* Firma de autor */}
+    <div className="text-sm italic text-gray-600 pt-1 text-right pr-1">
+      por: Laura García
+    </div>
+
+    {/* Menú de navegación */}
+    <nav className="flex flex-wrap justify-center gap-4 sm:gap-6 text-base sm:text-lg font-medium pt-2">
       {menu.map((item, index) => (
         <motion.span
           key={index}
@@ -231,6 +236,7 @@ export default function App() {
     </nav>
   </div>
 </motion.header>
+
 
 
       {/* Bienvenida */}
