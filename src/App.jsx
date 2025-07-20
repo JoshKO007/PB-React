@@ -114,17 +114,102 @@ export default function App() {
   initial={{ opacity: 0, y: -30 }}
   animate={{ opacity: 1, y: 0 }}
   transition={{ duration: 0.8 }}
-  className="w-full text-center relative z-50 px-6 py-4 border-b border-gray-300 bg-white/60 backdrop-blur-md shadow-xl rounded-b-xl"
+  className="w-full text-center relative z-50 px-6 py-4 border-b border-gray-300 bg-[#f0eae2]/80 backdrop-blur-md shadow-xl rounded-b-xl"
 >
-  <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6 relative z-50">
-    <motion.div className="flex items-center gap-4">
-      <img src="/logo.png" alt="Logo" className="h-28" />
-      <div className="text-3xl font-semibold leading-tight font-serif italic">
-        <div>Cámara</div>
-        <div>descompuesta</div>
+  <div className="max-w-7xl mx-auto w-full flex flex-col gap-4 relative z-40">
+    {/* Sección 1: Logo + Título + Usuario/Carrito */}
+    <div className="flex justify-between items-center w-full relative">
+      {/* Logo + Título + Autor */}
+      <div className="flex items-center gap-4">
+        <img src="/logo.png" alt="Logo" className="h-16" />
+        <div className="relative">
+          <div className="text-lg sm:text-xl font-semibold font-serif italic text-[#3b4d63] tracking-wide">
+            ARTE - RESTAURACIÓN - VISUALES
+          </div>
+          <div className="absolute right-0 -bottom-5 text-sm italic text-gray-600">
+            por: Laura García
+          </div>
+        </div>
       </div>
-    </motion.div>
 
+      {/* Iconos: Usuario y Carrito */}
+      <div className="flex items-center gap-2 pr-2">
+        {/* Usuario */}
+        <div
+          onMouseEnter={handleUserMouseEnter}
+          onMouseLeave={handleUserMouseLeave}
+          className="relative"
+        >
+          <button className="p-2 rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md hover:shadow-lg flex items-center">
+            <User size={28} className="text-[#333333]" />
+          </button>
+
+          <AnimatePresence>
+            {showUserMenu && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                onMouseEnter={handleUserMouseEnter}
+                onMouseLeave={handleUserMouseLeave}
+                className="absolute right-0 mt-2 w-60 bg-white border border-gray-200 rounded-lg shadow-xl py-3 text-left z-[9999]"
+              >
+                {usuarioActivo ? (
+                  <>
+                    <div className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-gray-800">
+                      <User size={16} /> {usuarioActivo.nombre || usuarioActivo.usuario}
+                    </div>
+                    <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                      <User size={16} className="mr-2" /> Información de cuenta
+                    </button>
+                    <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                      <Mail size={16} className="mr-2" /> Direcciones
+                    </button>
+                    <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                      <Settings size={16} className="mr-2" /> Configuración
+                    </button>
+                    <button
+                      onClick={cerrarSesion}
+                      className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100 text-red-600"
+                    >
+                      <LogOut size={16} className="mr-2" /> Cerrar sesión
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button onClick={() => navigate('/iniciar-sesion')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                      <LogIn size={16} className="mr-2" /> Iniciar sesión
+                    </button>
+                    <button onClick={() => navigate('/registro')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                      <UserPlus size={16} className="mr-2" /> Crear cuenta
+                    </button>
+                    <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                      <Settings size={16} className="mr-2" /> Configuración
+                    </button>
+                  </>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Carrito (si hay sesión activa) */}
+        {usuarioActivo && (
+          <button
+            onClick={() => navigate('/carrito')}
+            className="p-2 rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md hover:shadow-lg flex items-center"
+            title="Carrito"
+          >
+            <ShoppingBag size={22} className="text-[#a16207]" />
+          </button>
+        )}
+      </div>
+    </div>
+
+    <div className="w-full border-t border-gray-500 opacity-60" />
+
+
+    {/* Sección 2: Navegación */}
     <nav className="flex flex-wrap justify-center gap-4 sm:gap-6 text-base sm:text-lg font-medium">
       {menu.map((item, index) => (
         <motion.span
@@ -144,92 +229,8 @@ export default function App() {
         </motion.span>
       ))}
     </nav>
-
-    {/* Usuario y carrito */}
-    <div className="relative z-[999] flex items-center gap-2">
-      <div
-        onMouseEnter={() => {
-          clearTimeout(userMenuTimeout.current);
-          setShowUserMenu(true);
-        }}
-        onMouseLeave={() => {
-          userMenuTimeout.current = setTimeout(() => {
-            setShowUserMenu(false);
-          }, 300);
-        }}
-        className="relative"
-      >
-        <button className="p-3 rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md hover:shadow-lg flex items-center">
-          <User size={40} className="text-[#333333]" />
-        </button>
-
-        <AnimatePresence>
-          {showUserMenu && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              onMouseEnter={() => clearTimeout(userMenuTimeout.current)}
-              onMouseLeave={() => {
-                userMenuTimeout.current = setTimeout(() => {
-                  setShowUserMenu(false);
-                }, 300);
-              }}
-              className="absolute right-0 mt-2 w-60 bg-white border border-gray-200 rounded-lg shadow-xl py-3 text-left z-[9999]"
-            >
-              {usuarioActivo ? (
-                <>
-                  <div className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-gray-800">
-                    <User size={16} /> {usuarioActivo.nombre || usuarioActivo.usuario}
-                  </div>
-                  <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
-                    <User size={16} className="mr-2" /> Información de cuenta
-                  </button>
-                  <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
-                    <Mail size={16} className="mr-2" /> Direcciones
-                  </button>
-                  <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
-                    <Settings size={16} className="mr-2" /> Configuración
-                  </button>
-                  <button
-                    onClick={cerrarSesion}
-                    className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100 text-red-600"
-                  >
-                    <LogOut size={16} className="mr-2" /> Cerrar sesión
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button onClick={() => navigate('/iniciar-sesion')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
-                    <LogIn size={16} className="mr-2" /> Iniciar sesión
-                  </button>
-                  <button onClick={() => navigate('/registro')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
-                    <UserPlus size={16} className="mr-2" /> Crear cuenta
-                  </button>
-                  <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
-                    <Settings size={16} className="mr-2" /> Configuración
-                  </button>
-                </>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      {usuarioActivo && (
-        <button
-          onClick={() => navigate('/carrito')}
-          className="p-2 rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md hover:shadow-lg flex items-center"
-          title="Carrito"
-        >
-          <ShoppingBag size={22} className="text-[#a16207]" />
-        </button>
-      )}
-    </div>
   </div>
 </motion.header>
-
-
 
 
       {/* Bienvenida */}
