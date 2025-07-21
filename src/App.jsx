@@ -81,6 +81,10 @@ export default function App() {
     }, 5000);
   };
 
+  const configurar = () => {
+    navigate('/configuracion');
+  };
+
   const menu = [
     {
       label: "Inicio",
@@ -104,17 +108,16 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#f9f4ef] text-[#333333] font-sans flex flex-col items-center">
       {cerrandoSesion && (
-        <div className="fixed inset-0 z-50 bg-white/70 backdrop-blur-md flex flex-col items-center justify-center">
-          <div className="w-16 h-16 border-4 border-[#a16207] border-t-transparent rounded-full animate-spin mb-4"></div>
-          <p className="text-[#a16207] font-semibold text-lg">Cerrando sesión...</p>
+        <div className="fixed inset-0 bg-white/80 z-50 flex flex-col items-center justify-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-[#a16207]" />
+          <p className="mt-4 text-[#a16207] font-semibold">Cerrando sesión...</p>
         </div>
       )}
-
 <motion.header
   initial={{ opacity: 0, y: -30 }}
   animate={{ opacity: 1, y: 0 }}
   transition={{ duration: 0.8 }}
-  className="w-full text-center relative z-50 px-6 py-4 border-b border-gray-300 bg-[#f0eae2]/80 backdrop-blur-md shadow-xl rounded-b-xl"
+  className="w-full text-center relative z-40 px-6 py-4 border-b border-gray-300 bg-[#f0eae2]/80 backdrop-blur-md shadow-xl rounded-b-xl"
 >
   <div className="max-w-7xl mx-auto w-full flex flex-col gap-2 relative z-40">
 
@@ -163,7 +166,9 @@ export default function App() {
                     <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                       <Mail size={16} className="mr-2" /> Direcciones
                     </button>
-                    <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                    <button 
+                      onClick={configurar}
+                      className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                       <Settings size={16} className="mr-2" /> Configuración
                     </button>
                     <button

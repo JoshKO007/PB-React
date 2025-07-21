@@ -33,6 +33,8 @@ export default function Registro() {
   const [showPassword, setShowPassword] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [usuarioActivo, setUsuarioActivo] = useState(null);
+  const [cerrandoSesion, setCerrandoSesion] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -51,6 +53,16 @@ export default function Registro() {
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
+
+    const menu = [
+    { label: "Inicio", icon: <Home size={28} />, onClick: () => navigate('/') },
+    { label: "Galería", icon: <ImageIcon size={24} />, onClick: () => navigate('/galeria') },
+    { label: "Videos", icon: <Video size={24} /> },
+    { label: "Tienda", icon: <ShoppingBag size={24} /> },
+    { label: "Restauración", icon: <Brush size={24} /> },
+    { label: "Sobre la artista", icon: <User size={24} />, onClick: () => navigate('/artista') },
+    { label: "Contacto", icon: <Mail size={24} />, onClick: () => navigate('/contacto') }
+  ];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -104,18 +116,6 @@ export default function Registro() {
     }, 300);
   };
 
-  const menu = [
-    {
-    label: "Inicio",
-    icon: <Home size={28} />,
-    onClick: () => navigate('/')
-    },
-    { label: "Galería", icon: <ImageIcon size={24} /> },
-    { label: "Tienda", icon: <ShoppingBag size={24} /> },
-    { label: "Sobre la artista", icon: <User size={24} /> },
-    { label: "Prensa", icon: <Newspaper size={24} /> },
-    { label: "Contacto", icon: <Mail size={24} /> }
-  ];
 
   const renderInput = (name, placeholder, type = 'text', className = '') => (
     <div className="flex flex-col">
@@ -134,63 +134,43 @@ export default function Registro() {
   return (
     <div className="min-h-screen bg-[#f9f4ef] text-[#333333] font-sans flex flex-col">
       {/* ... Header y navegación sin cambios ... */}
+      {cerrandoSesion && (
+        <div className="fixed inset-0 bg-white/80 z-50 flex flex-col items-center justify-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-[#a16207]" />
+          <p className="mt-4 text-[#a16207] font-semibold">Cerrando sesión...</p>
+        </div>
+      )}
 
 <motion.header
   initial={{ opacity: 0, y: -30 }}
   animate={{ opacity: 1, y: 0 }}
   transition={{ duration: 0.8 }}
-  className="w-full text-center relative px-6 py-4 border-b border-gray-300 bg-white/60 backdrop-blur-md shadow-xl rounded-b-xl"
+  className="w-full text-center relative z-40 px-6 py-4 border-b border-gray-300 bg-[#f0eae2]/80 backdrop-blur-md shadow-xl rounded-b-xl"
 >
-  <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
-    <motion.div className="flex items-center gap-4">
-      <img src="/logo.png" alt="Logo" className="h-28" />
-      <div className="text-3xl font-semibold leading-tight font-serif italic">
-        <div>Cámara</div>
-        <div>descompuesta</div>
+  <div className="max-w-7xl mx-auto w-full flex flex-col gap-2 relative z-40">
+
+    {/* Sección superior: Logo + Título + Iconos */}
+    <div className="flex justify-between items-center w-full relative">
+      {/* Logo + Título */}
+      <div className="flex items-center gap-4">
+        <img src="/logo.png" alt="Logo" className="h-16" />
+         <div className="flex gap-6 text-xl sm:text-2xl font-semibold font-serif italic text-[#3b4d63] tracking-wide">
+            <span></span>
+            <span>ARTE</span>
+            <span>RESTAURACIÓN</span>
+            <span>VISUALES</span>
+        </div>
       </div>
-    </motion.div>
 
-    <nav className="flex flex-wrap justify-center gap-4 sm:gap-6 text-base sm:text-lg font-medium">
-      {[
-        {
-            label: "Inicio",
-            icon: <Home size={28} />,
-            onClick: () => navigate('/')
-            },
-        { label: "Galería", icon: <ImageIcon size={24} />, onClick: () => navigate('/galeria') },
-        { label: "Videos", icon: <Video size={24} /> },
-        { label: "Tienda", icon: <ShoppingBag size={24} /> },
-        { label: "Restauración", icon: <Brush size={24} /> },
-        { label: "Sobre la artista", icon: <User size={24} />, onClick: () => navigate('/artista') },
-        { label: "Contacto", icon: <Mail size={24} />, onClick: () => navigate('/contacto') }
-      ].map((item, index) => (
-        <motion.span
-            key={index}
-            onMouseEnter={() => setHovered(index)}
-            onMouseLeave={() => setHovered(null)}
-            onClick={item.onClick} // <-- aquí está la clave
-            className={`flex flex-col items-center gap-1 cursor-pointer px-3 py-1 transition-all duration-300 ease-out
-            ${hovered === index
-                ? 'bg-white/50 backdrop-blur-sm shadow-inner rounded-md scale-105 underline underline-offset-4'
-                : 'hover:bg-white/30 hover:backdrop-blur-sm hover:shadow-sm hover:rounded-md'
-            }`}
-            whileHover={{ scale: 1.05 }}
-        >
-            <div className="text-[#a16207]">{item.icon}</div>
-            <span className="text-sm sm:text-base">{item.label}</span>
-        </motion.span>
-      ))}
-    </nav>
-
-    <div className="relative">
-      <div className="flex items-center gap-2">
-        {/* Botón de Usuario */}
+      {/* Iconos de usuario y carrito */}
+      <div className="flex items-center gap-2 pr-2">
         <div
           onMouseEnter={handleUserMouseEnter}
           onMouseLeave={handleUserMouseLeave}
+          className="relative"
         >
-          <button className="p-3 rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md hover:shadow-lg flex items-center">
-            <User size={40} className="text-[#333333]" />
+          <button className="p-2 rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md hover:shadow-lg flex items-center">
+            <User size={28} className="text-[#333333]" />
           </button>
 
           <AnimatePresence>
@@ -201,29 +181,90 @@ export default function Registro() {
                 exit={{ opacity: 0, y: -10 }}
                 onMouseEnter={handleUserMouseEnter}
                 onMouseLeave={handleUserMouseLeave}
-                className="absolute right-0 mt-2 w-60 bg-white border border-gray-200 rounded-lg shadow-xl py-3 text-left z-50"
+                className="absolute right-0 mt-2 w-60 bg-white border border-gray-200 rounded-lg shadow-xl py-3 text-left z-[9999]"
               >
-                <button
-                  className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100"
-                  onClick={() => navigate('/iniciar-sesion')}
-                >
-                  <LogIn size={16} className="mr-2" /> Iniciar sesión
-                </button>
-                <button
-                  onClick={() => navigate('/registro')}
-                  className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100"
-                >
-                  <UserPlus size={16} className="mr-2" /> Crear cuenta
-                </button>
-                <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
-                  <Settings size={16} className="mr-2" /> Configuración
-                </button>
+                {usuarioActivo ? (
+                  <>
+                    <div className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-gray-800">
+                      <User size={16} /> {usuarioActivo.nombre || usuarioActivo.usuario}
+                    </div>
+                    <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                      <User size={16} className="mr-2" /> Información de cuenta
+                    </button>
+                    <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                      <Mail size={16} className="mr-2" /> Direcciones
+                    </button>
+                    <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                      <Settings size={16} className="mr-2" /> Configuración
+                    </button>
+                    <button
+                      onClick={cerrarSesion}
+                      className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100 text-red-600"
+                    >
+                      <LogOut size={16} className="mr-2" /> Cerrar sesión
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button onClick={() => navigate('/iniciar-sesion')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                      <LogIn size={16} className="mr-2" /> Iniciar sesión
+                    </button>
+                    <button onClick={() => navigate('/registro')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                      <UserPlus size={16} className="mr-2" /> Crear cuenta
+                    </button>
+                    <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                      <Settings size={16} className="mr-2" /> Configuración
+                    </button>
+                  </>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
         </div>
+
+        {/* Carrito */}
+        {usuarioActivo && (
+          <button
+            onClick={() => navigate('/carrito')}
+            className="p-2 rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md hover:shadow-lg flex items-center"
+            title="Carrito"
+          >
+            <ShoppingBag size={22} className="text-[#a16207]" />
+          </button>
+        )}
       </div>
     </div>
+
+
+    <div className="w-full border-t border-gray-500 opacity-70" />
+    <div className="w-full border-t-2 border-gray-500 opacity-70 mt-[2px]" />
+
+
+    {/* Firma de autor */}
+    <div className="text-sm italic text-gray-600 pt-1 text-right pr-1">
+      por: Laura García
+    </div>
+
+    {/* Menú de navegación */}
+    <nav className="flex flex-wrap justify-center gap-4 sm:gap-6 text-base sm:text-lg font-medium pt-2">
+      {menu.map((item, index) => (
+        <motion.span
+          key={index}
+          onMouseEnter={() => setHovered(index)}
+          onMouseLeave={() => setHovered(null)}
+          onClick={item.onClick}
+          className={`flex flex-col items-center gap-1 cursor-pointer px-3 py-1 transition-all duration-300 ease-out
+            ${hovered === index
+              ? 'bg-white/50 backdrop-blur-sm shadow-inner rounded-md scale-105 underline underline-offset-4'
+              : 'hover:bg-white/30 hover:backdrop-blur-sm hover:shadow-sm hover:rounded-md'
+            }`}
+          whileHover={{ scale: 1.05 }}
+        >
+          <div className="text-[#a16207]">{item.icon}</div>
+          <span className="text-sm sm:text-base">{item.label}</span>
+        </motion.span>
+      ))}
+    </nav>
   </div>
 </motion.header>
 
