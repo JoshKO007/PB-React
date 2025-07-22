@@ -10,7 +10,6 @@ import Contacto from "./pages/Contacto";
 import Recuerdo from "./pages/Recuerdo";
 import Galeria from "./pages/Galeria"; 
 import Artista from "./pages/Artista";
-import ConfiguracionUsuario from "./pages/Configuracion"; 
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
@@ -23,7 +22,6 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         <Route path="/galeria" element={<Galeria />} />
         <Route path="/artista" element={<Artista />} />
         <Route path="/contacto" element={<Contacto />} />
-        <Route path="/configuracion" element={<ConfiguracionUsuario />} />
 
       </Routes>
     </BrowserRouter>
