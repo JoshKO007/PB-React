@@ -111,19 +111,7 @@ const handleUserMouseLeave = () => {
 };
 
   useEffect(() => {
-    let sesion = null;
-      try {
-        const raw = localStorage.getItem('sesionActiva');
-        sesion = raw ? JSON.parse(raw) : null;
-      } catch (err) {
-        console.error("Error al parsear sesión:", err);
-        localStorage.removeItem('sesionActiva');
-      }
-
-    if (!usuarioActivo) {
-      return <p className="p-10 text-center text-gray-500">Cargando configuración...</p>;
-    }
-
+    const sesion = JSON.parse(localStorage.getItem('sesionActiva'));
     if (sesion?.usuario) {
       setUsuarioActivo(sesion);
       setDatos({ ...sesion, nacimiento: '', genero: '', bio: '' });
