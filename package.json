@@ -14,12 +14,14 @@
     "@tsparticles/all": "^3.8.1",
     "@tsparticles/engine": "^3.8.1",
     "@tsparticles/react": "^3.0.0",
+    "countries-states-cities": "^1.0.6",
     "country-region-data": "^3.1.0",
-    "country-state-city": "^3.0.2-beta.1",
+    "country-state-city": "^2.1.0",
     "crypto-js": "^4.2.0",
     "date-fns": "^4.1.0",
     "emailjs-com": "^3.2.0",
     "framer-motion": "^12.23.5",
+    "iso-3166-2": "^1.0.0",
     "lucide-react": "^0.525.0",
     "react": "^18.2.0",
     "react-datepicker": "^8.4.0",
@@ -28,7 +30,8 @@
     "react-router-dom": "^7.6.3",
     "react-text-transition": "^3.1.0",
     "react-wrap-balancer": "^1.1.1",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "world-countries": "^5.1.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.0.0",

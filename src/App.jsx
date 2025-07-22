@@ -169,7 +169,7 @@ export default function App() {
                       <User size={16} className="mr-2" /> Información de cuenta
                     </button>
                     <button 
-                     onClick={() => navigate('/direcciones')}
+                     onClick={() => navigate('/direccion')}
                     className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                       <Mail size={16} className="mr-2" /> Direcciones
                     </button>
