@@ -1,9 +1,29 @@
-import React, { useEffect, useState } from 'react';
-import { MapPin, Edit2, Trash2 } from 'lucide-react';
+// Archivo completo de DireccionesUsuario.jsx con motion.header incluido
+
 import { createClient } from '@supabase/supabase-js';
 import toast from 'react-hot-toast';
 import countries from 'world-countries';
 import estadosJSON from '../data/estadosPorPais.json';
+import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import 'react-datepicker/dist/react-datepicker.css';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Home,
+  Image as ImageIcon,
+  Video,
+  ShoppingBag,
+  Brush,
+  User,
+  Mail,
+  LogIn,
+  UserPlus,
+  Settings,
+  LogOut,
+  MapPin,
+  Edit2,
+  Trash2
+} from 'lucide-react';
 
 // Supabase init
 const supabase = createClient(
@@ -12,6 +32,12 @@ const supabase = createClient(
 );
 
 export default function DireccionesUsuario() {
+  const [hovered, setHovered] = useState(null);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [cerrandoSesion, setCerrandoSesion] = useState(false);
+  const [usuarioActivo, setUsuarioActivo] = useState(null);
+  const userMenuTimeout = useRef(null);
+
   const [usuarioId, setUsuarioId] = useState(null);
   const [direcciones, setDirecciones] = useState([]);
   const [nuevaDireccion, setNuevaDireccion] = useState(null);
@@ -19,6 +45,8 @@ export default function DireccionesUsuario() {
   const [paises, setPaises] = useState([]);
   const [estados, setEstados] = useState([]);
   const [telefonoUsuario, setTelefonoUsuario] = useState('');
+
+  const navigate = useNavigate();
 
   useEffect(() => {
     const sesion = JSON.parse(localStorage.getItem('sesionActiva'));
@@ -59,6 +87,47 @@ export default function DireccionesUsuario() {
 
     cargarDatos();
   }, [usuarioId]);
+
+    useEffect(() => {
+    const sesion = JSON.parse(localStorage.getItem('sesionActiva'));
+    if (sesion?.id) {
+      setUsuarioId(sesion.id);
+      setUsuarioActivo(sesion);
+    }
+  }, []);
+
+    const handleUserMouseEnter = () => {
+    clearTimeout(userMenuTimeout.current);
+    setShowUserMenu(true);
+  };
+
+  const handleUserMouseLeave = () => {
+    userMenuTimeout.current = setTimeout(() => {
+      setShowUserMenu(false);
+    }, 300);
+  };
+
+  const configurar = () => navigate('/configuracion');
+
+    const cerrarSesion = () => {
+    setCerrandoSesion(true);
+    setTimeout(() => {
+      localStorage.removeItem('sesionActiva');
+      setUsuarioActivo(null);
+      setCerrandoSesion(false);
+      navigate('/');
+    }, 5000);
+  };
+
+  const menu = [
+    { label: 'Inicio', icon: <Home size={28} />, onClick: () => navigate('/') },
+    { label: 'Galería', icon: <ImageIcon size={24} />, onClick: () => navigate('/galeria') },
+    { label: 'Videos', icon: <Video size={24} /> },
+    { label: 'Tienda', icon: <ShoppingBag size={24} /> },
+    { label: 'Restauración', icon: <Brush size={24} /> },
+    { label: 'Sobre la artista', icon: <User size={24} />, onClick: () => navigate('/artista') },
+    { label: 'Contacto', icon: <Mail size={24} />, onClick: () => navigate('/contacto') }
+  ];
 
   const cargarDirecciones = async () => {
     const { data, error } = await supabase
@@ -186,12 +255,122 @@ export default function DireccionesUsuario() {
   };
 
   if (!usuarioId) return <p className="text-center p-6 text-gray-500">Cargando usuario...</p>;
+return (
+  <div className="min-h-screen flex flex-col items-center justify-between bg-[#f9f4ef] px-4">
+    {cerrandoSesion && (
+      <div className="fixed inset-0 bg-white/80 z-50 flex flex-col items-center justify-center">
+        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-[#a16207]" />
+        <p className="mt-4 text-[#a16207] font-semibold">Cerrando sesión...</p>
+      </div>
+    )}
 
-  return (
-    <div className="p-6 max-w-4xl mx-auto bg-white border rounded-xl shadow-lg">
-      <h2 className="text-2xl font-bold mb-4 text-[#a16207]">Direcciones guardadas</h2>
+    {/* Header animado */}
+    <motion.header
+      initial={{ opacity: 0, y: -30 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.8 }}
+      className="w-full text-center relative z-40 px-6 py-4 border-b border-gray-300 bg-[#f0eae2]/80 backdrop-blur-md shadow-xl rounded-b-xl"
+    >
+      <div className="max-w-7xl mx-auto w-full flex flex-col gap-2 relative z-40">
+        <div className="flex justify-between items-center w-full relative">
+          <div className="flex items-center gap-4">
+            <img src="/logo.png" alt="Logo" className="h-16" />
+            <div className="flex gap-6 text-xl sm:text-2xl font-semibold font-serif italic text-[#3b4d63] tracking-wide">
+              <span>ARTE</span>
+              <span>RESTAURACIÓN</span>
+              <span>VISUALES</span>
+            </div>
+          </div>
 
-      {/* Lista */}
+          <div className="flex items-center gap-2 pr-2">
+            <div onMouseEnter={handleUserMouseEnter} onMouseLeave={handleUserMouseLeave} className="relative">
+              <button className="p-2 rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md hover:shadow-lg flex items-center">
+                <User size={28} className="text-[#333333]" />
+              </button>
+              <AnimatePresence>
+                {showUserMenu && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    onMouseEnter={handleUserMouseEnter}
+                    onMouseLeave={handleUserMouseLeave}
+                    className="absolute right-0 mt-2 w-60 bg-white border border-gray-200 rounded-lg shadow-xl py-3 text-left z-[9999]"
+                  >
+                    {usuarioActivo ? (
+                      <>
+                        <div className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-gray-800">
+                          <User size={16} /> {usuarioActivo.nombre || usuarioActivo.usuario}
+                        </div>
+                        <button onClick={() => navigate('/usuario')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                          <User size={16} className="mr-2" /> Información de cuenta
+                        </button>
+                        <button onClick={() => navigate('/direccion')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                          <Mail size={16} className="mr-2" /> Direcciones
+                        </button>
+                        <button onClick={configurar} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                          <Settings size={16} className="mr-2" /> Configuración
+                        </button>
+                        <button onClick={cerrarSesion} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100 text-red-600">
+                          <LogOut size={16} className="mr-2" /> Cerrar sesión
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button onClick={() => navigate('/iniciar-sesion')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                          <LogIn size={16} className="mr-2" /> Iniciar sesión
+                        </button>
+                        <button onClick={() => navigate('/registro')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                          <UserPlus size={16} className="mr-2" /> Crear cuenta
+                        </button>
+                      </>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {usuarioActivo && (
+              <button onClick={() => navigate('/carrito')} className="p-2 rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md hover:shadow-lg flex items-center" title="Carrito">
+                <ShoppingBag size={22} className="text-[#a16207]" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="w-full border-t border-gray-500 opacity-70" />
+        <div className="w-full border-t-2 border-gray-500 opacity-70 mt-[2px]" />
+
+        <div className="text-sm italic text-gray-600 pt-1 text-right pr-1">
+          por: Laura García
+        </div>
+
+        <nav className="flex flex-wrap justify-center gap-4 sm:gap-6 text-base sm:text-lg font-medium pt-2">
+          {menu.map((item, index) => (
+            <motion.span
+              key={index}
+              onMouseEnter={() => setHovered(index)}
+              onMouseLeave={() => setHovered(null)}
+              onClick={item.onClick}
+              className={`flex flex-col items-center gap-1 cursor-pointer px-3 py-1 transition-all duration-300 ease-out
+                ${hovered === index
+                  ? 'bg-white/50 backdrop-blur-sm shadow-inner rounded-md scale-105 underline underline-offset-4'
+                  : 'hover:bg-white/30 hover:backdrop-blur-sm hover:shadow-sm hover:rounded-md'}
+              `}
+              whileHover={{ scale: 1.05 }}
+            >
+              <div className="text-[#a16207]">{item.icon}</div>
+              <span className="text-sm sm:text-base">{item.label}</span>
+            </motion.span>
+          ))}
+        </nav>
+      </div>
+    </motion.header>
+
+    {/* Contenido principal */}
+    <div className="w-full max-w-4xl bg-white border rounded-xl shadow-lg p-6 flex flex-col justify-between mt-8">
+      <h2 className="text-2xl font-bold mb-6 text-[#a16207] text-center">Direcciones guardadas</h2>
+
       <div className="space-y-4 mb-8">
         {direcciones.map(dir => (
           <div key={dir.id} className="flex items-start gap-4 p-4 border border-gray-300 rounded-md bg-white shadow-sm">
@@ -215,14 +394,22 @@ export default function DireccionesUsuario() {
         ))}
       </div>
 
-      {/* Formulario */}
       {!nuevaDireccion ? (
-        <button
-          onClick={iniciarNuevaDireccion}
-          className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
-        >
-          <MapPin size={16} /> Agregar nueva dirección
-        </button>
+        <div className="flex justify-between items-center mt-8">
+          <button
+            onClick={iniciarNuevaDireccion}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+          >
+            <MapPin size={16} /> Agregar nueva dirección
+          </button>
+
+          <button
+            onClick={() => navigate('/')}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition"
+          >
+            ← Regresar al inicio
+          </button>
+        </div>
       ) : (
         <FormularioDireccion
           paises={paises}
@@ -240,7 +427,17 @@ export default function DireccionesUsuario() {
         />
       )}
     </div>
-  );
+
+    <footer className="w-full py-6 border-t border-gray-300 text-center mt-8">
+      <div className="max-w-6xl mx-auto px-6">
+        <p className="text-sm">&copy; 2025 Arte - Restauración - Visuales. Todos los derechos reservados.</p>
+      </div>
+    </footer>
+  </div>
+);
+
+
+
 }
 
 function FormularioDireccion({ paises, estados, direccion, onChange, onPaisChange, onEstadoChange, onCancel, onSave, editando }) {
@@ -264,6 +461,7 @@ function FormularioDireccion({ paises, estados, direccion, onChange, onPaisChang
           Cancelar
         </button>
       </div>
+      
     </div>
   );
 }
@@ -304,6 +502,8 @@ function CampoSelect({ label, name, value, onChange, opciones, required = false,
         ))}
       </select>
       <div className="pointer-events-none absolute right-2 top-8 text-gray-600 text-sm">▼</div>
+
+      
     </div>
   );
 }
