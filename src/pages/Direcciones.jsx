@@ -78,18 +78,23 @@ const handleUserMouseLeave = () => {
   ];
 
 useEffect(() => {
-  const sesion = JSON.parse(localStorage.getItem('sesionActiva'));
+  const sesion = JSON.parse(localStorage.getItem("sesionActiva"));
   if (sesion?.id) {
-    setUsuarioActivo((prev) => {
-      if (!prev || sesion.id !== prev.id) {
+    setUsuarioActivo(prev => {
+      if (!prev || prev.id !== sesion.id) {
         cargarDirecciones(sesion.id);
         return sesion;
       }
       return prev;
     });
   }
+}, []);
+
+useEffect(() => {
   setPaises(Country.getAllCountries());
 }, []);
+
+
 
 useEffect(() => {
   const cerrar = () => setShowUserMenu(false);
