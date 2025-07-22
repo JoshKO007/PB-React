@@ -48,6 +48,14 @@ export default function ConfiguracionUsuario() {
   setShowUserMenu(true);
 };
 
+  useEffect(() => {
+    const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (isMobile) {
+      alert("La configuración solo está disponible en computadoras.");
+      navigate('/');
+    }
+  }, []);
+  
   const cerrarSesion = () => {
     setCerrandoSesion(true);
     setTimeout(() => {
