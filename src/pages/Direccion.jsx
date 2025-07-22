@@ -1,59 +1,309 @@
 import React, { useEffect, useState } from 'react';
+import { MapPin, Edit2, Trash2 } from 'lucide-react';
+import { createClient } from '@supabase/supabase-js';
+import toast from 'react-hot-toast';
 import countries from 'world-countries';
 import estadosJSON from '../data/estadosPorPais.json';
 
-export default function FormularioDireccion() {
+// Supabase init
+const supabase = createClient(
+  'https://ousgktyljynqzrnafoqd.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im91c2drdHlsanlucXpybmFmb3FkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2MDMxNjYsImV4cCI6MjA2ODE3OTE2Nn0.hG27iuA-iNH3e3PPRck7ELgO89aRTbMiM8I65085TcE'
+);
+
+export default function DireccionesUsuario() {
+  const [usuarioId, setUsuarioId] = useState(null);
+  const [direcciones, setDirecciones] = useState([]);
+  const [nuevaDireccion, setNuevaDireccion] = useState(null);
+  const [editandoDireccionId, setEditandoDireccionId] = useState(null);
   const [paises, setPaises] = useState([]);
   const [estados, setEstados] = useState([]);
-  const [form, setForm] = useState({
-    pais: '',
-    estado: ''
-  });
+  const [telefonoUsuario, setTelefonoUsuario] = useState('');
 
   useEffect(() => {
-    const lista = countries
-      .map(p => ({ nombre: p.name.common, codigo: p.cca2 }))
-      .sort((a, b) => a.nombre.localeCompare(b.nombre));
-    setPaises(lista);
+    const sesion = JSON.parse(localStorage.getItem('sesionActiva'));
+    if (sesion?.id) setUsuarioId(sesion.id);
   }, []);
 
   useEffect(() => {
-    if (form.pais) {
+    const listaPaises = countries
+      .map(p => ({ nombre: p.name.common, codigo: p.cca2 }))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre));
+    setPaises(listaPaises);
+  }, []);
+
+  useEffect(() => {
+    if (nuevaDireccion?.paisCodigo) {
       const estadosFiltrados = estadosJSON
-        .filter(e => e.country_code === form.pais)
+        .filter(e => e.country_code === nuevaDireccion.paisCodigo)
         .map(e => e.name);
       setEstados(estadosFiltrados);
     } else {
       setEstados([]);
     }
-  }, [form.pais]);
+  }, [nuevaDireccion?.paisCodigo]);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setForm(prev => ({ ...prev, [name]: value }));
+  useEffect(() => {
+    if (!usuarioId) return;
+
+    const cargarDatos = async () => {
+      const { data } = await supabase
+        .from('usuarios')
+        .select('telefono')
+        .eq('id', usuarioId)
+        .single();
+
+      if (data?.telefono) setTelefonoUsuario(data.telefono);
+      cargarDirecciones();
+    };
+
+    cargarDatos();
+  }, [usuarioId]);
+
+  const cargarDirecciones = async () => {
+    const { data, error } = await supabase
+      .from('direcciones_usuarios')
+      .select('*')
+      .eq('id_usuario', usuarioId);
+
+    if (!error) setDirecciones(data);
+    else toast.error('No se pudieron cargar las direcciones');
   };
 
-  return (
-    <div className="p-6 max-w-md mx-auto bg-white rounded shadow">
-      <h2 className="text-xl font-bold mb-4">Dirección</h2>
+  const handleDireccionChange = (e) => {
+    const { name, value } = e.target;
+    setNuevaDireccion(prev => ({ ...prev, [name]: value }));
+  };
 
-      {/* País */}
-      <select name="pais" value={form.pais} onChange={handleChange} className="w-full border p-2 rounded mb-4">
-        <option value="">Selecciona un país</option>
-        {paises.map(p => (
-          <option key={p.codigo} value={p.codigo}>{p.nombre}</option>
+  const handlePaisChange = (e) => {
+    const codigoPais = e.target.value;
+    const paisSeleccionado = paises.find(p => p.codigo === codigoPais);
+    setNuevaDireccion(prev => ({
+      ...prev,
+      pais: paisSeleccionado?.nombre || '',
+      paisCodigo: codigoPais,
+      estado: '',
+      ciudad: ''
+    }));
+  };
+
+  const handleEstadoChange = (e) => {
+    setNuevaDireccion(prev => ({
+      ...prev,
+      estado: e.target.value,
+      ciudad: ''
+    }));
+  };
+
+  const guardarDireccion = async () => {
+    const campos = ['nombre', 'pais', 'estado', 'ciudad', 'calle', 'cp', 'telefono_contacto'];
+    const incompletos = campos.filter(c => !nuevaDireccion?.[c]?.trim());
+
+    if (incompletos.length > 0) {
+      toast.error('Completa todos los campos requeridos');
+      return;
+    }
+
+    const direccion = {
+      id_usuario: usuarioId,
+      nombre: nuevaDireccion.nombre.trim(),
+      pais: nuevaDireccion.pais.trim(),
+      estado: nuevaDireccion.estado.trim(),
+      ciudad: nuevaDireccion.ciudad.trim(),
+      cp: nuevaDireccion.cp.trim(),
+      calle: nuevaDireccion.calle.trim(),
+      referencia: nuevaDireccion.referencia?.trim() || '',
+      telefono_contacto: nuevaDireccion.telefono_contacto.trim()
+    };
+
+    try {
+      if (editandoDireccionId) {
+        const { data, error } = await supabase
+          .from('direcciones_usuarios')
+          .update(direccion)
+          .eq('id', editandoDireccionId)
+          .select();
+
+        if (error) throw error;
+        toast.success('Dirección actualizada');
+        setDirecciones(prev =>
+          prev.map(d => d.id === editandoDireccionId ? data[0] : d)
+        );
+      } else {
+        const { data, error } = await supabase
+          .from('direcciones_usuarios')
+          .insert(direccion)
+          .select();
+
+        if (error) throw error;
+        toast.success('Dirección guardada');
+        setDirecciones(prev => [...prev, ...data]);
+      }
+
+      setNuevaDireccion(null);
+      setEditandoDireccionId(null);
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al guardar la dirección');
+    }
+  };
+
+  const eliminarDireccion = async (id) => {
+    if (!confirm('¿Eliminar esta dirección?')) return;
+
+    const { error } = await supabase
+      .from('direcciones_usuarios')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      toast.error('Error al eliminar');
+    } else {
+      toast.success('Dirección eliminada');
+      setDirecciones(prev => prev.filter(d => d.id !== id));
+    }
+  };
+
+  const iniciarEdicion = (dir) => {
+    const pais = paises.find(p => p.nombre === dir.pais);
+    setNuevaDireccion({ ...dir, paisCodigo: pais?.codigo || '' });
+    setEditandoDireccionId(dir.id);
+  };
+
+  const iniciarNuevaDireccion = () => {
+    setNuevaDireccion({
+      nombre: '',
+      pais: '',
+      paisCodigo: '',
+      estado: '',
+      ciudad: '',
+      cp: '',
+      calle: '',
+      referencia: '',
+      telefono_contacto: telefonoUsuario || ''
+    });
+    setEditandoDireccionId(null);
+  };
+
+  if (!usuarioId) return <p className="text-center p-6 text-gray-500">Cargando usuario...</p>;
+
+  return (
+    <div className="p-6 max-w-4xl mx-auto bg-white border rounded-xl shadow-lg">
+      <h2 className="text-2xl font-bold mb-4 text-[#a16207]">Direcciones guardadas</h2>
+
+      {/* Lista */}
+      <div className="space-y-4 mb-8">
+        {direcciones.map(dir => (
+          <div key={dir.id} className="flex items-start gap-4 p-4 border border-gray-300 rounded-md bg-white shadow-sm">
+            <MapPin size={24} className="text-blue-600 mt-1" />
+            <div className="flex-1">
+              <p className="text-base font-bold text-[#a16207]">{dir.nombre}</p>
+              <p className="font-semibold">{dir.calle}, {dir.ciudad}, {dir.estado}</p>
+              <p className="text-sm text-gray-600">{dir.pais} · CP {dir.cp}</p>
+              {dir.referencia && <p className="text-sm text-gray-500 italic">"{dir.referencia}"</p>}
+              <p className="text-sm text-gray-600 mt-1">Tel: {dir.telefono_contacto}</p>
+            </div>
+            <div className="flex flex-col gap-2">
+              <button onClick={() => iniciarEdicion(dir)} className="text-blue-600 hover:underline text-sm flex items-center gap-1">
+                <Edit2 size={14} /> Editar
+              </button>
+              <button onClick={() => eliminarDireccion(dir.id)} className="text-red-600 hover:underline text-sm flex items-center gap-1">
+                <Trash2 size={14} /> Eliminar
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Formulario */}
+      {!nuevaDireccion ? (
+        <button
+          onClick={iniciarNuevaDireccion}
+          className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+        >
+          <MapPin size={16} /> Agregar nueva dirección
+        </button>
+      ) : (
+        <FormularioDireccion
+          paises={paises}
+          estados={estados}
+          direccion={nuevaDireccion}
+          onChange={handleDireccionChange}
+          onPaisChange={handlePaisChange}
+          onEstadoChange={handleEstadoChange}
+          onCancel={() => {
+            setNuevaDireccion(null);
+            setEditandoDireccionId(null);
+          }}
+          onSave={guardarDireccion}
+          editando={!!editandoDireccionId}
+        />
+      )}
+    </div>
+  );
+}
+
+function FormularioDireccion({ paises, estados, direccion, onChange, onPaisChange, onEstadoChange, onCancel, onSave, editando }) {
+  return (
+    <div className="space-y-6 border border-gray-300 rounded-md p-6 bg-white">
+      <div className="grid md:grid-cols-3 gap-4">
+        <CampoSelect label="País" name="paisCodigo" value={direccion.paisCodigo} onChange={onPaisChange} opciones={paises.map(p => ({ value: p.codigo, label: p.nombre }))} />
+        <CampoSelect label="Estado" name="estado" value={direccion.estado} onChange={onEstadoChange} opciones={estados.map(e => ({ value: e, label: e }))} disabled={!direccion.paisCodigo} />
+        <Campo label="Ciudad" name="ciudad" value={direccion.ciudad} onChange={onChange} required />
+        <Campo label="Código Postal" name="cp" value={direccion.cp} onChange={onChange} required />
+        <Campo label="Calle y número" name="calle" value={direccion.calle} onChange={onChange} required className="md:col-span-2" />
+        <Campo label="Referencia (opcional)" name="referencia" value={direccion.referencia} onChange={onChange} className="md:col-span-3" />
+        <Campo label="Teléfono de contacto" name="telefono_contacto" value={direccion.telefono_contacto} onChange={onChange} required className="md:col-span-2" />
+        <Campo label="Nombre (ej. Casa, Oficina)" name="nombre" value={direccion.nombre} onChange={onChange} required />
+      </div>
+      <div className="flex gap-4 mt-4">
+        <button onClick={onSave} className="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700 transition">
+          {editando ? 'Actualizar dirección' : 'Guardar dirección'}
+        </button>
+        <button onClick={onCancel} className="bg-gray-300 px-6 py-2 rounded hover:bg-gray-400 transition">
+          Cancelar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Campo({ label, name, value, onChange, required = false, className = '' }) {
+  return (
+    <div className={className}>
+      <label className="text-sm text-gray-600 mb-1 block">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <input
+        type="text"
+        name={name}
+        value={value || ''}
+        onChange={onChange}
+        required={required}
+        className="w-full border-b border-gray-400 bg-transparent px-2 py-2 text-gray-800 focus:outline-none focus:border-[#a16207]"
+      />
+    </div>
+  );
+}
+
+function CampoSelect({ label, name, value, onChange, opciones, required = false, disabled = false }) {
+  return (
+    <div className="relative">
+      <label className="text-sm text-gray-700 mb-1 block">{label}</label>
+      <select
+        name={name}
+        value={value || ''}
+        onChange={onChange}
+        required={required}
+        disabled={disabled}
+        className="appearance-none w-full border-b border-gray-400 bg-transparent px-2 py-2 pr-8 text-gray-800 focus:outline-none focus:border-[#a16207]"
+      >
+        <option value="">Selecciona {label.toLowerCase()}</option>
+        {opciones.map((op, i) => (
+          <option key={i} value={op.value}>{op.label}</option>
         ))}
       </select>
-
-      {/* Estado */}
-      {estados.length > 0 && (
-        <select name="estado" value={form.estado} onChange={handleChange} className="w-full border p-2 rounded mb-4">
-          <option value="">Selecciona un estado</option>
-          {estados.map((e, i) => (
-            <option key={i} value={e}>{e}</option>
-          ))}
-        </select>
-      )}
+      <div className="pointer-events-none absolute right-2 top-8 text-gray-600 text-sm">▼</div>
     </div>
   );
 }
