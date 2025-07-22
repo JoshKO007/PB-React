@@ -77,14 +77,27 @@ const handleUserMouseLeave = () => {
     { label: "Contacto", icon: <Mail size={24} />, onClick: () => navigate('/contacto') }
   ];
 
-    useEffect(() => {
-      const sesion = JSON.parse(localStorage.getItem('sesionActiva'));
-     if (sesion?.id && sesion.id !== usuarioActivo?.id) {
-        setUsuarioActivo(sesion);
+useEffect(() => {
+  const sesion = JSON.parse(localStorage.getItem('sesionActiva'));
+  if (sesion?.id) {
+    setUsuarioActivo((prev) => {
+      if (!prev || sesion.id !== prev.id) {
         cargarDirecciones(sesion.id);
+        return sesion;
       }
-      setPaises(Country.getAllCountries());
-    }, []);
+      return prev;
+    });
+  }
+  setPaises(Country.getAllCountries());
+}, []);
+
+useEffect(() => {
+  const cerrar = () => setShowUserMenu(false);
+  document.addEventListener('touchstart', cerrar);
+  return () => document.removeEventListener('touchstart', cerrar);
+}, []);
+
+
 
 const CustomInput = React.forwardRef(({ value, onClick, placeholder }, ref) => (
   <button
@@ -135,6 +148,7 @@ const CustomInput = React.forwardRef(({ value, onClick, placeholder }, ref) => (
       ciudad: ''
     }));
   };
+  
 
   const handleEstadoChange = (e) => {
     const code = e.target.value;
@@ -401,7 +415,11 @@ const CustomInput = React.forwardRef(({ value, onClick, placeholder }, ref) => (
         <div
           onMouseEnter={handleUserMouseEnter}
           onMouseLeave={handleUserMouseLeave}
-          onTouchStart={() => setShowUserMenu(!showUserMenu)} // Añade esto para móviles
+          onTouchStart={(e) => {
+            e.stopPropagation();
+            if (!showUserMenu) setShowUserMenu(true);
+          }}
+
           className="relative"
         >
           <button className="p-2 rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md hover:shadow-lg flex items-center">
