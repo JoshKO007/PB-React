@@ -77,26 +77,14 @@ const handleUserMouseLeave = () => {
     { label: "Contacto", icon: <Mail size={24} />, onClick: () => navigate('/contacto') }
   ];
 
-useEffect(() => {
-  try {
-    const raw = localStorage.getItem('sesionActiva');
-    const sesion = raw ? JSON.parse(raw) : null;
-
-    // ✅ Verifica que usuarioActivo esté vacío antes de setearlo
-    if (sesion?.id && !usuarioActivo?.id) {
-      setUsuarioActivo(sesion);
-      setDatos({ ...sesion, nacimiento: '', genero: '', bio: '' });
-      cargarDirecciones(sesion.id);
-    }
-  } catch (err) {
-    console.error("Error al cargar sesión:", err);
-    localStorage.removeItem('sesionActiva');
-  }
-
-  setPaises(Country.getAllCountries());
-}, [usuarioActivo]); 
-
-
+    useEffect(() => {
+      const sesion = JSON.parse(localStorage.getItem('sesionActiva'));
+     if (sesion?.id && sesion.id !== usuarioActivo?.id) {
+        setUsuarioActivo(sesion);
+        cargarDirecciones(sesion.id);
+      }
+      setPaises(Country.getAllCountries());
+    }, []);
 
 const CustomInput = React.forwardRef(({ value, onClick, placeholder }, ref) => (
   <button
