@@ -10,7 +10,6 @@ import React from 'react'; // Asegúrate de tener esta importación
 import 'react-datepicker/dist/react-datepicker.css';
 import { es } from 'date-fns/locale';
 import sha256 from 'crypto-js/sha256';
-import Header from "../components/Header";
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from "react-router-dom";
