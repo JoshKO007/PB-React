@@ -235,8 +235,9 @@ const CustomInput = React.forwardRef(({ value, onClick, placeholder }, ref) => (
   if (usuarioActualizado?.id !== usuarioActivo?.id) {
   setUsuarioActivo(usuarioActualizado);
   localStorage.setItem('sesionActiva', JSON.stringify(usuarioActualizado));
-  toast.success('Perfil actualizado correctamente');
 }
+
+  toast.success('Perfil actualizado correctamente');
 
 };
 
