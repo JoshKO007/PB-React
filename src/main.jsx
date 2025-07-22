@@ -2,7 +2,6 @@ import React, { Suspense } from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
-// Importación normal de componentes que NO fallan
 import App from "./App";
 import InicioSesion from "./pages/inicioSesion";
 import Registro from "./pages/Registro";
@@ -10,11 +9,15 @@ import Contacto from "./pages/Contacto";
 import Recuerdo from "./pages/Recuerdo";
 import Galeria from "./pages/Galeria";
 import Artista from "./pages/Artista";
-
-// ⚠️ Importación diferida del componente problemático
-const ConfiguracionUsuario = React.lazy(() => import("./pages/Configuracion"));
-
 import "./index.css";
+
+// ✅ Detectar si es móvil
+const esMovil = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+// ✅ Lazy load SOLO si no es móvil
+const ConfiguracionUsuario = !esMovil
+  ? React.lazy(() => import("./pages/Configuracion"))
+  : () => <div className="p-8 text-center">Configuración no disponible en móvil.</div>;
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
