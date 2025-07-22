@@ -375,7 +375,11 @@ case 'perfil':
         <div>
           <label className="text-sm text-gray-600 flex items-center gap-2 mb-1">Fecha de nacimiento</label>
           <DatePicker
-            selected={datos.nacimiento ? new Date(datos.nacimiento) : null}
+            selected={
+              datos.nacimiento && !isNaN(new Date(datos.nacimiento).getTime())
+                ? new Date(datos.nacimiento)
+                : null
+            }
             onChange={(date) =>
               setDatos(prev => ({
                 ...prev,
