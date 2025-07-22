@@ -55,7 +55,7 @@ export default function App() {
 
   useEffect(() => {
     const sesion = JSON.parse(localStorage.getItem('sesionActiva'));
-    if (sesion?.usuario) {
+   if (sesion?.id && sesion.id !== usuarioActivo?.id) {
       setUsuarioActivo(sesion);
     }
   }, []);

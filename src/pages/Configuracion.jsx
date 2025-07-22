@@ -109,16 +109,16 @@ const handleUserMouseLeave = () => {
 
   toast.success('Contraseña actualizada correctamente');
 };
+
 useEffect(() => {
   try {
     const raw = localStorage.getItem('sesionActiva');
     const sesion = raw ? JSON.parse(raw) : null;
 
-    // Solo ejecutar si no está ya seteado
+    // ✅ Verifica que usuarioActivo esté vacío antes de setearlo
     if (sesion?.id && !usuarioActivo?.id) {
       setUsuarioActivo(sesion);
       setDatos({ ...sesion, nacimiento: '', genero: '', bio: '' });
-
       cargarDirecciones(sesion.id);
       cargarDatosComplementarios(sesion.id);
     }
@@ -127,9 +127,9 @@ useEffect(() => {
     localStorage.removeItem('sesionActiva');
   }
 
-  // Esto sí puede correr siempre
   setPaises(Country.getAllCountries());
-}, []);
+}, [usuarioActivo]); // 👈 esto también ayuda
+
 
 
 const CustomInput = React.forwardRef(({ value, onClick, placeholder }, ref) => (
