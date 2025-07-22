@@ -10,14 +10,14 @@ import React from 'react';
 import 'react-datepicker/dist/react-datepicker.css';
 import { es } from 'date-fns/locale';
 import sha256 from 'crypto-js/sha256';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react'; // Agregamos useCallback
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from "react-router-dom";
 
 
 const supabase = createClient(
   'https://ousgktyljynqzrnafoqd.supabase.co',
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im91c2drdHlsanlucXpybmFmb3FkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2MDMxNjYsImV4cCI6MjA2ODE3OTE2Nn0.hG27iuA-iNH3e3PPRck7ELgO89aRTbMiM8I65085TcM'
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im91c2drdHlsanlucXpybmFmb3FkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2MDMxNjYsImV4cCI6MjA2ODE3OTE2Nn0.hG27iuA-iNH3e3PPRck7ELgO89aRTbMiM8I65085TcE'
 );
 
 export default function ConfiguracionUsuario() {
@@ -35,25 +35,36 @@ export default function ConfiguracionUsuario() {
   const [paises, setPaises] = useState([]);
   const [estados, setEstados] = useState([]);
   const [ciudades, setCiudades] = useState([]);
-  const userMenuRef = useRef(null); // Referencia al div del menú de usuario para detectar clics fuera
+  const userMenuRef = useRef(null); // Referencia al div del menú de usuario
+  const userMenuTimeout = useRef(null);
   const [cerrandoSesion, setCerrandoSesion] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [hovered, setHovered] = useState(null);
 
-  // Manejador para alternar la visibilidad del menú de usuario
-  // Se usa para clicks en escritorio y toques en móvil
+  // Manejo de mouse para el menú de usuario (para escritorio)
+  const handleUserMouseEnter = () => {
+    clearTimeout(userMenuTimeout.current);
+    setShowUserMenu(true);
+  };
+
+  const handleUserMouseLeave = () => {
+    userMenuTimeout.current = setTimeout(() => {
+      setShowUserMenu(false);
+    }, 300);
+  };
+
+  // Función para alternar el menú de usuario (para móvil)
   const toggleUserMenu = useCallback((e) => {
-    e.stopPropagation(); // Importante para evitar que el evento se propague al documento
+    e.stopPropagation(); // Evita que el evento se propague al documento inmediatamente
     setShowUserMenu(prev => !prev);
   }, []);
 
-  // Manejador para cerrar el menú si se hace click/toque fuera de él
+  // Función para cerrar el menú al hacer clic fuera
   const handleClickOutside = useCallback((event) => {
-    // Si el menú está abierto y el clic/toque NO está dentro del menú de usuario
-    if (showUserMenu && userMenuRef.current && !userMenuRef.current.contains(event.target)) {
+    if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
       setShowUserMenu(false);
     }
-  }, [showUserMenu]); // showUserMenu es una dependencia aquí para que la función se actualice si cambia
+  }, []);
 
   const cerrarSesion = () => {
     setCerrandoSesion(true);
@@ -96,17 +107,16 @@ export default function ConfiguracionUsuario() {
     setPaises(Country.getAllCountries());
   }, []);
 
-  // Agrega listeners para mousedown y touchstart en el documento
+  // Nuevo useEffect para manejar los clics fuera del menú en dispositivos táctiles y escritorio
   useEffect(() => {
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('touchstart', handleClickOutside); // Para dispositivos móviles
+    document.addEventListener('mousedown', handleClickOutside); // Para clics en escritorio
+    document.addEventListener('touchstart', handleClickOutside); // Para toques en móvil
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('touchstart', handleClickOutside);
     };
   }, [handleClickOutside]); // Dependencia de handleClickOutside
 
-  // CustomInput para DatePicker (no relacionado con el error principal)
   const CustomInput = React.forwardRef(({ value, onClick, placeholder }, ref) => (
     <button
       onClick={onClick}
@@ -425,8 +435,9 @@ export default function ConfiguracionUsuario() {
             {/* Iconos de usuario y carrito */}
             <div className="flex items-center gap-2 pr-2">
               <div
-                // Quitamos onMouseEnter y onMouseLeave de aquí. Se manejarán desde el menú desplegable si se desea un comportamiento de hover.
-                ref={userMenuRef} // Asignamos la referencia al contenedor del botón y el menú
+                onMouseEnter={handleUserMouseEnter} // Solo para escritorio
+                onMouseLeave={handleUserMouseLeave} // Solo para escritorio
+                ref={userMenuRef} // Asignamos la referencia
                 className="relative"
               >
                 <button
@@ -442,9 +453,8 @@ export default function ConfiguracionUsuario() {
                       initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
-                      // Mantener los eventos de hover aquí para la experiencia de escritorio en el menú desplegable
-                      onMouseEnter={() => clearTimeout(userMenuTimeout.current)} // Limpiar el timeout si el mouse entra en el menú
-                      onMouseLeave={() => userMenuTimeout.current = setTimeout(() => setShowUserMenu(false), 300)}
+                      onMouseEnter={handleUserMouseEnter} // Mantener para evitar cierre accidental en escritorio
+                      onMouseLeave={handleUserMouseLeave} // Mantener para evitar cierre accidental en escritorio
                       className="absolute right-0 mt-2 w-60 bg-white border border-gray-200 rounded-lg shadow-xl py-3 text-left z-[9999]"
                     >
                       {usuarioActivo ? (
@@ -452,14 +462,14 @@ export default function ConfiguracionUsuario() {
                           <div className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-gray-800">
                             <User size={16} /> {usuarioActivo.nombre || usuarioActivo.usuario}
                           </div>
-                          <button onClick={() => { /* Lógica para info cuenta */ setShowUserMenu(false); }} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                          <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <User size={16} className="mr-2" /> Información de cuenta
                           </button>
-                          <button onClick={() => { /* Lógica para direcciones */ setShowUserMenu(false); }} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                          <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <Mail size={16} className="mr-2" /> Direcciones
                           </button>
                           <button
-                            onClick={() => { configurar(); setShowUserMenu(false); }}
+                            onClick={configurar}
                             className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <Settings size={16} className="mr-2" /> Configuración
                           </button>
@@ -472,13 +482,13 @@ export default function ConfiguracionUsuario() {
                         </>
                       ) : (
                         <>
-                          <button onClick={() => { navigate('/iniciar-sesion'); setShowUserMenu(false); }} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                          <button onClick={() => navigate('/iniciar-sesion')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <LogIn size={16} className="mr-2" /> Iniciar sesión
                           </button>
-                          <button onClick={() => { navigate('/registro'); setShowUserMenu(false); }} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                          <button onClick={() => navigate('/registro')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <UserPlus size={16} className="mr-2" /> Crear cuenta
                           </button>
-                          <button onClick={() => { configurar(); setShowUserMenu(false); }} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                          <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <Settings size={16} className="mr-2" /> Configuración
                           </button>
                         </>
