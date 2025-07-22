@@ -10,7 +10,7 @@ import React from 'react';
 import 'react-datepicker/dist/react-datepicker.css';
 import { es } from 'date-fns/locale';
 import sha256 from 'crypto-js/sha256';
-import { useState, useEffect, useRef, useCallback } from 'react'; // Agregamos useCallback
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from "react-router-dom";
 
@@ -35,6 +35,7 @@ export default function ConfiguracionUsuario() {
   const [paises, setPaises] = useState([]);
   const [estados, setEstados] = useState([]);
   const [ciudades, setCiudades] = useState([]);
+  const allCitiesRef = useRef([]); // Referencia para almacenar todas las ciudades una vez
   const userMenuRef = useRef(null); // Referencia al div del menú de usuario
   const userMenuTimeout = useRef(null);
   const [cerrandoSesion, setCerrandoSesion] = useState(false);
@@ -60,11 +61,13 @@ export default function ConfiguracionUsuario() {
   }, []);
 
   // Función para cerrar el menú al hacer clic fuera
+  // Se ha añadido showUserMenu a las dependencias para que se actualice correctamente
   const handleClickOutside = useCallback((event) => {
-    if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
+    // Solo cerrar si el menú está visible y el clic no fue dentro del menú
+    if (showUserMenu && userMenuRef.current && !userMenuRef.current.contains(event.target)) {
       setShowUserMenu(false);
     }
-  }, []);
+  }, [showUserMenu]); // Dependencia clave
 
   const cerrarSesion = () => {
     setCerrandoSesion(true);
@@ -105,6 +108,14 @@ export default function ConfiguracionUsuario() {
 
   useEffect(() => {
     setPaises(Country.getAllCountries());
+    // Carga todas las ciudades una vez al inicio
+    try {
+      allCitiesRef.current = City.getAllCities();
+    } catch (error) {
+      console.error("Error al cargar todas las ciudades:", error);
+      toast.error("Hubo un problema al cargar las ciudades. Intenta de nuevo.");
+      // Considerar una alternativa o una versión anterior de la librería si esto falla.
+    }
   }, []);
 
   // Nuevo useEffect para manejar los clics fuera del menú en dispositivos táctiles y escritorio
@@ -165,12 +176,17 @@ export default function ConfiguracionUsuario() {
     }));
   };
 
-
+  // Modificación clave aquí para evitar City.getCitiesOfState()
   const handleEstadoChange = (e) => {
     const code = e.target.value;
     const estado = estados.find(s => s.isoCode === code);
-    const ciudadesEstado = City.getCitiesOfState(nuevaDireccion.paisCode, code);
-    setCiudades(ciudadesEstado);
+    
+    // Filtramos las ciudades desde el array completo cargado inicialmente
+    const ciudadesFiltradas = allCitiesRef.current.filter(city => 
+      city.countryCode === nuevaDireccion.paisCode && city.stateCode === code
+    );
+    setCiudades(ciudadesFiltradas);
+    
     setNuevaDireccion(prev => ({
       ...prev,
       estado: estado?.name,
@@ -277,10 +293,14 @@ export default function ConfiguracionUsuario() {
                     onClick={() => {
                       const paisObj = paises.find(p => p.name === dir.pais);
                       const estadoObj = paisObj ? State.getStatesOfCountry(paisObj.isoCode).find(s => s.name === dir.estado) : null;
-                      const ciudadesEstado = (paisObj && estadoObj) ? City.getCitiesOfState(paisObj.isoCode, estadoObj.isoCode) : [];
+                      
+                      // Filtrar ciudades al editar, usando el mismo enfoque
+                      const ciudadesParaEditar = allCitiesRef.current.filter(city => 
+                        city.countryCode === (paisObj?.isoCode || '') && city.stateCode === (estadoObj?.isoCode || '')
+                      );
 
                       setEstados(State.getStatesOfCountry(paisObj?.isoCode || ''));
-                      setCiudades(ciudadesEstado);
+                      setCiudades(ciudadesParaEditar);
 
                       setNuevaDireccion({
                         ...dir,
@@ -462,14 +482,15 @@ export default function ConfiguracionUsuario() {
                           <div className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-gray-800">
                             <User size={16} /> {usuarioActivo.nombre || usuarioActivo.usuario}
                           </div>
-                          <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                          {/* Añadir onClick para cerrar el menú al hacer clic en las opciones */}
+                          <button onClick={() => setShowUserMenu(false)} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <User size={16} className="mr-2" /> Información de cuenta
                           </button>
-                          <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                          <button onClick={() => setShowUserMenu(false)} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <Mail size={16} className="mr-2" /> Direcciones
                           </button>
                           <button
-                            onClick={configurar}
+                            onClick={() => { configurar(); setShowUserMenu(false); }}
                             className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <Settings size={16} className="mr-2" /> Configuración
                           </button>
@@ -482,13 +503,13 @@ export default function ConfiguracionUsuario() {
                         </>
                       ) : (
                         <>
-                          <button onClick={() => navigate('/iniciar-sesion')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                          <button onClick={() => { navigate('/iniciar-sesion'); setShowUserMenu(false); }} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <LogIn size={16} className="mr-2" /> Iniciar sesión
                           </button>
-                          <button onClick={() => navigate('/registro')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                          <button onClick={() => { navigate('/registro'); setShowUserMenu(false); }} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <UserPlus size={16} className="mr-2" /> Crear cuenta
                           </button>
-                          <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                          <button onClick={() => { configurar(); setShowUserMenu(false); }} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <Settings size={16} className="mr-2" /> Configuración
                           </button>
                         </>
