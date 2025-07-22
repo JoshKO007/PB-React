@@ -254,7 +254,7 @@ export default function App() {
   style={{ height: '400px' }}
 >
   <video
-    src="/Pintura.mp4"
+    src="/Pintura1.mov"
     autoPlay
     loop
     muted
