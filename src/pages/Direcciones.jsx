@@ -6,11 +6,11 @@ import { createClient } from '@supabase/supabase-js';
 import { Country, State, City } from 'country-state-city';
 import toast, { Toaster } from 'react-hot-toast';
 import DatePicker from 'react-datepicker';
-import React from 'react'; // Asegúrate de tener esta importación
+import React from 'react';
 import 'react-datepicker/dist/react-datepicker.css';
 import { es } from 'date-fns/locale';
 import sha256 from 'crypto-js/sha256';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react'; // Agregamos useCallback
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from "react-router-dom";
 
@@ -27,7 +27,7 @@ export default function ConfiguracionUsuario() {
     nombre: '', apellido: '', email: '', telefono: '', usuario: '',
     nacimiento: '', genero: '', bio: ''
   });
-  
+
   const [categoria, setCategoria] = useState('direccion');
   const [direcciones, setDirecciones] = useState([]);
   const [nuevaDireccion, setNuevaDireccion] = useState(null);
@@ -35,16 +35,37 @@ export default function ConfiguracionUsuario() {
   const [paises, setPaises] = useState([]);
   const [estados, setEstados] = useState([]);
   const [ciudades, setCiudades] = useState([]);
+  const userMenuRef = useRef(null); // Referencia al div del menú de usuario
   const userMenuTimeout = useRef(null);
   const [cerrandoSesion, setCerrandoSesion] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [hovered, setHovered] = useState(null);
-    const handleUserMouseEnter = () => {
-  clearTimeout(userMenuTimeout.current);
-  setShowUserMenu(true);
-};
 
-  
+  // Manejo de mouse para el menú de usuario (para escritorio)
+  const handleUserMouseEnter = () => {
+    clearTimeout(userMenuTimeout.current);
+    setShowUserMenu(true);
+  };
+
+  const handleUserMouseLeave = () => {
+    userMenuTimeout.current = setTimeout(() => {
+      setShowUserMenu(false);
+    }, 300);
+  };
+
+  // Función para alternar el menú de usuario (para móvil)
+  const toggleUserMenu = useCallback((e) => {
+    e.stopPropagation(); // Evita que el evento se propague al documento inmediatamente
+    setShowUserMenu(prev => !prev);
+  }, []);
+
+  // Función para cerrar el menú al hacer clic fuera
+  const handleClickOutside = useCallback((event) => {
+    if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
+      setShowUserMenu(false);
+    }
+  }, []);
+
   const cerrarSesion = () => {
     setCerrandoSesion(true);
     setTimeout(() => {
@@ -55,19 +76,11 @@ export default function ConfiguracionUsuario() {
     }, 5000);
   };
 
-
   const configurar = () => {
     navigate('/configuracion');
   };
 
-const handleUserMouseLeave = () => {
-  userMenuTimeout.current = setTimeout(() => {
-    setShowUserMenu(false);
-  }, 300);
-};
-
-
-      const menu = [
+  const menu = [
     { label: "Inicio", icon: <Home size={28} />, onClick: () => navigate('/') },
     { label: "Galería", icon: <ImageIcon size={24} />, onClick: () => navigate('/galeria') },
     { label: "Videos", icon: <Video size={24} /> },
@@ -77,48 +90,46 @@ const handleUserMouseLeave = () => {
     { label: "Contacto", icon: <Mail size={24} />, onClick: () => navigate('/contacto') }
   ];
 
-useEffect(() => {
-  const sesion = JSON.parse(localStorage.getItem("sesionActiva"));
-  if (sesion?.id) {
-    setUsuarioActivo(prev => {
-      if (!prev || prev.id !== sesion.id) {
-        cargarDirecciones(sesion.id);
-        return sesion;
-      }
-      return prev;
-    });
-  }
-}, []);
+  useEffect(() => {
+    const sesion = JSON.parse(localStorage.getItem("sesionActiva"));
+    if (sesion?.id) {
+      setUsuarioActivo(prev => {
+        if (!prev || prev.id !== sesion.id) {
+          cargarDirecciones(sesion.id);
+          return sesion;
+        }
+        return prev;
+      });
+    }
+  }, []);
 
-useEffect(() => {
-  setPaises(Country.getAllCountries());
-}, []);
+  useEffect(() => {
+    setPaises(Country.getAllCountries());
+  }, []);
 
+  // Nuevo useEffect para manejar los clics fuera del menú en dispositivos táctiles y escritorio
+  useEffect(() => {
+    document.addEventListener('mousedown', handleClickOutside); // Para clics en escritorio
+    document.addEventListener('touchstart', handleClickOutside); // Para toques en móvil
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [handleClickOutside]); // Dependencia de handleClickOutside
 
-
-useEffect(() => {
-  const cerrar = () => setShowUserMenu(false);
-  document.addEventListener('touchstart', cerrar);
-  return () => document.removeEventListener('touchstart', cerrar);
-}, []);
-
-
-
-const CustomInput = React.forwardRef(({ value, onClick, placeholder }, ref) => (
-  <button
-    onClick={onClick}
-    ref={ref}
-    type="button"
-    className="w-full h-[48px] p-3 border border-gray-300 rounded-md shadow-sm flex items-center justify-between gap-2 text-left focus:outline-none focus:ring-2 focus:ring-[#a16207]/50"
-  >
-    <span className={`flex-1 truncate ${!value ? 'text-gray-400' : 'text-black'}`}>
-      {value || placeholder}
-    </span>
-    <Calendar className="h-5 w-5 text-gray-500 flex-shrink-0" />
-  </button>
-));
-
-
+  const CustomInput = React.forwardRef(({ value, onClick, placeholder }, ref) => (
+    <button
+      onClick={onClick}
+      ref={ref}
+      type="button"
+      className="w-full h-[48px] p-3 border border-gray-300 rounded-md shadow-sm flex items-center justify-between gap-2 text-left focus:outline-none focus:ring-2 focus:ring-[#a16207]/50"
+    >
+      <span className={`flex-1 truncate ${!value ? 'text-gray-400' : 'text-black'}`}>
+        {value || placeholder}
+      </span>
+      <Calendar className="h-5 w-5 text-gray-500 flex-shrink-0" />
+    </button>
+  ));
 
   const cargarDirecciones = async (userId) => {
     const { data, error } = await supabase
@@ -153,7 +164,7 @@ const CustomInput = React.forwardRef(({ value, onClick, placeholder }, ref) => (
       ciudad: ''
     }));
   };
-  
+
 
   const handleEstadoChange = (e) => {
     const code = e.target.value;
@@ -175,8 +186,8 @@ const CustomInput = React.forwardRef(({ value, onClick, placeholder }, ref) => (
 
   const guardarDireccion = async () => {
     if (!nuevaDireccion.nombre || nuevaDireccion.nombre.trim() === '') {
-        toast.error('Debes ingresar un nombre para la dirección');
-        return;
+      toast.error('Debes ingresar un nombre para la dirección');
+      return;
     }
     if (!usuarioActivo || !nuevaDireccion) return;
     const direccionAGuardar = {
@@ -202,8 +213,10 @@ const CustomInput = React.forwardRef(({ value, onClick, placeholder }, ref) => (
         setDirecciones(prev =>
           prev.map(dir => dir.id === editandoDireccionId ? data[0] : dir)
         );
+        toast.success('Dirección actualizada con éxito!');
       } else {
         console.error(error);
+        toast.error('Error al actualizar la dirección.');
       }
     } else {
       const { data, error } = await supabase
@@ -213,8 +226,10 @@ const CustomInput = React.forwardRef(({ value, onClick, placeholder }, ref) => (
 
       if (!error) {
         setDirecciones(prev => [...prev, ...data]);
+        toast.success('Dirección guardada con éxito!');
       } else {
         console.error(error);
+        toast.error('Error al guardar la dirección.');
       }
     }
 
@@ -231,8 +246,10 @@ const CustomInput = React.forwardRef(({ value, onClick, placeholder }, ref) => (
 
     if (!error) {
       setDirecciones(prev => prev.filter(dir => dir.id !== id));
+      toast.success('Dirección eliminada con éxito.');
     } else {
       console.error(error);
+      toast.error('Error al eliminar la dirección.');
     }
   };
 
@@ -274,7 +291,7 @@ const CustomInput = React.forwardRef(({ value, onClick, placeholder }, ref) => (
                     }}
                     className="text-blue-600 hover:underline text-sm flex items-center gap-1"
                   >
-                   <Edit2 size={14} />  Editar
+                    <Edit2 size={14} />  Editar
                   </button>
                   <button
                     onClick={() => eliminarDireccion(dir.id)}
@@ -289,11 +306,11 @@ const CustomInput = React.forwardRef(({ value, onClick, placeholder }, ref) => (
             {!nuevaDireccion ? (
               <button
                 onClick={() => {
-                    setNuevaDireccion({
+                  setNuevaDireccion({
                     nombre: '',
                     pais: '', estado: '', ciudad: '', cp: '', calle: '', referencia: '',
                     telefono_contacto: datos.telefono || ''
-                    });
+                  });
                   setEditandoDireccionId(null);
                 }}
                 className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
@@ -362,7 +379,7 @@ const CustomInput = React.forwardRef(({ value, onClick, placeholder }, ref) => (
                   </div>
                   <div className="md:col-span-3">
                     <Campo label="Nombre de la dirección (ej. Casa, Oficina)" name="nombre" value={nuevaDireccion.nombre} onChange={handleDireccionChange} />
-                </div>
+                  </div>
                 </div>
 
                 <div className="flex gap-4 mt-4">
@@ -389,173 +406,172 @@ const CustomInput = React.forwardRef(({ value, onClick, placeholder }, ref) => (
       default:
         return null;
     }
-    
+
   };
 
   return (
     <>
-<motion.header
-  initial={{ opacity: 0, y: -30 }}
-  animate={{ opacity: 1, y: 0 }}
-  transition={{ duration: 0.8 }}
-  className="w-full text-center relative z-40 px-6 py-4 border-b border-gray-300 bg-[#f0eae2]/80 backdrop-blur-md shadow-xl rounded-b-xl"
->
-  <div className="max-w-7xl mx-auto w-full flex flex-col gap-2 relative z-40">
+      <motion.header
+        initial={{ opacity: 0, y: -30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8 }}
+        className="w-full text-center relative z-40 px-6 py-4 border-b border-gray-300 bg-[#f0eae2]/80 backdrop-blur-md shadow-xl rounded-b-xl"
+      >
+        <div className="max-w-7xl mx-auto w-full flex flex-col gap-2 relative z-40">
 
-    {/* Sección superior: Logo + Título + Iconos */}
-    <div className="flex justify-between items-center w-full relative">
-      {/* Logo + Título */}
-      <div className="flex items-center gap-4">
-        <img src="/logo.png" alt="Logo" className="h-16" />
-         <div className="flex gap-6 text-xl sm:text-2xl font-semibold font-serif italic text-[#3b4d63] tracking-wide">
-            <span></span>
-            <span>ARTE</span>
-            <span>RESTAURACIÓN</span>
-            <span>VISUALES</span>
-        </div>
-      </div>
+          {/* Sección superior: Logo + Título + Iconos */}
+          <div className="flex justify-between items-center w-full relative">
+            {/* Logo + Título */}
+            <div className="flex items-center gap-4">
+              <img src="/logo.png" alt="Logo" className="h-16" />
+              <div className="flex gap-6 text-xl sm:text-2xl font-semibold font-serif italic text-[#3b4d63] tracking-wide">
+                <span></span>
+                <span>ARTE</span>
+                <span>RESTAURACIÓN</span>
+                <span>VISUALES</span>
+              </div>
+            </div>
 
-      {/* Iconos de usuario y carrito */}
-      <div className="flex items-center gap-2 pr-2">
-        <div
-          onMouseEnter={handleUserMouseEnter}
-          onMouseLeave={handleUserMouseLeave}
-          onTouchStart={(e) => {
-            e.stopPropagation();
-            if (!showUserMenu) setShowUserMenu(true);
-          }}
-
-          className="relative"
-        >
-          <button className="p-2 rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md hover:shadow-lg flex items-center">
-            <User size={28} className="text-[#333333]" />
-          </button>
-
-          <AnimatePresence>
-            {showUserMenu && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                onMouseEnter={handleUserMouseEnter}
-                onMouseLeave={handleUserMouseLeave}
-                className="absolute right-0 mt-2 w-60 bg-white border border-gray-200 rounded-lg shadow-xl py-3 text-left z-[9999]"
+            {/* Iconos de usuario y carrito */}
+            <div className="flex items-center gap-2 pr-2">
+              <div
+                onMouseEnter={handleUserMouseEnter} // Solo para escritorio
+                onMouseLeave={handleUserMouseLeave} // Solo para escritorio
+                ref={userMenuRef} // Asignamos la referencia
+                className="relative"
               >
-                {usuarioActivo ? (
-                  <>
-                    <div className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-gray-800">
-                      <User size={16} /> {usuarioActivo.nombre || usuarioActivo.usuario}
-                    </div>
-                    <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
-                      <User size={16} className="mr-2" /> Información de cuenta
-                    </button>
-                    <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
-                      <Mail size={16} className="mr-2" /> Direcciones
-                    </button>
-                    <button 
-                      onClick={configurar}
-                      className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
-                      <Settings size={16} className="mr-2" /> Configuración
-                    </button>
-                    <button
-                      onClick={cerrarSesion}
-                      className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100 text-red-600"
+                <button
+                  onClick={toggleUserMenu} // Usamos onClick para alternar en todos los dispositivos
+                  className="p-2 rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md hover:shadow-lg flex items-center"
+                >
+                  <User size={28} className="text-[#333333]" />
+                </button>
+
+                <AnimatePresence>
+                  {showUserMenu && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      onMouseEnter={handleUserMouseEnter} // Mantener para evitar cierre accidental en escritorio
+                      onMouseLeave={handleUserMouseLeave} // Mantener para evitar cierre accidental en escritorio
+                      className="absolute right-0 mt-2 w-60 bg-white border border-gray-200 rounded-lg shadow-xl py-3 text-left z-[9999]"
                     >
-                      <LogOut size={16} className="mr-2" /> Cerrar sesión
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button onClick={() => navigate('/iniciar-sesion')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
-                      <LogIn size={16} className="mr-2" /> Iniciar sesión
-                    </button>
-                    <button onClick={() => navigate('/registro')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
-                      <UserPlus size={16} className="mr-2" /> Crear cuenta
-                    </button>
-                    <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
-                      <Settings size={16} className="mr-2" /> Configuración
-                    </button>
-                  </>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+                      {usuarioActivo ? (
+                        <>
+                          <div className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-gray-800">
+                            <User size={16} /> {usuarioActivo.nombre || usuarioActivo.usuario}
+                          </div>
+                          <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                            <User size={16} className="mr-2" /> Información de cuenta
+                          </button>
+                          <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                            <Mail size={16} className="mr-2" /> Direcciones
+                          </button>
+                          <button
+                            onClick={configurar}
+                            className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                            <Settings size={16} className="mr-2" /> Configuración
+                          </button>
+                          <button
+                            onClick={cerrarSesion}
+                            className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100 text-red-600"
+                          >
+                            <LogOut size={16} className="mr-2" /> Cerrar sesión
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button onClick={() => navigate('/iniciar-sesion')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                            <LogIn size={16} className="mr-2" /> Iniciar sesión
+                          </button>
+                          <button onClick={() => navigate('/registro')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                            <UserPlus size={16} className="mr-2" /> Crear cuenta
+                          </button>
+                          <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                            <Settings size={16} className="mr-2" /> Configuración
+                          </button>
+                        </>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
 
-        {/* Carrito */}
-        {usuarioActivo && (
-          <button
-            onClick={() => navigate('/carrito')}
-            className="p-2 rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md hover:shadow-lg flex items-center"
-            title="Carrito"
-          >
-            <ShoppingBag size={22} className="text-[#a16207]" />
-          </button>
-        )}
-      </div>
-    </div>
-
-
-    <div className="w-full border-t border-gray-500 opacity-70" />
-    <div className="w-full border-t-2 border-gray-500 opacity-70 mt-[2px]" />
-
-
-    {/* Firma de autor */}
-    <div className="text-sm italic text-gray-600 pt-1 text-right pr-1">
-      por: Laura García
-    </div>
-
-    {/* Menú de navegación */}
-    <nav className="flex flex-wrap justify-center gap-4 sm:gap-6 text-base sm:text-lg font-medium pt-2">
-      {menu.map((item, index) => (
-        <motion.span
-          key={index}
-          onMouseEnter={() => setHovered(index)}
-          onMouseLeave={() => setHovered(null)}
-          onClick={item.onClick}
-          className={`flex flex-col items-center gap-1 cursor-pointer px-3 py-1 transition-all duration-300 ease-out
-            ${hovered === index
-              ? 'bg-white/50 backdrop-blur-sm shadow-inner rounded-md scale-105 underline underline-offset-4'
-              : 'hover:bg-white/30 hover:backdrop-blur-sm hover:shadow-sm hover:rounded-md'
-            }`}
-          whileHover={{ scale: 1.05 }}
-        >
-          <div className="text-[#a16207]">{item.icon}</div>
-          <span className="text-sm sm:text-base">{item.label}</span>
-        </motion.span>
-      ))}
-    </nav>
-  </div>
-</motion.header>
-
-{cerrandoSesion && (
-  <div className="fixed inset-0 bg-white/80 z-50 flex flex-col items-center justify-center">
-    <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-[#a16207]" />
-    <p className="mt-4 text-[#a16207] font-semibold">Cerrando sesión...</p>
-  </div>
-)}
-
-
-    <div className="min-h-screen bg-[#f9f4ef] flex">
-    <Toaster position="top-right" reverseOrder={false} />
-    
-
-      <main className="flex-1 p-10">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="bg-white/80 backdrop-blur-md border border-gray-200 rounded-xl shadow-lg p-8"
-        >
-          <h3 className="text-2xl font-bold mb-6 text-[#a16207]">
-            {categorias.find(c => c.id === categoria)?.label}
-          </h3>
-          <div className="space-y-6">
-            {renderCampos()}
+              {/* Carrito */}
+              {usuarioActivo && (
+                <button
+                  onClick={() => navigate('/carrito')}
+                  className="p-2 rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md hover:shadow-lg flex items-center"
+                  title="Carrito"
+                >
+                  <ShoppingBag size={22} className="text-[#a16207]" />
+                </button>
+              )}
+            </div>
           </div>
-        </motion.div>
-      </main>
-    </div>
+
+
+          <div className="w-full border-t border-gray-500 opacity-70" />
+          <div className="w-full border-t-2 border-gray-500 opacity-70 mt-[2px]" />
+
+
+          {/* Firma de autor */}
+          <div className="text-sm italic text-gray-600 pt-1 text-right pr-1">
+            por: Laura García
+          </div>
+
+          {/* Menú de navegación */}
+          <nav className="flex flex-wrap justify-center gap-4 sm:gap-6 text-base sm:text-lg font-medium pt-2">
+            {menu.map((item, index) => (
+              <motion.span
+                key={index}
+                onMouseEnter={() => setHovered(index)}
+                onMouseLeave={() => setHovered(null)}
+                onClick={item.onClick}
+                className={`flex flex-col items-center gap-1 cursor-pointer px-3 py-1 transition-all duration-300 ease-out
+            ${hovered === index
+                    ? 'bg-white/50 backdrop-blur-sm shadow-inner rounded-md scale-105 underline underline-offset-4'
+                    : 'hover:bg-white/30 hover:backdrop-blur-sm hover:shadow-sm hover:rounded-md'
+                  }`}
+                whileHover={{ scale: 1.05 }}
+              >
+                <div className="text-[#a16207]">{item.icon}</div>
+                <span className="text-sm sm:text-base">{item.label}</span>
+              </motion.span>
+            ))}
+          </nav>
+        </div>
+      </motion.header>
+
+      {cerrandoSesion && (
+        <div className="fixed inset-0 bg-white/80 z-50 flex flex-col items-center justify-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-[#a16207]" />
+          <p className="mt-4 text-[#a16207] font-semibold">Cerrando sesión...</p>
+        </div>
+      )}
+
+
+      <div className="min-h-screen bg-[#f9f4ef] flex">
+        <Toaster position="top-right" reverseOrder={false} />
+
+
+        <main className="flex-1 p-10">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="bg-white/80 backdrop-blur-md border border-gray-200 rounded-xl shadow-lg p-8"
+          >
+            <h3 className="text-2xl font-bold mb-6 text-[#a16207]">
+              {categorias.find(c => c.id === categoria)?.label}
+            </h3>
+            <div className="space-y-6">
+              {renderCampos()}
+            </div>
+          </motion.div>
+        </main>
+      </div>
     </>
   );
 }
