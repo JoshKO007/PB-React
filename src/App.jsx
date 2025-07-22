@@ -46,6 +46,7 @@ export default function App() {
   const [cerrandoSesion, setCerrandoSesion] = useState(false);
   const userMenuTimeout = useRef(null);
   const navigate = useNavigate();
+  
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -72,16 +73,6 @@ export default function App() {
     }, 300);
   };
 
-  const cerrarSesion = () => {
-    setCerrandoSesion(true);
-    setTimeout(() => {
-      localStorage.removeItem('sesionActiva');
-      setUsuarioActivo(null);
-      setCerrandoSesion(false);
-      navigate('/');
-    }, 5000);
-  };
-
   const configurar = () => {
     navigate('/configuracion');
   };
@@ -106,6 +97,17 @@ export default function App() {
      onClick: () => navigate('/contacto') }, 
   ];
   
+  const cerrarSesion = () => {
+  setCerrandoSesion(true);
+  setTimeout(() => {
+    localStorage.removeItem('sesionActiva');
+    setUsuarioActivo(null);
+    setCerrandoSesion(false);
+    navigate('/');
+  }, 5000);
+};
+
+
   return (
     <div className="min-h-screen bg-[#f9f4ef] text-[#333333] font-sans flex flex-col items-center">
       {cerrandoSesion && (
@@ -161,7 +163,9 @@ export default function App() {
                     <div className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-gray-800">
                       <User size={16} /> {usuarioActivo.nombre || usuarioActivo.usuario}
                     </div>
-                    <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                    <button 
+                    onClick={() => navigate('/usuario')}
+                    className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                       <User size={16} className="mr-2" /> Información de cuenta
                     </button>
                     <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
