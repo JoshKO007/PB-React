@@ -13,7 +13,8 @@ import {
   LogIn,
   UserPlus,
   Settings,
-  LogOut
+  LogOut,
+  Eye
 } from 'lucide-react';
 
 const productos = [
