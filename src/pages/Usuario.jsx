@@ -493,5 +493,6 @@ function Modal({ mensaje, color = 'green', onClose }) {
         </button>
       </div>
     </div>
+
   );
 }
