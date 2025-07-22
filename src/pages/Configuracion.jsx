@@ -109,17 +109,28 @@ const handleUserMouseLeave = () => {
 
   toast.success('Contraseña actualizada correctamente');
 };
+useEffect(() => {
+  try {
+    const raw = localStorage.getItem('sesionActiva');
+    const sesion = raw ? JSON.parse(raw) : null;
 
-  useEffect(() => {
-    const sesion = JSON.parse(localStorage.getItem('sesionActiva'));
-    if (sesion?.usuario) {
+    // Solo ejecutar si no está ya seteado
+    if (sesion?.id && !usuarioActivo?.id) {
       setUsuarioActivo(sesion);
       setDatos({ ...sesion, nacimiento: '', genero: '', bio: '' });
+
       cargarDirecciones(sesion.id);
       cargarDatosComplementarios(sesion.id);
     }
-    setPaises(Country.getAllCountries());
-  }, []);
+  } catch (err) {
+    console.error("Error al cargar sesión:", err);
+    localStorage.removeItem('sesionActiva');
+  }
+
+  // Esto sí puede correr siempre
+  setPaises(Country.getAllCountries());
+}, []);
+
 
 const CustomInput = React.forwardRef(({ value, onClick, placeholder }, ref) => (
   <button
@@ -161,6 +172,8 @@ const CustomInput = React.forwardRef(({ value, onClick, placeholder }, ref) => (
     toast.error('Error al actualizar datos del usuario');
     console.error(errorUsuario);
     return;
+
+    
   }
 
   // 2. Intenta actualizar datos_complementarios
@@ -219,9 +232,12 @@ const CustomInput = React.forwardRef(({ value, onClick, placeholder }, ref) => (
     return;
   }
 
+  if (usuarioActualizado?.id !== usuarioActivo?.id) {
   setUsuarioActivo(usuarioActualizado);
   localStorage.setItem('sesionActiva', JSON.stringify(usuarioActualizado));
   toast.success('Perfil actualizado correctamente');
+}
+
 };
 
   const handleChange = (e) => {
