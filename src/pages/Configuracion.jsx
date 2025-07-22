@@ -658,6 +658,7 @@ case 'cuenta':
         <div
           onMouseEnter={handleUserMouseEnter}
           onMouseLeave={handleUserMouseLeave}
+          onTouchStart={() => setShowUserMenu(!showUserMenu)} // Añade esto para móviles
           className="relative"
         >
           <button className="p-2 rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md hover:shadow-lg flex items-center">
