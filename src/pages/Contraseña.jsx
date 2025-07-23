@@ -111,7 +111,7 @@ export default function PerfilUsuario() {
             <div className={`text-lg font-semibold mb-4 ${modalMensaje.tipo === 'exito' ? 'text-green-600' : 'text-red-600'}`}>{modalMensaje.mensaje}</div>
             <button
               onClick={cerrarModal}
-              className="mt-2 px-4 py-2 bg-[#a16207] text-white rounded hover:bg-[#8a5304]"
+              className="mt-2 px-4 py-2 bg-[#a16207] text-white rounded hover:bg-[#854d06]"
             >
               Aceptar
             </button>
@@ -295,7 +295,7 @@ export default function PerfilUsuario() {
               </button>
               <button
                 onClick={actualizarContrasena}
-                className="flex-1 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition"
+                className="flex-1 bg-[#a16207] text-white px-4 py-2 rounded hover:bg-[#854d06]  transition"
               >
                 Guardar contraseña
               </button>
