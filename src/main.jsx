@@ -12,6 +12,7 @@ import Galeria from "./pages/Galeria";
 import Artista from "./pages/Artista";
 import Usuario from "./pages/Usuario";
 import Direccion from "./pages/Direccion";
+import Contraseña from "./pages/Contraseña";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
@@ -26,6 +27,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         <Route path="/contacto" element={<Contacto />} />
        <Route path="/usuario" element={<Usuario />} />
         <Route path="/direccion" element={<Direccion />} />
+        <Route path="/contrasena" element={<Contraseña />} />
       </Routes>
     </BrowserRouter>
   </React.StrictMode>
