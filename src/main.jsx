@@ -13,6 +13,7 @@ import Artista from "./pages/Artista";
 import Usuario from "./pages/Usuario";
 import Direccion from "./pages/Direccion";
 import Contraseña from "./pages/Contraseña";
+import Restauracion from "./pages/Restauración";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
@@ -28,6 +29,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
        <Route path="/usuario" element={<Usuario />} />
         <Route path="/direccion" element={<Direccion />} />
         <Route path="/contrasena" element={<Contraseña />} />
+        <Route path="/restauracion" element={<Restauracion />} />
       </Routes>
     </BrowserRouter>
   </React.StrictMode>

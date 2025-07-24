@@ -89,7 +89,10 @@ export default function App() {
       onClick: () => navigate('/galeria')},
     { label: "Videos", icon: <Video size={24} /> },                     
     { label: "Tienda", icon: <ShoppingBag size={24} /> },
-    { label: "Restauración", icon: <Brush size={24} /> },               
+    { label: "Restauración", 
+      icon: <Brush size={24} /> ,
+      onClick: () => navigate('/restauracion')
+    },               
     { label: "Sobre la artista", 
       icon: <User size={24} />,
       onClick: () => navigate('/artista') }, 

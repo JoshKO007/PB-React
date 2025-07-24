@@ -18,7 +18,8 @@ import {
   UserPlus,
   Settings,
   LogOut, 
-  Calendar
+  Calendar,
+  KeyRound
 } from 'lucide-react';
 
 const supabase = createClient(
@@ -211,66 +212,58 @@ export default function PerfilUsuario() {
   initial={{ opacity: 0, y: -30 }}
   animate={{ opacity: 1, y: 0 }}
   transition={{ duration: 0.8 }}
-  className="w-full text-center relative z-40 px-6 py-4 border-b border-gray-300 bg-[#f0eae2]/80 backdrop-blur-md shadow-xl rounded-b-xl"
+  className="w-full text-center relative z-40 px-4 py-3 sm:px-6 sm:py-4 border-b border-gray-300 bg-[#f0eae2]/80 backdrop-blur-md shadow-xl rounded-b-xl"
 >
   <div className="max-w-7xl mx-auto w-full flex flex-col gap-2 relative z-40">
 
     {/* Sección superior: Logo + Título + Iconos */}
-    <div className="flex justify-between items-center w-full relative">
+    <div className="flex flex-col sm:flex-row justify-between items-center w-full relative gap-2 sm:gap-0">
       {/* Logo + Título */}
-      <div className="flex items-center gap-4">
-        <img src="/logo.png" alt="Logo" className="h-16" />
-         <div className="flex gap-6 text-xl sm:text-2xl font-semibold font-serif italic text-[#3b4d63] tracking-wide">
-            <span></span>
-            <span>ARTE</span>
-            <span>RESTAURACIÓN</span>
-            <span>VISUALES</span>
+      <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4">
+        <img src="/logo.png" alt="Logo" className="h-14 sm:h-16" />
+        <div className="flex gap-2 sm:gap-6 text-lg sm:text-2xl font-semibold font-serif italic text-[#3b4d63] tracking-wide">
+          <span>ARTE</span>
+          <span>RESTAURACIÓN</span>
+          <span>VISUALES</span>
         </div>
       </div>
 
       {/* Iconos de usuario y carrito */}
-      <div className="flex items-center gap-2 pr-2">
+      <div className="flex items-center gap-2 mt-2 sm:mt-0 pr-1 sm:pr-2">
         <div
           onMouseEnter={handleUserMouseEnter}
           onMouseLeave={handleUserMouseLeave}
           className="relative"
         >
           <button className="p-2 rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md hover:shadow-lg flex items-center">
-            <User size={28} className="text-[#333333]" />
+            <User size={24} className="text-[#333333]" />
           </button>
 
           <AnimatePresence>
             {showUserMenu && (
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                onMouseEnter={handleUserMouseEnter}
-                onMouseLeave={handleUserMouseLeave}
-                className="absolute right-0 mt-2 w-60 bg-white border border-gray-200 rounded-lg shadow-xl py-3 text-left z-[9999]"
-              >
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      onMouseEnter={handleUserMouseEnter}
+                      onMouseLeave={handleUserMouseLeave}
+                      className="absolute mt-2 w-60 left-1/2 -translate-x-1/2 sm:left-auto sm:right-0 sm:translate-x-0 bg-white border border-gray-200 rounded-lg shadow-xl py-3 text-left z-[9999]"
+                    >
                 {usuarioActivo ? (
                   <>
                     <div className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-gray-800">
                       <User size={16} /> {usuarioActivo.nombre || usuarioActivo.usuario}
                     </div>
-                    <button 
-                    onClick={() => navigate('/usuario')}
-                    className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                    <button onClick={() => navigate('/usuario')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                       <User size={16} className="mr-2" /> Información de cuenta
                     </button>
-                    <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                    <button onClick={() => navigate('/direccion')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                       <Mail size={16} className="mr-2" /> Direcciones
                     </button>
-                    <button 
-                      onClick={configurar}
-                      className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
-                      <Settings size={16} className="mr-2" /> Configuración
+                    <button onClick={() => navigate('/contrasena')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                      <KeyRound size={16} className="mr-2" /> Cambiar contraseña
                     </button>
-                    <button
-                      onClick={cerrarSesion}
-                      className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100 text-red-600"
-                    >
+                    <button onClick={cerrarSesion} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100 text-red-600">
                       <LogOut size={16} className="mr-2" /> Cerrar sesión
                     </button>
                   </>
@@ -282,9 +275,6 @@ export default function PerfilUsuario() {
                     <button onClick={() => navigate('/registro')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                       <UserPlus size={16} className="mr-2" /> Crear cuenta
                     </button>
-                    <button className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
-                      <Settings size={16} className="mr-2" /> Configuración
-                    </button>
                   </>
                 )}
               </motion.div>
@@ -292,7 +282,6 @@ export default function PerfilUsuario() {
           </AnimatePresence>
         </div>
 
-        {/* Carrito */}
         {usuarioActivo && (
           <button
             onClick={() => navigate('/carrito')}
@@ -305,25 +294,23 @@ export default function PerfilUsuario() {
       </div>
     </div>
 
-
-    <div className="w-full border-t border-gray-500 opacity-70" />
+    <div className="w-full border-t border-gray-500 opacity-70 mt-2" />
     <div className="w-full border-t-2 border-gray-500 opacity-70 mt-[2px]" />
 
-
     {/* Firma de autor */}
-    <div className="text-sm italic text-gray-600 pt-1 text-right pr-1">
+    <div className="text-sm italic text-gray-600 pt-1 text-right sm:text-right text-center pr-1">
       por: Laura García
     </div>
 
     {/* Menú de navegación */}
-    <nav className="flex flex-wrap justify-center gap-4 sm:gap-6 text-base sm:text-lg font-medium pt-2">
+    <nav className="flex flex-wrap justify-center gap-3 sm:gap-6 text-sm sm:text-lg font-medium pt-2">
       {menu.map((item, index) => (
         <motion.span
           key={index}
           onMouseEnter={() => setHovered(index)}
           onMouseLeave={() => setHovered(null)}
           onClick={item.onClick}
-          className={`flex flex-col items-center gap-1 cursor-pointer px-3 py-1 transition-all duration-300 ease-out
+          className={`flex flex-col items-center gap-1 cursor-pointer px-2 sm:px-3 py-1 transition-all duration-300 ease-out
             ${hovered === index
               ? 'bg-white/50 backdrop-blur-sm shadow-inner rounded-md scale-105 underline underline-offset-4'
               : 'hover:bg-white/30 hover:backdrop-blur-sm hover:shadow-sm hover:rounded-md'
@@ -331,12 +318,13 @@ export default function PerfilUsuario() {
           whileHover={{ scale: 1.05 }}
         >
           <div className="text-[#a16207]">{item.icon}</div>
-          <span className="text-sm sm:text-base">{item.label}</span>
+          <span>{item.label}</span>
         </motion.span>
       ))}
     </nav>
   </div>
-      </motion.header>
+</motion.header>
+
 
       <div className="max-w-4xl mx-auto p-6 relative">
         <h2 className="text-2xl font-bold mb-6 text-[#a16207]">Editar perfil</h2>
