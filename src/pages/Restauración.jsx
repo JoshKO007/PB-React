@@ -384,7 +384,7 @@ const handleEnviar = async () => {
         <section className="text-center">
           <h2 className="text-3xl font-bold text-[#a16207] mb-2">Restauración de obras</h2>
           <p className="text-lg text-gray-700 max-w-2xl mx-auto">
-            ¿Tienes una pintura dañada o antigua que deseas restaurar? Sube varias imágenes claras desde distintos ángulos y cuéntanos los detalles, para que la artista pueda ayudarte a revivirla.
+            ¿Tienes una pintura dañada o antigua que deseas restaurar? Sube varias imágenes claras desde distintos ángulos y cuéntanos los detalles, para que podamos ayudarte a revivirla.
           </p>
         </section>
 
@@ -522,7 +522,7 @@ const handleEnviar = async () => {
             <input type="text" placeholder="Antigüedad aproximada" className="w-full border rounded px-3 py-2" value={antiguedad} onChange={e => setAntiguedad(e.target.value)} />
             <textarea rows="3" placeholder="Detalles específicos" className="w-full border rounded px-3 py-2" value={detalles} onChange={e => setDetalles(e.target.value)} />
             <button onClick={() => setMostrarModal(true)} className="mt-4 bg-[#a16207] text-white py-2 rounded hover:bg-[#875507] transition text-center">
-              Enviar solicitud a la artista
+              Enviar solicitud de restauración
             </button>
           </div>
         </section>
