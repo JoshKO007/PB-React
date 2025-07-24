@@ -391,126 +391,128 @@ const handleEnviar = async () => {
         {/* Imagen + formulario */}
         <section className="w-full flex flex-col sm:flex-row gap-6 bg-white rounded-xl p-6 border shadow-md">
           {/* Contenedor de imagen principal + miniaturas */}
-          <div className="flex flex-col items-center gap-4 w-full sm:w-auto">
-            <div className="relative w-[420px] h-[420px] group">
-              <div
-                className="w-full h-full border border-dashed border-gray-400 rounded-lg bg-gray-50 overflow-hidden flex items-center justify-center cursor-pointer"
-                onClick={() => fileInputRef.current?.click()}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  if (e.dataTransfer.files.length > 0) {
-                    setSelectedImage(e.dataTransfer.files[0]);
-                  }
-                }}
-              >
-                {selectedImage ? (
-                  <img src={URL.createObjectURL(selectedImage)} alt="Principal" className="w-full h-full object-contain" />
-                ) : (
-                  <div className="text-center text-sm text-gray-500 px-4">
-                    <ImageIcon size={48} className="mx-auto mb-2 text-gray-400" />
-                    <p className="font-medium">Haz clic o arrastra una imagen aquí</p>
-                    <p className="text-xs text-gray-400">Sube al menos 2 imágenes desde distintos ángulos</p>
-                  </div>
-                )}
-                <input
-                  type="file"
-                  accept="image/*"
-                  ref={fileInputRef}
-                  className="hidden"
-                  onChange={(e) => {
-                    if (e.target.files.length > 0) setSelectedImage(e.target.files[0]);
-                  }}
-                />
-              </div>
+<div className="flex flex-col items-center gap-4 w-full sm:w-auto">
+  <div className="relative w-full aspect-square max-w-xs sm:w-[420px] sm:max-w-none sm:h-[420px] group">
 
-              {selectedImage && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (imagenesAdicionales.length > 0) {
-                      const [nuevaPrincipal, ...resto] = imagenesAdicionales;
-                      setSelectedImage(nuevaPrincipal);
-                      setImagenesAdicionales(resto);
-                    } else {
-                      setSelectedImage(null);
-                    }
-                  }}
-                  className="absolute top-0 right-0 text-gray-500 bg-white/70 rounded-bl px-2 py-0.5 text-lg hover:text-gray-700 transition"
-                  title="Eliminar imagen principal"
-                >
-                  ×
-                </button>
-              )}
+    <div
+      className="w-full h-full border border-dashed border-gray-400 rounded-lg bg-gray-50 overflow-hidden flex items-center justify-center cursor-pointer"
+      onClick={() => fileInputRef.current?.click()}
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => {
+        e.preventDefault();
+        if (e.dataTransfer.files.length > 0) {
+          setSelectedImage(e.dataTransfer.files[0]);
+        }
+      }}
+    >
+      {selectedImage ? (
+        <img src={URL.createObjectURL(selectedImage)} alt="Principal" className="w-full h-full object-contain" />
+      ) : (
+        <div className="text-center text-sm text-gray-500 px-4">
+          <ImageIcon size={48} className="mx-auto mb-2 text-gray-400" />
+          <p className="font-medium">Haz clic o arrastra una imagen aquí</p>
+          <p className="text-xs text-gray-400">Sube al menos 2 imágenes desde distintos ángulos</p>
+        </div>
+      )}
+      <input
+        type="file"
+        accept="image/*"
+        ref={fileInputRef}
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files.length > 0) setSelectedImage(e.target.files[0]);
+        }}
+      />
+    </div>
 
-              {imagenesAdicionales.length > 0 && (
-                <>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const anterior = imagenesAdicionales[imagenesAdicionales.length - 1];
-                      const nuevas = imagenesAdicionales.slice(0, -1);
-                      setImagenesAdicionales([selectedImage, ...nuevas]);
-                      setSelectedImage(anterior);
-                    }}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/80 p-1 rounded-full shadow hover:bg-white z-10"
-                  >
-                    ←
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const siguiente = imagenesAdicionales[0];
-                      const nuevas = imagenesAdicionales.slice(1);
-                      setImagenesAdicionales([...nuevas, selectedImage]);
-                      setSelectedImage(siguiente);
-                    }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/80 p-1 rounded-full shadow hover:bg-white z-10"
-                  >
-                    →
-                  </button>
-                </>
-              )}
-            </div>
+    {selectedImage && (
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          if (imagenesAdicionales.length > 0) {
+            const [nuevaPrincipal, ...resto] = imagenesAdicionales;
+            setSelectedImage(nuevaPrincipal);
+            setImagenesAdicionales(resto);
+          } else {
+            setSelectedImage(null);
+          }
+        }}
+        className="absolute top-0 right-0 text-gray-500 bg-white/70 rounded-bl px-2 py-0.5 text-lg hover:text-gray-700 transition"
+        title="Eliminar imagen principal"
+      >
+        ×
+      </button>
+    )}
 
-            <div className="w-[420px] flex gap-2 overflow-x-auto no-scrollbar mt-1">
-              {imagenesAdicionales.map((img, i) => (
-                <div key={i} className="relative w-16 h-16 border rounded overflow-hidden flex-shrink-0">
-                  <img src={URL.createObjectURL(img)} alt={`extra-${i}`} className="w-full h-full object-cover" />
-                  <button
-                    onClick={() => setImagenesAdicionales(prev => prev.filter((_, j) => j !== i))}
-                    className="absolute top-0 right-0 text-white bg-red-500 rounded-bl px-1 text-xs hover:bg-red-600"
-                    title="Eliminar"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
+    {imagenesAdicionales.length > 0 && (
+      <>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            const anterior = imagenesAdicionales[imagenesAdicionales.length - 1];
+            const nuevas = imagenesAdicionales.slice(0, -1);
+            setImagenesAdicionales([selectedImage, ...nuevas]);
+            setSelectedImage(anterior);
+          }}
+          className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/80 p-1 rounded-full shadow hover:bg-white z-10"
+        >
+          ←
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            const siguiente = imagenesAdicionales[0];
+            const nuevas = imagenesAdicionales.slice(1);
+            setImagenesAdicionales([...nuevas, selectedImage]);
+            setSelectedImage(siguiente);
+          }}
+          className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/80 p-1 rounded-full shadow hover:bg-white z-10"
+        >
+          →
+        </button>
+      </>
+    )}
+  </div>
 
-              {imagenesAdicionales.length < 4 && (
-                <>
-                  <label
-                    htmlFor="extraImagenInput"
-                    className="w-16 h-16 border-2 border-dashed border-gray-400 flex items-center justify-center text-gray-400 cursor-pointer hover:border-gray-600 transition flex-shrink-0"
-                  >
-                    <span className="text-xl font-bold">+</span>
-                  </label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    id="extraImagenInput"
-                    className="hidden"
-                    onChange={(e) => {
-                      if (e.target.files.length > 0) {
-                        const nueva = e.target.files[0];
-                        setImagenesAdicionales(prev => [...prev, nueva].slice(0, 4));
-                      }
-                    }}
-                  />
-                </>
-              )}
-            </div>
-          </div>
+  <div className="w-full max-w-xs sm:w-[420px] flex gap-2 overflow-x-auto no-scrollbar mt-1">
+    {imagenesAdicionales.map((img, i) => (
+      <div key={i} className="relative w-16 h-16 border rounded overflow-hidden flex-shrink-0">
+        <img src={URL.createObjectURL(img)} alt={`extra-${i}`} className="w-full h-full object-cover" />
+        <button
+          onClick={() => setImagenesAdicionales(prev => prev.filter((_, j) => j !== i))}
+          className="absolute top-0 right-0 text-white bg-red-500 rounded-bl px-1 text-xs hover:bg-red-600"
+          title="Eliminar"
+        >
+          ×
+        </button>
+      </div>
+    ))}
+
+    {imagenesAdicionales.length < 4 && (
+      <>
+        <label
+          htmlFor="extraImagenInput"
+          className="w-16 h-16 border-2 border-dashed border-gray-400 flex items-center justify-center text-gray-400 cursor-pointer hover:border-gray-600 transition flex-shrink-0"
+        >
+          <span className="text-xl font-bold">+</span>
+        </label>
+        <input
+          type="file"
+          accept="image/*"
+          id="extraImagenInput"
+          className="hidden"
+          onChange={(e) => {
+            if (e.target.files.length > 0) {
+              const nueva = e.target.files[0];
+              setImagenesAdicionales(prev => [...prev, nueva].slice(0, 4));
+            }
+          }}
+        />
+      </>
+    )}
+  </div>
+</div>
+
 
           {/* Formulario */}
           <div className="flex-1 flex flex-col gap-4">
