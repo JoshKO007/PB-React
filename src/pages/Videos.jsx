@@ -10,7 +10,7 @@ const videos = [
     descripcion: 'Una obra audiovisual que explora el viaje espiritual del alma a través del color y el movimiento.'
   },
   {
-    url: '/videos/video2.mov',
+    url: '/videos/video2.mp4',
     titulo: 'El eco del silencio',
     descripcion: 'Experimento sensorial donde la ausencia de sonido resalta cada imagen como un grito contenido.'
   },
