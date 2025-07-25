@@ -150,35 +150,18 @@ export default function Galeria() {
         )}
       </AnimatePresence>
 
-<div
-  className="absolute top-5 left-5 z-50 flex items-center gap-2"
-  onMouseEnter={() => setHoverSalir(true)}
-  onMouseLeave={() => setHoverSalir(false)}
->
-  <button
-    onClick={() => navigate('/')}
-    className="p-2 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur border border-gray-400"
-    title="Volver al inicio"
-  >
-    <LogOut size={20} />
-  </button>
-
-  <AnimatePresence>
-    {hoverSalir && (
-      <motion.div
-        key="salir-text"
-        initial={{ opacity: 0, x: -15 }}
-        animate={{ opacity: 1, x: 0 }}
-        exit={{ opacity: 0, x: 15 }}
-        transition={{ duration: 0.3 }}
-        className="px-3 py-1 bg-black/70 text-white text-sm rounded-md"
+      {/* Botón Salida */}
+      <button
+        onClick={() => {
+          window.speechSynthesis.cancel();
+          if (audioRef.current) audioRef.current.pause();
+          navigate('/');
+        }}
+        className="fixed top-6 left-6 z-50 bg-white/10 border border-white/20 text-white p-3 rounded-full backdrop-blur hover:scale-105 transition"
+        title="Salir al menú"
       >
-        Salir
-      </motion.div>
-    )}
-  </AnimatePresence>
-</div>
-
+        <LogOut size={22} />
+      </button>
 
       {/* Botones verticales */}
       <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-4">
