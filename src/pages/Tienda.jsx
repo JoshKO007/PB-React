@@ -1,5 +1,5 @@
 // src/Tienda.jsx
-import { useEffect, useMemo, useState, useRef } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import {
@@ -28,7 +28,8 @@ import {
   Tag,
   Clock,
   ChevronLeft,
-  ChevronDown
+  ChevronDown,
+  ShieldAlert
 } from "lucide-react";
 
 /* ======================= DATOS DE TIENDA ======================= */
@@ -42,7 +43,7 @@ const PRODUCTOS_BASE = [
     imagenes: ["/obras/obra3.jpg", "/producto1b.jpg", "/producto1c.jpg", "/producto1d.jpg", "/producto1e.jpg"],
     precio: 1200,
     moneda: "MXN",
-    descuento: 10, // 10% de descuento
+    descuento: 10,
     destacado: true,
     bajoPedido: false,
     etiquetas: ["acrílico", "naturaleza"],
@@ -188,7 +189,7 @@ function formatoPrecio(valor, moneda) {
 
 function getPrecioFinal(precio, descuento = 0) {
   const pct = Math.max(0, Math.min(100, Number(descuento) || 0));
-  return Math.round((precio * (1 - pct / 100)) * 100) / 100;
+  return Math.round(precio * (1 - pct / 100) * 100) / 100;
 }
 
 function Etiqueta({ children }) {
@@ -206,13 +207,12 @@ function HeartBurst({ fire, onDone }) {
     window.matchMedia &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  // Nuevo set de partículas por disparo
   const particles = useMemo(() => {
-    const n = 10 + Math.floor(Math.random() * 6); // 10-15
+    const n = 10 + Math.floor(Math.random() * 6);
     const cols = ["#ef4444","#fb7185","#f59e0b","#10b981","#3b82f6","#a855f7"];
     return Array.from({ length: n }).map((_, i) => {
       const angle = (Math.PI * 2 * i) / n + Math.random() * 0.5;
-      const dist = 40 + Math.random() * 40; // 40-80px
+      const dist = 40 + Math.random() * 40;
       return {
         id: i,
         x: Math.cos(angle) * dist,
@@ -250,8 +250,6 @@ function HeartBurst({ fire, onDone }) {
             transition={{ duration: 0.55, ease: "easeOut", delay: p.delay }}
           />
         ))}
-
-        {/* Ondita (ripple) */}
         <motion.span
           className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-rose-400/70"
           style={{ width: 6, height: 6 }}
@@ -264,7 +262,58 @@ function HeartBurst({ fire, onDone }) {
   );
 }
 
-/* ======================= UI: ComboSelect (select estilizado) ======================= */
+/* ======================= CartBurst: partículas para el contador del carrito ======================= */
+function CartBurst({ fire }) {
+  const prefersReduced =
+    typeof window !== "undefined" &&
+    window.matchMedia &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  const particles = useMemo(() => {
+    const n = 8 + Math.floor(Math.random() * 6);
+    const cols = ["#059669","#10b981","#34d399","#a7f3d0","#f59e0b"];
+    return Array.from({ length: n }).map((_, i) => {
+      const angle = (Math.PI * 2 * i) / n + Math.random() * 0.6;
+      const dist = 28 + Math.random() * 24;
+      return {
+        id: i,
+        x: Math.cos(angle) * dist,
+        y: Math.sin(angle) * dist,
+        size: 4 + Math.random() * 5,
+        color: cols[Math.floor(Math.random() * cols.length)],
+        delay: Math.random() * 0.02
+      };
+    });
+  }, [fire]);
+
+  if (!fire || prefersReduced) return null;
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        key={`cartburst-${fire}`}
+        className="pointer-events-none absolute inset-0 grid place-items-center"
+        initial={{ opacity: 1 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.25 }}
+      >
+        {particles.map(p => (
+          <motion.span
+            key={p.id}
+            className="absolute rounded-full"
+            style={{ width: p.size, height: p.size, background: p.color }}
+            initial={{ x: 0, y: 0, scale: 0.6, opacity: 1 }}
+            animate={{ x: p.x, y: p.y, scale: 1, opacity: 0 }}
+            transition={{ duration: 0.45, ease: "easeOut", delay: p.delay }}
+          />
+        ))}
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
+/* ======================= UI: ComboSelect ======================= */
 function ComboSelect({ value, onChange, children, className = "" }) {
   return (
     <div className={`relative ${className}`}>
@@ -285,9 +334,10 @@ function ComboSelect({ value, onChange, children, className = "" }) {
 }
 
 /* ======================= CARD PRODUCTO ======================= */
-function CardProducto({ p, onOpen, onAddCart, onFav, favs }) {
+function CardProducto({ p, onOpen, onAddCartAnim, onFav, favs }) {
   const [hover, setHover] = useState(false);
-  const [burstId, setBurstId] = useState(0); // <<— NUEVO
+  const [burstId, setBurstId] = useState(0);
+  const imgRef = useRef(null);
   const isFav = favs?.includes(p.id);
   const handleOpen = () => onOpen(p);
 
@@ -307,6 +357,7 @@ function CardProducto({ p, onOpen, onAddCart, onFav, favs }) {
     >
       <div className="relative aspect-[4/3] overflow-hidden">
         <img
+          ref={imgRef}
           src={(hover && p.imagenes[1]) ? p.imagenes[1] : p.imagenes[0]}
           alt={p.titulo}
           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
@@ -337,13 +388,13 @@ function CardProducto({ p, onOpen, onAddCart, onFav, favs }) {
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex gap-2">
-            {/* Botón favorito con burst */}
+            {/* Favorito */}
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 const eraFav = isFav;
                 onFav(p);
-                if (!eraFav) setBurstId((x) => x + 1); // solo explota al agregar
+                if (!eraFav) setBurstId((x) => x + 1);
               }}
               className={`relative overflow-visible rounded-full bg-white/90 p-2 shadow hover:shadow-md ${isFav ? "ring-2 ring-rose-500" : ""}`}
               title={isFav ? "Quitar de favoritos" : "Agregar a favoritos"}
@@ -357,13 +408,12 @@ function CardProducto({ p, onOpen, onAddCart, onFav, favs }) {
               >
                 <Heart size={18} className={isFav ? "fill-rose-500 text-rose-500" : ""} />
               </motion.span>
-
-              {/* Partículas */}
               <HeartBurst fire={burstId} onDone={() => {}} />
             </button>
 
+            {/* Añadir al carrito */}
             <button
-              onClick={() => onAddCart(p)}
+              onClick={() => onAddCartAnim(p, imgRef.current, p.imagenes?.[0])}
               className="rounded-full bg-emerald-600 text-white px-3 py-2 text-xs font-semibold shadow hover:shadow-md flex items-center gap-1"
               title="Añadir al carrito"
             >
@@ -418,7 +468,7 @@ function CardProducto({ p, onOpen, onAddCart, onFav, favs }) {
 }
 
 /* ======================= SECCIONES ======================= */
-function SeccionGridLimitada({ titulo, icon, descripcion, productos, onOpen, onAddCart, onFav, favs, onVerTodo }) {
+function SeccionGridLimitada({ titulo, icon, descripcion, productos, onOpen, onAddCartAnim, onFav, favs, onVerTodo }) {
   const mostrados = productos.slice(0, 6);
   return (
     <section className="mt-10">
@@ -435,7 +485,7 @@ function SeccionGridLimitada({ titulo, icon, descripcion, productos, onOpen, onA
       <div className="mt-5">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {mostrados.map((p) => (
-            <CardProducto key={p.id} p={p} onOpen={onOpen} onAddCart={onAddCart} onFav={onFav} favs={favs} />
+            <CardProducto key={p.id} p={p} onOpen={onOpen} onAddCartAnim={onAddCartAnim} onFav={onFav} favs={favs} />
           ))}
         </div>
       </div>
@@ -443,14 +493,13 @@ function SeccionGridLimitada({ titulo, icon, descripcion, productos, onOpen, onA
   );
 }
 
-function GridGeneral({ productos, onOpen, onAddCart, onFav, favs }) {
+function GridGeneral({ productos, onOpen, onAddCartAnim, onFav, favs }) {
   return (
     <section className="mt-5">
-      {/* Máximo 3 por fila en desktop */}
       <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         <AnimatePresence>
           {productos.map((p) => (
-            <CardProducto key={p.id} p={p} onOpen={onOpen} onAddCart={onAddCart} onFav={onFav} favs={favs} />
+            <CardProducto key={p.id} p={p} onOpen={onOpen} onAddCartAnim={onAddCartAnim} onFav={onFav} favs={favs} />
           ))}
         </AnimatePresence>
       </div>
@@ -458,7 +507,7 @@ function GridGeneral({ productos, onOpen, onAddCart, onFav, favs }) {
   );
 }
 
-/* ======================= CARRUSEL DE IMAGENES (quick view) ======================= */
+/* ======================= CARRUSEL DE IMAGENES ======================= */
 function ImageCarousel({ images = [], title = "" }) {
   const [idx, setIdx] = useState(0);
   const [autoPlay, setAutoPlay] = useState(true);
@@ -491,7 +540,6 @@ function ImageCarousel({ images = [], title = "" }) {
 
   return (
     <div className="relative w-full select-none">
-      {/* Flexible sin aspect-square para no desbordar en móvil */}
       <div className="relative w-full bg-gray-100 overflow-hidden flex items-center justify-center min-h-[240px]">
         <AnimatePresence initial={false} custom={direction}>
           <motion.img
@@ -547,8 +595,9 @@ function ImageCarousel({ images = [], title = "" }) {
   );
 }
 
-/* ======================= QUICK VIEW (compacto en móvil) ======================= */
-function QuickView({ open, onClose, producto, onAddCart }) {
+/* ======================= QUICK VIEW ======================= */
+function QuickView({ open, onClose, producto, onAddCartAnim }) {
+  const anchorRef = useRef(null);
   if (!open || !producto) return null;
 
   const tieneDescuento = (producto.descuento || 0) > 0;
@@ -570,7 +619,9 @@ function QuickView({ open, onClose, producto, onAddCart }) {
 
           <div className="grid grid-cols-1 md:grid-cols-2">
             <div className="p-3 md:p-4 overflow-hidden">
-              <ImageCarousel images={producto?.imagenes} title={producto?.titulo} />
+              <div ref={anchorRef}>
+                <ImageCarousel images={producto?.imagenes} title={producto?.titulo} />
+              </div>
             </div>
 
             <div className="flex flex-col max-h-[70vh] md:max-h-[85vh]">
@@ -624,7 +675,10 @@ function QuickView({ open, onClose, producto, onAddCart }) {
 
               <div className="sticky bottom-0 w-full px-4 md:px-6 pb-4 md:pb-6 pt-3 md:pt-4 bg-white/95 backdrop-blur border-t">
                 <div className="flex gap-2 md:gap-3">
-                  <button onClick={() => onAddCart(producto)} className="rounded-lg md:rounded-xl bg-emerald-600 text-white px-3 py-2 md:px-4 md:py-3 font-semibold inline-flex items-center gap-2 shadow hover:shadow-md text-sm md:text-base">
+                  <button
+                    onClick={() => onAddCartAnim(producto, anchorRef.current, producto.imagenes?.[0])}
+                    className="rounded-lg md:rounded-xl bg-emerald-600 text-white px-3 py-2 md:px-4 md:py-3 font-semibold inline-flex items-center gap-2 shadow hover:shadow-md text-sm md:text-base"
+                  >
                     <ShoppingCart size={16} className="md:hidden" />
                     <ShoppingCart size={18} className="hidden md:inline" />
                     Añadir al carrito
@@ -647,11 +701,97 @@ function QuickView({ open, onClose, producto, onAddCart }) {
   );
 }
 
-/* ======================= TIENDA (con HEADER + FOOTER del App) ======================= */
+/* ======================= TOAST ======================= */
+function ToastItem({ t, onDone }) {
+  return (
+    <motion.div
+      layout
+      initial={{ y: 20, opacity: 0, scale: 0.98 }}
+      animate={{ y: 0, opacity: 1, scale: 1 }}
+      exit={{ y: 10, opacity: 0 }}
+      transition={{ type: "spring", stiffness: 400, damping: 28 }}
+      className="pointer-events-auto w-full sm:w-auto"
+    >
+      <div className="flex items-center gap-3 rounded-2xl border border-emerald-200 bg-white/95 backdrop-blur px-3 py-2 shadow-lg">
+        <img
+          src={t.img || "/placeholder.jpg"}
+          alt=""
+          className="h-10 w-10 rounded-lg object-cover border border-gray-200"
+          onError={(e) => { e.currentTarget.src = "/placeholder.jpg"; }}
+        />
+        <div className="min-w-0">
+          <div className="text-sm font-semibold text-emerald-700">¡Añadido al carrito!</div>
+          <div className="text-xs text-gray-700 truncate max-w-[60vw] sm:max-w-[320px]">{t.title}</div>
+        </div>
+      </div>
+      <motion.div
+        aria-hidden
+        initial={{ width: "100%" }}
+        animate={{ width: "0%" }}
+        transition={{ duration: t.ttl / 1000, ease: "linear" }}
+        className="h-0.5 bg-emerald-300 rounded mt-1"
+        onAnimationComplete={onDone}
+      />
+    </motion.div>
+  );
+}
+
+/* ======================= MODAL: Solicitar inicio de sesión ======================= */
+function SignInRequiredModal({ open, onClose, onGoLogin }) {
+  if (!open) return null;
+  return (
+    <AnimatePresence>
+      <motion.div
+        className="fixed inset-0 z-[10001] flex items-center justify-center"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+      >
+        <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+        <motion.div
+          initial={{ scale: 0.92, y: 10, opacity: 0 }}
+          animate={{ scale: 1, y: 0, opacity: 1 }}
+          exit={{ scale: 0.96, y: 8, opacity: 0 }}
+          transition={{ type: "spring", stiffness: 380, damping: 28 }}
+          className="relative w-[92%] sm:w-full sm:max-w-md rounded-2xl bg-white shadow-2xl border border-gray-200 p-5"
+        >
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-amber-100 text-amber-700 grid place-items-center">
+              <ShieldAlert size={20} />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Necesitas iniciar sesión</h3>
+              <p className="text-sm text-gray-600">
+                Para guardar artículos en tu carrito, inicia sesión en tu cuenta.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 flex gap-2 justify-end">
+            <button
+              onClick={onClose}
+              className="rounded-full border px-4 py-2 text-sm font-semibold bg-white hover:bg-gray-50 border-gray-200"
+            >
+              Más tarde
+            </button>
+            <button
+              onClick={onGoLogin}
+              className="rounded-full bg-gray-900 text-white px-4 py-2 text-sm font-semibold shadow hover:shadow-md inline-flex items-center gap-2"
+            >
+              <LogIn size={16} /> Iniciar sesión
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
+/* ======================= TIENDA ======================= */
 export default function Tienda() {
   const navigate = useNavigate();
 
-  // --- Header states (de App.jsx) ---
+  // --- Header states ---
   const [hovered, setHovered] = useState(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [usuarioActivo, setUsuarioActivo] = useState(null);
@@ -668,43 +808,47 @@ export default function Tienda() {
   const cerrarSesion = () => {
     setCerrandoSesion(true);
     setTimeout(() => {
-      localStorage.removeItem('sesionActiva');
+      localStorage.removeItem("sesionActiva");
       setUsuarioActivo(null);
       setCerrandoSesion(false);
-      navigate('/');
+      navigate("/");
     }, 5000);
   };
 
+  // Cargar sesión activa (si existe)
   useEffect(() => {
-    const sesion = JSON.parse(localStorage.getItem('sesionActiva'));
-    if (sesion?.id && sesion.id !== usuarioActivo?.id) setUsuarioActivo(sesion);
+    try {
+      const sesion = JSON.parse(localStorage.getItem("sesionActiva"));
+      if (sesion?.id) setUsuarioActivo(sesion);
+      else setUsuarioActivo(null);
+    } catch {
+      setUsuarioActivo(null);
+    }
   }, []);
 
   const menu = [
-    { label: "Inicio", icon: <Home size={28} />, onClick: () => navigate('/') },
-    { label: "Galería", icon: <ImageIcon size={24} />, onClick: () => navigate('/galeria')},
-    { label: "Videos", icon: <Video size={24} />, onClick: () => navigate('/videos') },
-    { label: "Tienda", icon: <ShoppingBag size={24} />, onClick: () => navigate('/tienda') },
-    { label: "Restauración", icon: <Brush size={24} />, onClick: () => navigate('/restauracion') },
-    { label: "Contacto", icon: <Mail size={24} />, onClick: () => navigate('/contacto') },
+    { label: "Inicio", icon: <Home size={28} />, onClick: () => navigate("/") },
+    { label: "Galería", icon: <ImageIcon size={24} />, onClick: () => navigate("/galeria") },
+    { label: "Videos", icon: <Video size={24} />, onClick: () => navigate("/videos") },
+    { label: "Tienda", icon: <ShoppingBag size={24} />, onClick: () => navigate("/tienda") },
+    { label: "Restauración", icon: <Brush size={24} />, onClick: () => navigate("/restauracion") },
+    { label: "Contacto", icon: <Mail size={24} />, onClick: () => navigate("/contacto") },
   ];
 
-  // --- Tienda original ---
+  // --- Productos y filtros ---
   const [productos] = useState(PRODUCTOS_BASE);
 
-  // ESTADO APLICADO
   const [busqueda, setBusqueda] = useState("");
   const [orden, setOrden] = useState("relevancia");
   const [categoria, setCategoria] = useState("todas");
   const [precioMax, setPrecioMax] = useState(3000);
 
-  // ESTADO DRAFT
   const [draftBusqueda, setDraftBusqueda] = useState(busqueda);
   const [draftOrden, setDraftOrden] = useState(orden);
   const [draftCategoria, setDraftCategoria] = useState(categoria);
   const [draftPrecioMax, setDraftPrecioMax] = useState(precioMax);
 
-  // Favoritos / Modal
+  // Favoritos / Modal producto
   const [favoritos, setFavoritos] = useState(() => {
     try { return JSON.parse(localStorage.getItem("favoritos")) || []; } catch { return []; }
   });
@@ -719,6 +863,72 @@ export default function Tienda() {
     setDraftCategoria(categoria);
     setDraftPrecioMax(precioMax);
   }, [busqueda, orden, categoria, precioMax]);
+
+  // ---- Carrito: botón, contador, animaciones ----
+  const cartBtnRef = useRef(null);
+  const [cartBurstId, setCartBurstId] = useState(0);
+
+  const getCartCountFromLS = () => {
+    try {
+      const cart = JSON.parse(localStorage.getItem("carrito")) || [];
+      return cart.reduce((sum, it) => sum + (Number(it.cantidad) || 1), 0);
+    } catch {
+      return 0;
+    }
+  };
+  const [cartCount, setCartCount] = useState(getCartCountFromLS());
+
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key === "carrito") setCartCount(getCartCountFromLS());
+      if (e.key === "sesionActiva") {
+        try {
+          const sesion = JSON.parse(e.newValue);
+          setUsuarioActivo(sesion?.id ? sesion : null);
+        } catch { setUsuarioActivo(null); }
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  useEffect(() => {
+    const onFocus = () => {
+      setCartCount(getCartCountFromLS());
+      try {
+        const sesion = JSON.parse(localStorage.getItem("sesionActiva"));
+        setUsuarioActivo(sesion?.id ? sesion : null);
+      } catch { setUsuarioActivo(null); }
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, []);
+
+  // ------- Overlay fly-to-cart -------
+  const [flying, setFlying] = useState([]); // {id, src, start:{x,y,w,h}, end:{x,y}}
+  const flyToCart = (startEl, src) => {
+    try {
+      if (!startEl || !cartBtnRef.current) return;
+      const sr = startEl.getBoundingClientRect();
+      const er = cartBtnRef.current.getBoundingClientRect();
+      const start = { x: sr.left + sr.width / 2, y: sr.top + sr.height / 2, w: sr.width, h: sr.height };
+      const end = { x: er.left + er.width / 2, y: er.top + er.height / 2 };
+      const id = Math.random().toString(36).slice(2);
+      setFlying((prev) => [...prev, { id, src: src || "/placeholder.jpg", start, end }]);
+    } catch {}
+  };
+
+  // ------- TOASTS -------
+  const [toasts, setToasts] = useState([]); // {id, title, img, ttl}
+  const pushToast = (title, img) => {
+    const id = Math.random().toString(36).slice(2);
+    const ttl = 2400;
+    setToasts((prev) => [...prev, { id, title, img, ttl }]);
+  };
+  const removeToast = (id) => setToasts((prev) => prev.filter(t => t.id !== id));
+
+  // ------- Modal "inicia sesión" -------
+  const [needLoginOpen, setNeedLoginOpen] = useState(false);
 
   const aplicarFiltroTipo = (tipo) => {
     const nuevaCat = tipo;
@@ -745,10 +955,8 @@ export default function Tienda() {
       );
     }
 
-    // Filtro por precio: usar precio final con descuento
     list = list.filter((p) => (getPrecioFinal(p.precio, p.descuento) || 0) <= (precioMax || 999999));
 
-    // Ordenamiento
     switch (orden) {
       case "precio_asc":
         list.sort((a, b) => getPrecioFinal(a.precio, a.descuento) - getPrecioFinal(b.precio, b.descuento));
@@ -760,7 +968,6 @@ export default function Tienda() {
         list.sort((a, b) => a.titulo.localeCompare(b.titulo));
         break;
       default:
-        // relevancia: destacados, luego bajo pedido
         list.sort((a, b) => Number(b.destacado) - Number(a.destacado) || Number(b.bajoPedido) - Number(a.bajoPedido));
     }
     return list;
@@ -778,20 +985,42 @@ export default function Tienda() {
 
   const abrirQuick = (p) => { setQuickProducto(p); setQuickOpen(true); };
   const cerrarQuick = () => { setQuickOpen(false); setQuickProducto(null); };
-  const addCart = (p) => {
-    try {
-      const raw = localStorage.getItem("carrito");
-      const cart = raw ? JSON.parse(raw) : [];
-      const existing = cart.find((i) => i.id === p.id);
-      if (existing) existing.cantidad += 1;
-      else cart.push({ id: p.id, titulo: p.titulo, precio: getPrecioFinal(p.precio, p.descuento), imagen: p.imagenes?.[0], cantidad: 1 });
-      localStorage.setItem("carrito", JSON.stringify(cart));
-    } catch {}
-    navigate("/carrito");
-  };
-  const toggleFav = (p) => { setFavoritos(prev => prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id]); };
 
-  const aplicarFiltros = () => { setBusqueda(draftBusqueda); setOrden(draftOrden); setCategoria(draftCategoria); setPrecioMax(draftPrecioMax); };
+  // ---- Persistencia del carrito + bursts (solo si hay sesión) ----
+  const persistAddToCart = (p) => {
+    const raw = localStorage.getItem("carrito");
+    const cart = raw ? JSON.parse(raw) : [];
+    const existing = cart.find((i) => i.id === p.id);
+    if (existing) existing.cantidad += 1;
+    else cart.push({ id: p.id, titulo: p.titulo, precio: getPrecioFinal(p.precio, p.descuento), imagen: p.imagenes?.[0], cantidad: 1 });
+    localStorage.setItem("carrito", JSON.stringify(cart));
+
+    const total = cart.reduce((sum, it) => sum + (Number(it.cantidad) || 1), 0);
+    setCartCount(total);
+    setCartBurstId((x) => x + 1);
+  };
+
+  // Añadir con animación o pedir login
+  const addCartWithAnim = (p, startEl, imgSrc) => {
+    if (!usuarioActivo) {
+      setNeedLoginOpen(true);
+      return;
+    }
+    if (startEl) flyToCart(startEl, imgSrc || p.imagenes?.[0]);
+    try { persistAddToCart(p); } catch {}
+    pushToast(p.titulo, imgSrc || p.imagenes?.[0]);
+  };
+
+  const toggleFav = (p) => {
+    setFavoritos(prev => prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id]);
+  };
+
+  const aplicarFiltros = () => {
+    setBusqueda(draftBusqueda);
+    setOrden(draftOrden);
+    setCategoria(draftCategoria);
+    setPrecioMax(draftPrecioMax);
+  };
   const limpiarFiltros = () => {
     setDraftBusqueda(""); setDraftOrden("relevancia"); setDraftCategoria("todas"); setDraftPrecioMax(3000);
     setBusqueda(""); setOrden("relevancia"); setCategoria("todas"); setPrecioMax(3000);
@@ -801,7 +1030,7 @@ export default function Tienda() {
   const destacados = productos.filter((p) => p.destacado);
   const bajoPedido = productos.filter((p) => p.bajoPedido);
 
-  // Sin filtros → muestra todas las obras
+  // Sin filtros → todas las obras
   const generales = filtrosAplicados ? productosFiltrados : productos;
 
   return (
@@ -814,7 +1043,7 @@ export default function Tienda() {
         </div>
       )}
 
-      {/* ================= HEADER (de App.jsx) ================= */}
+      {/* ================= HEADER ================= */}
       <motion.header
         initial={{ opacity: 0, y: -30 }}
         animate={{ opacity: 1, y: 0 }}
@@ -859,13 +1088,13 @@ export default function Tienda() {
                           <div className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-gray-800">
                             <User size={16} /> {usuarioActivo.nombre || usuarioActivo.usuario}
                           </div>
-                          <button onClick={() => navigate('/usuario')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                          <button onClick={() => navigate("/usuario")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <User size={16} className="mr-2" /> Información de cuenta
                           </button>
-                          <button onClick={() => navigate('/direccion')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                          <button onClick={() => navigate("/direccion")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <Mail size={16} className="mr-2" /> Direcciones
                           </button>
-                          <button onClick={() => navigate('/contrasena')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                          <button onClick={() => navigate("/contrasena")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <KeyRound size={16} className="mr-2" /> Cambiar contraseña
                           </button>
                           <button onClick={cerrarSesion} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100 text-red-600">
@@ -874,10 +1103,10 @@ export default function Tienda() {
                         </>
                       ) : (
                         <>
-                          <button onClick={() => navigate('/iniciar-sesion')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                          <button onClick={() => navigate("/iniciar-sesion")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <LogIn size={16} className="mr-2" /> Iniciar sesión
                           </button>
-                          <button onClick={() => navigate('/registro')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                          <button onClick={() => navigate("/registro")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <UserPlus size={16} className="mr-2" /> Crear cuenta
                           </button>
                         </>
@@ -889,11 +1118,36 @@ export default function Tienda() {
 
               {usuarioActivo && (
                 <button
-                  onClick={() => navigate('/carrito')}
-                  className="p-2 rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md hover:shadow-lg flex items-center"
+                  ref={cartBtnRef}
+                  onClick={() => navigate("/carrito")}
+                  className="relative group"
                   title="Carrito"
+                  aria-label={`Carrito con ${cartCount} ${cartCount === 1 ? "artículo" : "artículos"}`}
                 >
-                  <ShoppingBag size={22} className="text-[#a16207]" />
+                  {/* Bolita grande */}
+                  <span
+                    className="grid place-items-center rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md transition
+                               h-11 w-11 group-hover:shadow-lg group-hover:scale-105"
+                  >
+                    <ShoppingBag size={22} className="text-[#a16207]" />
+                  </span>
+
+                  {/* Contador fusionado */}
+                  <motion.span
+                    key={cartCount}
+                    initial={{ scale: 0.85 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: "spring", stiffness: 500, damping: 18 }}
+                    className="absolute -right-1 -top-1 rounded-full text-[11px] font-bold
+                               bg-rose-600 text-white h-5 min-w-[20px] px-1.5 grid place-items-center
+                               ring-2 ring-white shadow overflow-visible"
+                    style={{ lineHeight: 1 }}
+                  >
+                    {cartCount > 99 ? "99+" : cartCount}
+                    <div className="absolute inset-0">
+                      <CartBurst fire={cartBurstId} />
+                    </div>
+                  </motion.span>
                 </button>
               )}
             </div>
@@ -917,8 +1171,8 @@ export default function Tienda() {
                 onClick={item.onClick}
                 className={`flex flex-col items-center gap-1 cursor-pointer px-2 sm:px-3 py-1 transition-all duration-300 ease-out
                   ${hovered === index
-                    ? 'bg-white/50 backdrop-blur-sm shadow-inner rounded-md scale-105 underline underline-offset-4'
-                    : 'hover:bg-white/30 hover:backdrop-blur-sm hover:shadow-sm hover:rounded-md'
+                    ? "bg-white/50 backdrop-blur-sm shadow-inner rounded-md scale-105 underline underline-offset-4"
+                    : "hover:bg-white/30 hover:backdrop-blur-sm hover:shadow-sm hover:rounded-md"
                   }`}
                 whileHover={{ scale: 1.05 }}
               >
@@ -946,7 +1200,7 @@ export default function Tienda() {
           </motion.div>
         </section>
 
-        {/* FILTROS (ajustados a 4 columnas iguales) */}
+        {/* FILTROS */}
         <section className="mt-4">
           <div className="rounded-2xl border bg-white/70 backdrop-blur p-4 sm:p-5 shadow-sm">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
@@ -1044,7 +1298,7 @@ export default function Tienda() {
             productos={destacados}
             onVerTodo={() => aplicarFiltroTipo("destacadas")}
             onOpen={(p) => { setQuickProducto(p); setQuickOpen(true); }}
-            onAddCart={(p) => addCart(p)}
+            onAddCartAnim={addCartWithAnim}
             onFav={(p) => toggleFav(p)}
             favs={favoritos}
           />
@@ -1058,7 +1312,7 @@ export default function Tienda() {
             productos={bajoPedido}
             onVerTodo={() => aplicarFiltroTipo("bajo_pedido")}
             onOpen={(p) => { setQuickProducto(p); setQuickOpen(true); }}
-            onAddCart={(p) => addCart(p)}
+            onAddCartAnim={addCartWithAnim}
             onFav={(p) => toggleFav(p)}
             favs={favoritos}
           />
@@ -1078,7 +1332,7 @@ export default function Tienda() {
           <GridGeneral
             productos={generales}
             onOpen={(p) => { setQuickProducto(p); setQuickOpen(true); }}
-            onAddCart={(p) => addCart(p)}
+            onAddCartAnim={addCartWithAnim}
             onFav={(p) => toggleFav(p)}
             favs={favoritos}
           />
@@ -1115,8 +1369,73 @@ export default function Tienda() {
         open={quickOpen}
         onClose={cerrarQuick}
         producto={quickProducto}
-        onAddCart={(p) => addCart(p)}
+        onAddCartAnim={addCartWithAnim}
       />
+
+      {/* Flying Overlay */}
+      <div className="pointer-events-none fixed inset-0 z-[9998]">
+        <AnimatePresence>
+          {flying.map(item => {
+            const size = Math.max(32, Math.min(120, item.start.w || 80));
+            return (
+              <motion.img
+                key={item.id}
+                src={item.src || "/placeholder.jpg"}
+                alt=""
+                initial={{
+                  x: item.start.x - size / 2,
+                  y: item.start.y - size / 2,
+                  width: size,
+                  height: size,
+                  borderRadius: 12,
+                  opacity: 0.95,
+                  rotate: 0,
+                  scale: 1
+                }}
+                animate={{
+                  x: item.end.x - size / 3,
+                  y: item.end.y - size / 3,
+                  width: size / 3,
+                  height: size / 3,
+                  borderRadius: 9999,
+                  opacity: 0.3,
+                  rotate: 15,
+                  scale: 0.9
+                }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.8, ease: "easeInOut" }}
+                style={{ position: "fixed", objectFit: "cover", boxShadow: "0 8px 24px rgba(0,0,0,.15)" }}
+                onAnimationComplete={() => {
+                  setFlying(prev => prev.filter(f => f.id !== item.id));
+                }}
+              />
+            );
+          })}
+        </AnimatePresence>
+      </div>
+
+      {/* TOAST CONTAINER */}
+      <SignInRequiredModal
+        open={needLoginOpen}
+        onClose={() => setNeedLoginOpen(false)}
+        onGoLogin={() => {
+          setNeedLoginOpen(false);
+          navigate("/iniciar-sesion");
+        }}
+      />
+      
+      {/* ================= TOAST CONTAINER ================= */}
+      <div
+        aria-live="polite"
+        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[10000] flex flex-col gap-2 items-center w-full px-3 sm:px-0"
+        style={{ pointerEvents: "none" }}
+      >
+        <AnimatePresence initial={false}>
+          {toasts.map(t => (
+            <ToastItem key={t.id} t={t} onDone={() => removeToast(t.id)} />
+          ))}
+        </AnimatePresence>
+      </div>
 
       {/* ================= FOOTER (de App.jsx) ================= */}
       <footer className="w-full py-6 border-t border-gray-300 text-center mt-auto">
