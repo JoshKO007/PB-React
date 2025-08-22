@@ -199,6 +199,71 @@ function Etiqueta({ children }) {
   );
 }
 
+/* ======================= HeartBurst: partículas tipo TikTok ======================= */
+function HeartBurst({ fire, onDone }) {
+  const prefersReduced =
+    typeof window !== "undefined" &&
+    window.matchMedia &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // Nuevo set de partículas por disparo
+  const particles = useMemo(() => {
+    const n = 10 + Math.floor(Math.random() * 6); // 10-15
+    const cols = ["#ef4444","#fb7185","#f59e0b","#10b981","#3b82f6","#a855f7"];
+    return Array.from({ length: n }).map((_, i) => {
+      const angle = (Math.PI * 2 * i) / n + Math.random() * 0.5;
+      const dist = 40 + Math.random() * 40; // 40-80px
+      return {
+        id: i,
+        x: Math.cos(angle) * dist,
+        y: Math.sin(angle) * dist,
+        size: 6 + Math.random() * 6,
+        color: cols[Math.floor(Math.random() * cols.length)],
+        delay: Math.random() * 0.03
+      };
+    });
+  }, [fire]);
+
+  if (!fire || prefersReduced) return null;
+
+  return (
+    <AnimatePresence onExitComplete={onDone}>
+      <motion.div
+        key={`burst-${fire}`}
+        className="pointer-events-none absolute inset-0"
+        initial={{ opacity: 1 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.25 }}
+      >
+        {particles.map(p => (
+          <motion.span
+            key={p.id}
+            className="absolute rounded-full"
+            style={{
+              left: "50%", top: "50%",
+              width: p.size, height: p.size,
+              background: p.color, boxShadow: `0 0 0.5px ${p.color}`
+            }}
+            initial={{ x: 0, y: 0, scale: 0.6, opacity: 1 }}
+            animate={{ x: p.x, y: p.y, scale: 1, opacity: 0 }}
+            transition={{ duration: 0.55, ease: "easeOut", delay: p.delay }}
+          />
+        ))}
+
+        {/* Ondita (ripple) */}
+        <motion.span
+          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-rose-400/70"
+          style={{ width: 6, height: 6 }}
+          initial={{ scale: 1, opacity: 0.8 }}
+          animate={{ scale: 8, opacity: 0 }}
+          transition={{ duration: 0.6, ease: "easeOut" }}
+        />
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
 /* ======================= UI: ComboSelect (select estilizado) ======================= */
 function ComboSelect({ value, onChange, children, className = "" }) {
   return (
@@ -222,6 +287,7 @@ function ComboSelect({ value, onChange, children, className = "" }) {
 /* ======================= CARD PRODUCTO ======================= */
 function CardProducto({ p, onOpen, onAddCart, onFav, favs }) {
   const [hover, setHover] = useState(false);
+  const [burstId, setBurstId] = useState(0); // <<— NUEVO
   const isFav = favs?.includes(p.id);
   const handleOpen = () => onOpen(p);
 
@@ -271,13 +337,31 @@ function CardProducto({ p, onOpen, onAddCart, onFav, favs }) {
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex gap-2">
+            {/* Botón favorito con burst */}
             <button
-              onClick={() => onFav(p)}
-              className={`rounded-full bg-white/90 p-2 shadow hover:shadow-md ${isFav ? "ring-2 ring-rose-500" : ""}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                const eraFav = isFav;
+                onFav(p);
+                if (!eraFav) setBurstId((x) => x + 1); // solo explota al agregar
+              }}
+              className={`relative overflow-visible rounded-full bg-white/90 p-2 shadow hover:shadow-md ${isFav ? "ring-2 ring-rose-500" : ""}`}
               title={isFav ? "Quitar de favoritos" : "Agregar a favoritos"}
             >
-              <Heart size={18} className={isFav ? "fill-rose-500 text-rose-500" : ""} />
+              <motion.span
+                initial={false}
+                animate={{ scale: isFav ? 1.15 : 1 }}
+                whileTap={{ scale: 0.85 }}
+                transition={{ type: "spring", stiffness: 400, damping: 18 }}
+                className="grid place-items-center"
+              >
+                <Heart size={18} className={isFav ? "fill-rose-500 text-rose-500" : ""} />
+              </motion.span>
+
+              {/* Partículas */}
+              <HeartBurst fire={burstId} onDone={() => {}} />
             </button>
+
             <button
               onClick={() => onAddCart(p)}
               className="rounded-full bg-emerald-600 text-white px-3 py-2 text-xs font-semibold shadow hover:shadow-md flex items-center gap-1"
