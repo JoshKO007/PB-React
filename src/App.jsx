@@ -18,7 +18,7 @@ import {
 
 const productos = [
   {
-    titulo: 'Cuadro “Raíz de vida”',
+    titulo: 'Cuadro “Raíz onirica”',
     descripcion: 'Acrílico sobre lienzo. 60x80 cm.',
     imagen: '/producto1.jpg',
     precio: '$1200 MXN'
