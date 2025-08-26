@@ -32,138 +32,21 @@ import {
   ShieldAlert
 } from "lucide-react";
 
-/* ======================= DATOS DE TIENDA ======================= */
+/* ============================================================
+   (A) Catálogo base (fallback) — se intenta cargar JSON externo
+   ============================================================ */
 const PRODUCTOS_BASE = [
-  {
-    id: "p1",
-    titulo: "Raíz de vida",
-    descripcion: "Acrílico sobre lienzo. 60x80 cm.",
-    descripcionDetallada:
-      "Obra que explora la relación entre lo orgánico y lo ritual. Capas de acrílico veladas con pinceladas gestuales. Lienzo de algodón 380 g/m², bastidor de pino con acabado mate. Incluye sistema de colgado.",
-    imagenes: ["/obras/obra3.jpg", "/producto1b.jpg", "/producto1c.jpg", "/producto1d.jpg", "/producto1e.jpg"],
-    precio: 1200,
-    moneda: "MXN",
-    descuento: 10,
-    destacado: true,
-    bajoPedido: false,
-    etiquetas: ["acrílico", "naturaleza"],
-    disponible: true,
-    tiempoEntrega: "Listo para envío",
-  },
-  {
-    id: "p2",
-    titulo: "Aurora interna",
-    descripcion: "Mixta sobre papel reciclado. 50x70 cm.",
-    descripcionDetallada:
-      "Técnica mixta con pigmentos y tintas sobre papel reciclado libre de ácido (300 g). La pieza combina texturas granulosas y transparencias para sugerir una luz interior.",
-    imagenes: ["/producto2.jpg", "/producto2b.jpg", "/producto2c.jpg", "/producto2d.jpg"],
-    precio: 900,
-    moneda: "MXN",
-    descuento: 0,
-    destacado: true,
-    bajoPedido: false,
-    etiquetas: ["mixta", "onírico"],
-    disponible: true,
-    tiempoEntrega: "Listo para envío",
-  },
-  {
-    id: "p3",
-    titulo: "Serie Elementos (3 piezas)",
-    descripcion: "Serie de 3 piezas. Técnica mixta.",
-    descripcionDetallada:
-      "Tríptico que dialoga con los cuatro elementos a través de tres abstracciones. Base acrílica, tinta y grafito sellado con barniz satinado. Se puede instalar en horizontal o vertical.",
-    imagenes: ["/producto3.jpg", "/producto3b.jpg", "/producto3c.jpg"],
-    precio: 2100,
-    moneda: "MXN",
-    descuento: 15,
-    destacado: true,
-    bajoPedido: true,
-    etiquetas: ["serie", "mixta"],
-    disponible: true,
-    tiempoEntrega: "Hecho bajo pedido (2-3 semanas)",
-  },
-  {
-    id: "p4",
-    titulo: "Cenit marino",
-    descripcion: "Óleo sobre lienzo. 40x60 cm.",
-    descripcionDetallada:
-      "Pincelada suelta con veladuras de óleo para un efecto de profundidad acuosa. Lienzo tensado en bastidor de pino. Borde pintado para montaje sin marco.",
-    imagenes: ["/producto4.jpg", "/producto4b.jpg", "/producto4c.jpg", "/producto4d.jpg", "/producto4e.jpg"],
-    precio: 1500,
-    moneda: "MXN",
-    descuento: 0,
-    destacado: false,
-    bajoPedido: false,
-    etiquetas: ["óleo", "mar"],
-    disponible: true,
-    tiempoEntrega: "Listo para envío",
-  },
-  {
-    id: "p5",
-    titulo: "Bosque de susurros",
-    descripcion: "Acuarela. 30x40 cm.",
-    descripcionDetallada:
-      "Acuarela sobre papel 100% algodón prensado en frío. Paleta fría con detalles húmedo-sobre-húmedo que enfatiza atmósferas y profundidad.",
-    imagenes: ["/producto5.jpg", "/producto5b.jpg", "/producto5c.jpg"],
-    precio: 600,
-    moneda: "MXN",
-    descuento: 5,
-    destacado: true,
-    bajoPedido: false,
-    etiquetas: ["acuarela", "paisaje"],
-    disponible: true,
-    tiempoEntrega: "Listo para envío",
-  },
-  {
-    id: "p6",
-    titulo: "Retrato en bruma",
-    descripcion: "Mixta sobre madera. 60x60 cm.",
-    descripcionDetallada:
-      "Soporte de madera sellado y texturizado. Capas de acrílico y carbón para un gesto difuso que insinúa rostro. Barniz protector UV.",
-    imagenes: ["/producto6.jpg", "/producto6b.jpg", "/producto6c.jpg", "/producto6d.jpg"],
-    precio: 1800,
-    moneda: "MXN",
-    descuento: 20,
-    destacado: true,
-    bajoPedido: true,
-    etiquetas: ["retrato", "mixta"],
-    disponible: true,
-    tiempoEntrega: "Hecho bajo pedido (3 semanas)",
-  },
-  {
-    id: "p7",
-    titulo: "Geometría íntima",
-    descripcion: "Tinta y acrílico. 50x50 cm.",
-    descripcionDetallada:
-      "Composición abstracta con módulos geométricos y veladuras. Base acrílica con intervenciones en tinta indeleble. Montaje recomendado flotado.",
-    imagenes: ["/producto7.jpg", "/producto7b.jpg", "/producto7c.jpg"],
-    precio: 1100,
-    moneda: "MXN",
-    descuento: 0,
-    destacado: false,
-    bajoPedido: false,
-    etiquetas: ["tinta", "abstracto"],
-    disponible: true,
-    tiempoEntrega: "Listo para envío",
-  },
-  {
-    id: "p8",
-    titulo: "Luz de medianoche",
-    descripcion: "Acrílico sobre lienzo. 70x90 cm.",
-    descripcionDetallada:
-      "Gran formato con capas espesas y raspados. Contrastes de azul profundo y toques nacarados. Ideal para muro principal.",
-    imagenes: ["/producto8.jpg", "/producto8b.jpg", "/producto8c.jpg", "/producto8d.jpg"],
-    precio: 2500,
-    moneda: "MXN",
-    descuento: 12,
-    destacado: false,
-    bajoPedido: true,
-    etiquetas: ["acrílico", "contemporáneo"],
-    disponible: true,
-    tiempoEntrega: "Hecho bajo pedido (4 semanas)",
-  },
+  { id: "p1", titulo: "Raíz de vida", descripcion: "Acrílico sobre lienzo. 60x80 cm.", descripcionDetallada: "Obra que explora la relación entre lo orgánico y lo ritual. Capas de acrílico veladas con pinceladas gestuales. Lienzo de algodón 380 g/m², bastidor de pino con acabado mate. Incluye sistema de colgado.", imagenes: ["/obras/obra3.jpg","/producto1b.jpg","/producto1c.jpg","/producto1d.jpg","/producto1e.jpg"], precio: 1200, moneda: "MXN", descuento: 10, destacado: true, bajoPedido: false, etiquetas: ["acrílico","naturaleza"], disponible: true, tiempoEntrega: "Listo para envío" },
+  { id: "p2", titulo: "Aurora interna", descripcion: "Mixta sobre papel reciclado. 50x70 cm.", descripcionDetallada: "Técnica mixta con pigmentos y tintas sobre papel reciclado libre de ácido (300 g). La pieza combina texturas granulosas y transparencias para sugerir una luz interior.", imagenes: ["/producto2.jpg","/producto2b.jpg","/producto2c.jpg","/producto2d.jpg"], precio: 900, moneda: "MXN", descuento: 0, destacado: true, bajoPedido: false, etiquetas: ["mixta","onírico"], disponible: true, tiempoEntrega: "Listo para envío" },
+  { id: "p3", titulo: "Serie Elementos (3 piezas)", descripcion: "Serie de 3 piezas. Técnica mixta.", descripcionDetallada: "Tríptico que dialoga con los cuatro elementos a través de tres abstracciones. Base acrílica, tinta y grafito sellado con barniz satinado. Se puede instalar en horizontal o vertical.", imagenes: ["/producto3.jpg","/producto3b.jpg","/producto3c.jpg"], precio: 2100, moneda: "MXN", descuento: 15, destacado: true, bajoPedido: true, etiquetas: ["serie","mixta"], disponible: true, tiempoEntrega: "Hecho bajo pedido (2-3 semanas)" },
+  { id: "p4", titulo: "Cenit marino", descripcion: "Óleo sobre lienzo. 40x60 cm.", descripcionDetallada: "Pincelada suelta con veladuras de óleo para un efecto de profundidad acuosa. Lienzo tensado en bastidor de pino. Borde pintado para montaje sin marco.", imagenes: ["/producto4.jpg","/producto4b.jpg","/producto4c.jpg","/producto4d.jpg","/producto4e.jpg"], precio: 1500, moneda: "MXN", descuento: 0, destacado: false, bajoPedido: false, etiquetas: ["óleo","mar"], disponible: true, tiempoEntrega: "Listo para envío" },
+  { id: "p5", titulo: "Bosque de susurros", descripcion: "Acuarela. 30x40 cm.", descripcionDetallada: "Acuarela sobre papel 100% algodón prensado en frío. Paleta fría con detalles húmedo-sobre-húmedo que enfatiza atmósferas y profundidad.", imagenes: ["/producto5.jpg","/producto5b.jpg","/producto5c.jpg"], precio: 600, moneda: "MXN", descuento: 5, destacado: true, bajoPedido: false, etiquetas: ["acuarela","paisaje"], disponible: true, tiempoEntrega: "Listo para envío" },
+  { id: "p6", titulo: "Retrato en bruma", descripcion: "Mixta sobre madera. 60x60 cm.", descripcionDetallada: "Soporte de madera sellado y texturizado. Capas de acrílico y carbón para un gesto difuso que insinúa rostro. Barniz protector UV.", imagenes: ["/producto6.jpg","/producto6b.jpg","/producto6c.jpg","/producto6d.jpg"], precio: 1800, moneda: "MXN", descuento: 20, destacado: true, bajoPedido: true, etiquetas: ["retrato","mixta"], disponible: true, tiempoEntrega: "Hecho bajo pedido (3 semanas)" },
+  { id: "p7", titulo: "Geometría íntima", descripcion: "Tinta y acrílico. 50x50 cm.", descripcionDetallada: "Composición abstracta con módulos geométricos y veladuras. Base acrílica con intervenciones en tinta indeleble. Montaje recomendado flotado.", imagenes: ["/producto7.jpg","/producto7b.jpg","/producto7c.jpg"], precio: 1100, moneda: "MXN", descuento: 0, destacado: false, bajoPedido: false, etiquetas: ["tinta","abstracto"], disponible: true, tiempoEntrega: "Listo para envío" },
+  { id: "p8", titulo: "Luz de medianoche", descripcion: "Acrílico sobre lienzo. 70x90 cm.", descripcionDetallada: "Gran formato con capas espesas y raspados. Contrastes de azul profundo y toques nacarados. Ideal para muro principal.", imagenes: ["/producto8.jpg","/producto8b.jpg","/producto8c.jpg","/producto8d.jpg"], precio: 2500, moneda: "MXN", descuento: 12, destacado: false, bajoPedido: true, etiquetas: ["acrílico","contemporáneo"], disponible: true, tiempoEntrega: "Hecho bajo pedido (4 semanas)" },
 ];
 
+/* ======================= Ordenes / Categorías ======================= */
 const ORDENES = [
   { id: "relevancia", label: "Relevancia" },
   { id: "precio_asc", label: "Precio: bajo a alto" },
@@ -178,7 +61,7 @@ const categorias = [
   { id: "generales", label: "Obras en general" },
 ];
 
-/* ======================= UTILES ======================= */
+/* ======================= Utiles de precio/etiquetas ======================= */
 function formatoPrecio(valor, moneda) {
   try {
     return new Intl.NumberFormat("es-MX", { style: "currency", currency: moneda || "MXN" }).format(valor);
@@ -186,12 +69,10 @@ function formatoPrecio(valor, moneda) {
     return `$${valor} ${moneda || "MXN"}`;
   }
 }
-
 function getPrecioFinal(precio, descuento = 0) {
   const pct = Math.max(0, Math.min(100, Number(descuento) || 0));
   return Math.round(precio * (1 - pct / 100) * 100) / 100;
 }
-
 function Etiqueta({ children }) {
   return (
     <span className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium backdrop-blur bg-white/60 border-gray-200">
@@ -200,27 +81,62 @@ function Etiqueta({ children }) {
   );
 }
 
-/* ======================= HeartBurst: partículas tipo TikTok ======================= */
+/* ======================= (B) Helpers de Carrito & Favoritos ======================= */
+// Carrito por usuario
+function getCartKeyBySession(sesion) {
+  return sesion?.id ? `carrito:${sesion.id}` : null;
+}
+function safeCartCount(cartArray) {
+  return (cartArray || []).reduce((sum, it) => {
+    const raw = Number(it?.cantidad);
+    const qty = Number.isFinite(raw) ? raw : 1;
+    return sum + Math.max(0, qty);
+  }, 0);
+}
+
+// Favoritos por usuario + sincronización
+function getFavsKeyBySession(sesion) {
+  // sin sesión, usa "favoritos" (permite migrar cuando inicia sesión)
+  return sesion?.id ? `favoritos:${sesion.id}` : "favoritos";
+}
+function readFavsBySession(sesion) {
+  try {
+    const key = getFavsKeyBySession(sesion);
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+function writeFavsBySession(sesion, list) {
+  const key = getFavsKeyBySession(sesion);
+  try {
+    localStorage.setItem(key, JSON.stringify(list));
+  } catch {}
+  // Evento interno (misma pestaña)
+  try {
+    window.dispatchEvent(new CustomEvent("favs:changed", { detail: { key, list } }));
+  } catch {}
+  // BroadcastChannel (entre pestañas)
+  try {
+    const bc = new BroadcastChannel("favs");
+    bc.postMessage({ key, list });
+    bc.close();
+  } catch {}
+}
+
+/* ======================= HeartBurst (partículas) ======================= */
 function HeartBurst({ fire, onDone }) {
   const prefersReduced =
     typeof window !== "undefined" &&
     window.matchMedia &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  const particles = useMemo(() => {
+  const particles = React.useMemo(() => {
     const n = 10 + Math.floor(Math.random() * 6);
     const cols = ["#ef4444","#fb7185","#f59e0b","#10b981","#3b82f6","#a855f7"];
     return Array.from({ length: n }).map((_, i) => {
       const angle = (Math.PI * 2 * i) / n + Math.random() * 0.5;
       const dist = 40 + Math.random() * 40;
-      return {
-        id: i,
-        x: Math.cos(angle) * dist,
-        y: Math.sin(angle) * dist,
-        size: 6 + Math.random() * 6,
-        color: cols[Math.floor(Math.random() * cols.length)],
-        delay: Math.random() * 0.03
-      };
+      return { id: i, x: Math.cos(angle) * dist, y: Math.sin(angle) * dist, size: 6 + Math.random() * 6, color: cols[Math.floor(Math.random() * cols.length)], delay: Math.random() * 0.03 };
     });
   }, [fire]);
 
@@ -240,11 +156,7 @@ function HeartBurst({ fire, onDone }) {
           <motion.span
             key={p.id}
             className="absolute rounded-full"
-            style={{
-              left: "50%", top: "50%",
-              width: p.size, height: p.size,
-              background: p.color, boxShadow: `0 0 0.5px ${p.color}`
-            }}
+            style={{ left: "50%", top: "50%", width: p.size, height: p.size, background: p.color, boxShadow: `0 0 0.5px ${p.color}` }}
             initial={{ x: 0, y: 0, scale: 0.6, opacity: 1 }}
             animate={{ x: p.x, y: p.y, scale: 1, opacity: 0 }}
             transition={{ duration: 0.55, ease: "easeOut", delay: p.delay }}
@@ -262,27 +174,20 @@ function HeartBurst({ fire, onDone }) {
   );
 }
 
-/* ======================= CartBurst: partículas para el contador del carrito ======================= */
+/* ======================= CartBurst (partículas) ======================= */
 function CartBurst({ fire }) {
   const prefersReduced =
     typeof window !== "undefined" &&
     window.matchMedia &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  const particles = useMemo(() => {
+  const particles = React.useMemo(() => {
     const n = 8 + Math.floor(Math.random() * 6);
     const cols = ["#059669","#10b981","#34d399","#a7f3d0","#f59e0b"];
     return Array.from({ length: n }).map((_, i) => {
       const angle = (Math.PI * 2 * i) / n + Math.random() * 0.6;
       const dist = 28 + Math.random() * 24;
-      return {
-        id: i,
-        x: Math.cos(angle) * dist,
-        y: Math.sin(angle) * dist,
-        size: 4 + Math.random() * 5,
-        color: cols[Math.floor(Math.random() * cols.length)],
-        delay: Math.random() * 0.02
-      };
+      return { id: i, x: Math.cos(angle) * dist, y: Math.sin(angle) * dist, size: 4 + Math.random() * 5, color: cols[Math.floor(Math.random() * cols.length)], delay: Math.random() * 0.02 };
     });
   }, [fire]);
 
@@ -358,7 +263,7 @@ function CardProducto({ p, onOpen, onAddCartAnim, onFav, favs }) {
       <div className="relative aspect-[4/3] overflow-hidden">
         <img
           ref={imgRef}
-          src={(hover && p.imagenes[1]) ? p.imagenes[1] : p.imagenes[0]}
+          src={(hover && p.imagenes?.[1]) ? p.imagenes[1] : (p.imagenes?.[0] || "/placeholder.jpg")}
           alt={p.titulo}
           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
           onError={(e) => { e.currentTarget.src = p.imagenes?.[0] || "/placeholder.jpg"; }}
@@ -808,8 +713,18 @@ export default function Tienda() {
   const cerrarSesion = () => {
     setCerrandoSesion(true);
     setTimeout(() => {
+      try {
+        localStorage.removeItem("carrito"); // legacy
+        const prev = JSON.parse(localStorage.getItem("sesionActiva"));
+        if (prev?.id) {
+          localStorage.removeItem(`carrito:${prev.id}`);
+          // si quieres borrar también favoritos del usuario saliente, descomenta:
+          // localStorage.removeItem(`favoritos:${prev.id}`);
+        }
+      } catch {}
       localStorage.removeItem("sesionActiva");
       setUsuarioActivo(null);
+      setCartCount(0);
       setCerrandoSesion(false);
       navigate("/");
     }, 5000);
@@ -819,8 +734,7 @@ export default function Tienda() {
   useEffect(() => {
     try {
       const sesion = JSON.parse(localStorage.getItem("sesionActiva"));
-      if (sesion?.id) setUsuarioActivo(sesion);
-      else setUsuarioActivo(null);
+      setUsuarioActivo(sesion?.id ? sesion : null);
     } catch {
       setUsuarioActivo(null);
     }
@@ -835,9 +749,25 @@ export default function Tienda() {
     { label: "Contacto", icon: <Mail size={24} />, onClick: () => navigate("/contacto") },
   ];
 
-  // --- Productos y filtros ---
-  const [productos] = useState(PRODUCTOS_BASE);
+  // --- Productos: se intenta obtener de /data/productos.json, con fallback a PRODUCTOS_BASE ---
+  const [productos, setProductos] = useState(PRODUCTOS_BASE);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/data/productos.json", { cache: "no-store" });
+        if (!res.ok) throw new Error("No JSON");
+        const data = await res.json();
+        if (!cancelled && Array.isArray(data) && data.length) setProductos(data);
+      } catch {
+        // fallback ya está en state
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // --- Filtros ---
   const [busqueda, setBusqueda] = useState("");
   const [orden, setOrden] = useState("relevancia");
   const [categoria, setCategoria] = useState("todas");
@@ -848,14 +778,71 @@ export default function Tienda() {
   const [draftCategoria, setDraftCategoria] = useState(categoria);
   const [draftPrecioMax, setDraftPrecioMax] = useState(precioMax);
 
-  // Favoritos / Modal producto
-  const [favoritos, setFavoritos] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("favoritos")) || []; } catch { return []; }
-  });
+  // --- Favoritos (sincronizados) ---
+  const [favoritos, setFavoritos] = useState([]);
+
+  // Carga inicial + migración global "favoritos" -> "favoritos:<id>"
+  useEffect(() => {
+    try {
+      const current = readFavsBySession(usuarioActivo);
+      // Si hay sesión y no tiene favoritos pero existe la clave global, migrar
+      if ((usuarioActivo?.id) && (!current || current.length === 0)) {
+        const legacy = JSON.parse(localStorage.getItem("favoritos") || "[]");
+        if (legacy.length > 0) {
+          writeFavsBySession(usuarioActivo, legacy);
+          localStorage.removeItem("favoritos");
+          setFavoritos(legacy);
+          return;
+        }
+      }
+      setFavoritos(current || []);
+    } catch {
+      setFavoritos([]);
+    }
+  }, [usuarioActivo]);
+
+  // Escuchar cambios (storage + custom event + BroadcastChannel)
+  useEffect(() => {
+    const myKey = getFavsKeyBySession(usuarioActivo);
+
+    const onStorage = (e) => {
+      if (e.key === myKey) {
+        try { setFavoritos(JSON.parse(e.newValue || "[]") || []); } catch { setFavoritos([]); }
+      }
+      if (e.key === "sesionActiva") {
+        try {
+          const ses = JSON.parse(e.newValue);
+          setFavoritos(readFavsBySession(ses?.id ? ses : null));
+        } catch {}
+      }
+    };
+
+    const onLocalFavs = (e) => {
+      if (e.detail?.key === myKey) {
+        setFavoritos(e.detail.list || []);
+      }
+    };
+
+    let bc;
+    try {
+      bc = new BroadcastChannel("favs");
+      bc.onmessage = (msg) => {
+        if (msg?.data?.key === myKey) setFavoritos(msg.data.list || []);
+      };
+    } catch {}
+
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("favs:changed", onLocalFavs);
+
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("favs:changed", onLocalFavs);
+      try { bc && bc.close(); } catch {}
+    };
+  }, [usuarioActivo]);
+
   const [quickOpen, setQuickOpen] = useState(false);
   const [quickProducto, setQuickProducto] = useState(null);
-
-  useEffect(() => { localStorage.setItem("favoritos", JSON.stringify(favoritos)); }, [favoritos]);
 
   useEffect(() => {
     setDraftBusqueda(busqueda);
@@ -867,38 +854,58 @@ export default function Tienda() {
   // ---- Carrito: botón, contador, animaciones ----
   const cartBtnRef = useRef(null);
   const [cartBurstId, setCartBurstId] = useState(0);
+  const [cartCount, setCartCount] = useState(0);
 
-  const getCartCountFromLS = () => {
+  // Recalcular contador al cambiar sesión
+  useEffect(() => {
     try {
-      const cart = JSON.parse(localStorage.getItem("carrito")) || [];
-      return cart.reduce((sum, it) => sum + (Number(it.cantidad) || 1), 0);
-    } catch {
-      return 0;
-    }
-  };
-  const [cartCount, setCartCount] = useState(getCartCountFromLS());
+      if (!usuarioActivo?.id) { setCartCount(0); return; }
+      const key = getCartKeyBySession(usuarioActivo);
+      const cart = JSON.parse(localStorage.getItem(key) || "[]");
+      setCartCount(safeCartCount(cart));
+    } catch { setCartCount(0); }
+  }, [usuarioActivo]);
 
+  // Listeners de storage y focus
   useEffect(() => {
     const onStorage = (e) => {
-      if (e.key === "carrito") setCartCount(getCartCountFromLS());
       if (e.key === "sesionActiva") {
         try {
           const sesion = JSON.parse(e.newValue);
           setUsuarioActivo(sesion?.id ? sesion : null);
         } catch { setUsuarioActivo(null); }
+        return;
+      }
+      if (usuarioActivo?.id) {
+        const myKey = getCartKeyBySession(usuarioActivo);
+        if (e.key === myKey) {
+          try {
+            const cart = JSON.parse(e.newValue || "[]");
+            setCartCount(safeCartCount(cart));
+          } catch { setCartCount(0); }
+        }
       }
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
-  }, []);
+  }, [usuarioActivo]);
 
   useEffect(() => {
     const onFocus = () => {
-      setCartCount(getCartCountFromLS());
       try {
         const sesion = JSON.parse(localStorage.getItem("sesionActiva"));
         setUsuarioActivo(sesion?.id ? sesion : null);
-      } catch { setUsuarioActivo(null); }
+        if (sesion?.id) {
+          const key = getCartKeyBySession(sesion);
+          const cart = JSON.parse(localStorage.getItem(key) || "[]");
+          setCartCount(safeCartCount(cart));
+        } else {
+          setCartCount(0);
+        }
+      } catch {
+        setUsuarioActivo(null);
+        setCartCount(0);
+      }
     };
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
@@ -988,14 +995,16 @@ export default function Tienda() {
 
   // ---- Persistencia del carrito + bursts (solo si hay sesión) ----
   const persistAddToCart = (p) => {
-    const raw = localStorage.getItem("carrito");
+    if (!usuarioActivo?.id) return;
+    const key = getCartKeyBySession(usuarioActivo);
+    const raw = localStorage.getItem(key);
     const cart = raw ? JSON.parse(raw) : [];
     const existing = cart.find((i) => i.id === p.id);
     if (existing) existing.cantidad += 1;
     else cart.push({ id: p.id, titulo: p.titulo, precio: getPrecioFinal(p.precio, p.descuento), imagen: p.imagenes?.[0], cantidad: 1 });
-    localStorage.setItem("carrito", JSON.stringify(cart));
+    localStorage.setItem(key, JSON.stringify(cart));
 
-    const total = cart.reduce((sum, it) => sum + (Number(it.cantidad) || 1), 0);
+    const total = safeCartCount(cart);
     setCartCount(total);
     setCartBurstId((x) => x + 1);
   };
@@ -1011,8 +1020,13 @@ export default function Tienda() {
     pushToast(p.titulo, imgSrc || p.imagenes?.[0]);
   };
 
+  // --- Toggle favoritos (persistente + sincronizado) ---
   const toggleFav = (p) => {
-    setFavoritos(prev => prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id]);
+    setFavoritos(prev => {
+      const next = prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id];
+      writeFavsBySession(usuarioActivo, next);
+      return next;
+    });
   };
 
   const aplicarFiltros = () => {
@@ -1029,8 +1043,6 @@ export default function Tienda() {
   // Datos para secciones
   const destacados = productos.filter((p) => p.destacado);
   const bajoPedido = productos.filter((p) => p.bajoPedido);
-
-  // Sin filtros → todas las obras
   const generales = filtrosAplicados ? productosFiltrados : productos;
 
   return (
@@ -1132,22 +1144,24 @@ export default function Tienda() {
                     <ShoppingBag size={22} className="text-[#a16207]" />
                   </span>
 
-                  {/* Contador fusionado */}
-                  <motion.span
-                    key={cartCount}
-                    initial={{ scale: 0.85 }}
-                    animate={{ scale: 1 }}
-                    transition={{ type: "spring", stiffness: 500, damping: 18 }}
-                    className="absolute -right-1 -top-1 rounded-full text-[11px] font-bold
-                               bg-rose-600 text-white h-5 min-w-[20px] px-1.5 grid place-items-center
-                               ring-2 ring-white shadow overflow-visible"
-                    style={{ lineHeight: 1 }}
-                  >
-                    {cartCount > 99 ? "99+" : cartCount}
-                    <div className="absolute inset-0">
-                      <CartBurst fire={cartBurstId} />
-                    </div>
-                  </motion.span>
+                  {/* Contador fusionado: solo si > 0 */}
+                  {cartCount > 0 && (
+                    <motion.span
+                      key={cartCount}
+                      initial={{ scale: 0.85 }}
+                      animate={{ scale: 1 }}
+                      transition={{ type: "spring", stiffness: 500, damping: 18 }}
+                      className="absolute -right-1 -top-1 rounded-full text-[11px] font-bold
+                                 bg-rose-600 text-white h-5 min-w-[20px] px-1.5 grid place-items-center
+                                 ring-2 ring-white shadow overflow-visible"
+                      style={{ lineHeight: 1 }}
+                    >
+                      {cartCount > 99 ? "99+" : cartCount}
+                      <div className="absolute inset-0">
+                        <CartBurst fire={cartBurstId} />
+                      </div>
+                    </motion.span>
+                  )}
                 </button>
               )}
             </div>
@@ -1414,7 +1428,7 @@ export default function Tienda() {
         </AnimatePresence>
       </div>
 
-      {/* TOAST CONTAINER */}
+      {/* Modal Requiere Login */}
       <SignInRequiredModal
         open={needLoginOpen}
         onClose={() => setNeedLoginOpen(false)}
@@ -1437,7 +1451,7 @@ export default function Tienda() {
         </AnimatePresence>
       </div>
 
-      {/* ================= FOOTER (de App.jsx) ================= */}
+      {/* ================= FOOTER ================= */}
       <footer className="w-full py-6 border-t border-gray-300 text-center mt-auto">
         <div className="max-w-6xl mx-auto px-6">
           <p className="text-sm">&copy; 2025 Arte - Restauración - Visuales. Todos los derechos reservados.</p>

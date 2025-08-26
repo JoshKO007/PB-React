@@ -13,7 +13,8 @@ import {
   LogIn,
   UserPlus,
   LogOut,
-  KeyRound
+  KeyRound,
+  HeartIcon
 } from 'lucide-react';
 
 const productos = [
@@ -37,15 +38,28 @@ const productos = [
   }
 ];
 
+/* ======================= Helpers carrito por usuario ======================= */
+function getCartKeyBySession(sesion) {
+  return sesion?.id ? `carrito:${sesion.id}` : null;
+}
+function safeCartCount(cartArray) {
+  return (cartArray || []).reduce((sum, it) => {
+    const qty = Number.isFinite(Number(it?.cantidad)) ? Number(it.cantidad) : 1;
+    return sum + Math.max(0, qty);
+  }, 0);
+}
+
 export default function App() {
   const [hovered, setHovered] = useState(null);
   const [index, setIndex] = useState(0);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [usuarioActivo, setUsuarioActivo] = useState(null);
   const [cerrandoSesion, setCerrandoSesion] = useState(false);
+  const [cartCount, setCartCount] = useState(0); // contador inicia en 0
   const userMenuTimeout = useRef(null);
   const navigate = useNavigate();
 
+  // Slider de destacados
   useEffect(() => {
     const interval = setInterval(() => {
       setIndex((prev) => (prev + 1) % productos.length);
@@ -53,11 +67,83 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
+  // Cargar sesión al montar
   useEffect(() => {
-    const sesion = JSON.parse(localStorage.getItem('sesionActiva'));
-    if (sesion?.id && sesion.id !== usuarioActivo?.id) {
-      setUsuarioActivo(sesion);
+    try {
+      const sesion = JSON.parse(localStorage.getItem('sesionActiva'));
+      if (sesion?.id && sesion.id !== usuarioActivo?.id) {
+        setUsuarioActivo(sesion);
+      }
+    } catch {
+      setUsuarioActivo(null);
     }
+  }, []);
+
+  // Recalcular contador cuando cambia la sesión
+  useEffect(() => {
+    try {
+      if (!usuarioActivo?.id) {
+        setCartCount(0);
+        return;
+      }
+      const key = getCartKeyBySession(usuarioActivo);
+      const cart = JSON.parse(localStorage.getItem(key)) || [];
+      setCartCount(safeCartCount(cart));
+    } catch {
+      setCartCount(0);
+    }
+  }, [usuarioActivo]);
+
+  // Escuchar cambios en localStorage (sesión y carrito del usuario actual)
+  useEffect(() => {
+    const onStorage = (e) => {
+      // Cambio de sesión en otra pestaña
+      if (e.key === 'sesionActiva') {
+        try {
+          const sesion = JSON.parse(e.newValue);
+          setUsuarioActivo(sesion?.id ? sesion : null);
+        } catch {
+          setUsuarioActivo(null);
+        }
+        return;
+      }
+      // Cambios del carrito del usuario actual
+      if (usuarioActivo?.id) {
+        const myKey = getCartKeyBySession(usuarioActivo);
+        if (e.key === myKey) {
+          try {
+            const cart = JSON.parse(e.newValue || '[]');
+            setCartCount(safeCartCount(cart));
+          } catch {
+            setCartCount(0);
+          }
+        }
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [usuarioActivo]);
+
+  // Al volver el foco, re-sincronizar sesión y contador
+  useEffect(() => {
+    const onFocus = () => {
+      try {
+        const sesion = JSON.parse(localStorage.getItem('sesionActiva'));
+        setUsuarioActivo(sesion?.id ? sesion : null);
+        if (sesion?.id) {
+          const key = getCartKeyBySession(sesion);
+          const cart = JSON.parse(localStorage.getItem(key)) || [];
+          setCartCount(safeCartCount(cart));
+        } else {
+          setCartCount(0);
+        }
+      } catch {
+        setUsuarioActivo(null);
+        setCartCount(0);
+      }
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
   }, []);
 
   const handleUserMouseEnter = () => {
@@ -83,8 +169,16 @@ export default function App() {
   const cerrarSesion = () => {
     setCerrandoSesion(true);
     setTimeout(() => {
+      try {
+        // Limpia la clave global antigua por si quedó
+        localStorage.removeItem('carrito');
+        // Opcional: si quieres borrar TMB el carrito del usuario saliente, descomenta:
+        const prev = JSON.parse(localStorage.getItem('sesionActiva'));
+        if (prev?.id) localStorage.removeItem(`carrito:${prev.id}`);
+      } catch {}
       localStorage.removeItem('sesionActiva');
       setUsuarioActivo(null);
+      setCartCount(0); // reset visual inmediato
       setCerrandoSesion(false);
       navigate('/');
     }, 5000);
@@ -184,6 +278,9 @@ export default function App() {
                           <button onClick={() => navigate('/direccion')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <Mail size={16} className="mr-2" /> Direcciones
                           </button>
+                          <button onClick={() => navigate('/favoritos')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                            <HeartIcon size={16} className="mr-2" /> Favoritos
+                          </button>                          
                           <button onClick={() => navigate('/contrasena')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <KeyRound size={16} className="mr-2" /> Cambiar contraseña
                           </button>
@@ -209,10 +306,29 @@ export default function App() {
               {usuarioActivo && (
                 <button
                   onClick={() => navigate('/carrito')}
-                  className="p-2 rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md hover:shadow-lg flex items-center"
+                  className="relative group"
                   title="Carrito"
+                  aria-label={`Carrito con ${cartCount} ${cartCount === 1 ? 'artículo' : 'artículos'}`}
                 >
-                  <ShoppingBag size={22} className="text-[#a16207]" />
+                  {/* Botón base */}
+                  <span
+                    className="grid place-items-center rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md transition
+                               h-11 w-11 group-hover:shadow-lg group-hover:scale-105"
+                  >
+                    <ShoppingBag size={22} className="text-[#a16207]" />
+                  </span>
+
+                  {/* Badge del contador (solo si > 0) */}
+                  {cartCount > 0 && (
+                    <span
+                      className="absolute -right-1 -top-1 rounded-full text-[11px] font-bold
+                                 bg-rose-600 text-white h-5 min-w-[20px] px-1.5 grid place-items-center
+                                 ring-2 ring-white shadow"
+                      style={{ lineHeight: 1 }}
+                    >
+                      {cartCount > 99 ? "99+" : cartCount}
+                    </span>
+                  )}
                 </button>
               )}
             </div>

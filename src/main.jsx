@@ -16,6 +16,7 @@ import Contraseña from "./pages/Contraseña";
 import Restauracion from "./pages/Restauración";
 import Videos from "./pages/Videos";
 import Tienda from "./pages/Tienda";
+import Favoritos from "./pages/Favoritos";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
@@ -34,6 +35,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         <Route path="/restauracion" element={<Restauracion />} />
         <Route path="/videos" element={<Videos />} />
         <Route path="/tienda" element={<Tienda />} />
+        <Route path="/favoritos" element={<Favoritos />} />
         <Route path="*" element={<h1>404 - Página no encontrada</h1>} />
       </Routes>
     </BrowserRouter>
