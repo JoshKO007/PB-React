@@ -1,7 +1,8 @@
-// src/Tienda.jsx
+// src/pages/Tienda.jsx
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import PRODUCTOS_JSON from "../data/productos.json";
 import {
   // Header / Footer / Menú
   Home,
@@ -31,20 +32,6 @@ import {
   ChevronDown,
   ShieldAlert
 } from "lucide-react";
-
-/* ============================================================
-   (A) Catálogo base (fallback) — se intenta cargar JSON externo
-   ============================================================ */
-const PRODUCTOS_BASE = [
-  { id: "p1", titulo: "Raíz de vida", descripcion: "Acrílico sobre lienzo. 60x80 cm.", descripcionDetallada: "Obra que explora la relación entre lo orgánico y lo ritual. Capas de acrílico veladas con pinceladas gestuales. Lienzo de algodón 380 g/m², bastidor de pino con acabado mate. Incluye sistema de colgado.", imagenes: ["/obras/obra3.jpg","/producto1b.jpg","/producto1c.jpg","/producto1d.jpg","/producto1e.jpg"], precio: 1200, moneda: "MXN", descuento: 10, destacado: true, bajoPedido: false, etiquetas: ["acrílico","naturaleza"], disponible: true, tiempoEntrega: "Listo para envío" },
-  { id: "p2", titulo: "Aurora interna", descripcion: "Mixta sobre papel reciclado. 50x70 cm.", descripcionDetallada: "Técnica mixta con pigmentos y tintas sobre papel reciclado libre de ácido (300 g). La pieza combina texturas granulosas y transparencias para sugerir una luz interior.", imagenes: ["/producto2.jpg","/producto2b.jpg","/producto2c.jpg","/producto2d.jpg"], precio: 900, moneda: "MXN", descuento: 0, destacado: true, bajoPedido: false, etiquetas: ["mixta","onírico"], disponible: true, tiempoEntrega: "Listo para envío" },
-  { id: "p3", titulo: "Serie Elementos (3 piezas)", descripcion: "Serie de 3 piezas. Técnica mixta.", descripcionDetallada: "Tríptico que dialoga con los cuatro elementos a través de tres abstracciones. Base acrílica, tinta y grafito sellado con barniz satinado. Se puede instalar en horizontal o vertical.", imagenes: ["/producto3.jpg","/producto3b.jpg","/producto3c.jpg"], precio: 2100, moneda: "MXN", descuento: 15, destacado: true, bajoPedido: true, etiquetas: ["serie","mixta"], disponible: true, tiempoEntrega: "Hecho bajo pedido (2-3 semanas)" },
-  { id: "p4", titulo: "Cenit marino", descripcion: "Óleo sobre lienzo. 40x60 cm.", descripcionDetallada: "Pincelada suelta con veladuras de óleo para un efecto de profundidad acuosa. Lienzo tensado en bastidor de pino. Borde pintado para montaje sin marco.", imagenes: ["/producto4.jpg","/producto4b.jpg","/producto4c.jpg","/producto4d.jpg","/producto4e.jpg"], precio: 1500, moneda: "MXN", descuento: 0, destacado: false, bajoPedido: false, etiquetas: ["óleo","mar"], disponible: true, tiempoEntrega: "Listo para envío" },
-  { id: "p5", titulo: "Bosque de susurros", descripcion: "Acuarela. 30x40 cm.", descripcionDetallada: "Acuarela sobre papel 100% algodón prensado en frío. Paleta fría con detalles húmedo-sobre-húmedo que enfatiza atmósferas y profundidad.", imagenes: ["/producto5.jpg","/producto5b.jpg","/producto5c.jpg"], precio: 600, moneda: "MXN", descuento: 5, destacado: true, bajoPedido: false, etiquetas: ["acuarela","paisaje"], disponible: true, tiempoEntrega: "Listo para envío" },
-  { id: "p6", titulo: "Retrato en bruma", descripcion: "Mixta sobre madera. 60x60 cm.", descripcionDetallada: "Soporte de madera sellado y texturizado. Capas de acrílico y carbón para un gesto difuso que insinúa rostro. Barniz protector UV.", imagenes: ["/producto6.jpg","/producto6b.jpg","/producto6c.jpg","/producto6d.jpg"], precio: 1800, moneda: "MXN", descuento: 20, destacado: true, bajoPedido: true, etiquetas: ["retrato","mixta"], disponible: true, tiempoEntrega: "Hecho bajo pedido (3 semanas)" },
-  { id: "p7", titulo: "Geometría íntima", descripcion: "Tinta y acrílico. 50x50 cm.", descripcionDetallada: "Composición abstracta con módulos geométricos y veladuras. Base acrílica con intervenciones en tinta indeleble. Montaje recomendado flotado.", imagenes: ["/producto7.jpg","/producto7b.jpg","/producto7c.jpg"], precio: 1100, moneda: "MXN", descuento: 0, destacado: false, bajoPedido: false, etiquetas: ["tinta","abstracto"], disponible: true, tiempoEntrega: "Listo para envío" },
-  { id: "p8", titulo: "Luz de medianoche", descripcion: "Acrílico sobre lienzo. 70x90 cm.", descripcionDetallada: "Gran formato con capas espesas y raspados. Contrastes de azul profundo y toques nacarados. Ideal para muro principal.", imagenes: ["/producto8.jpg","/producto8b.jpg","/producto8c.jpg","/producto8d.jpg"], precio: 2500, moneda: "MXN", descuento: 12, destacado: false, bajoPedido: true, etiquetas: ["acrílico","contemporáneo"], disponible: true, tiempoEntrega: "Hecho bajo pedido (4 semanas)" },
-];
 
 /* ======================= Ordenes / Categorías ======================= */
 const ORDENES = [
@@ -96,7 +83,6 @@ function safeCartCount(cartArray) {
 
 // Favoritos por usuario + sincronización
 function getFavsKeyBySession(sesion) {
-  // sin sesión, usa "favoritos" (permite migrar cuando inicia sesión)
   return sesion?.id ? `favoritos:${sesion.id}` : "favoritos";
 }
 function readFavsBySession(sesion) {
@@ -111,11 +97,9 @@ function writeFavsBySession(sesion, list) {
   try {
     localStorage.setItem(key, JSON.stringify(list));
   } catch {}
-  // Evento interno (misma pestaña)
   try {
     window.dispatchEvent(new CustomEvent("favs:changed", { detail: { key, list } }));
   } catch {}
-  // BroadcastChannel (entre pestañas)
   try {
     const bc = new BroadcastChannel("favs");
     bc.postMessage({ key, list });
@@ -718,7 +702,6 @@ export default function Tienda() {
         const prev = JSON.parse(localStorage.getItem("sesionActiva"));
         if (prev?.id) {
           localStorage.removeItem(`carrito:${prev.id}`);
-          // si quieres borrar también favoritos del usuario saliente, descomenta:
           // localStorage.removeItem(`favoritos:${prev.id}`);
         }
       } catch {}
@@ -749,23 +732,8 @@ export default function Tienda() {
     { label: "Contacto", icon: <Mail size={24} />, onClick: () => navigate("/contacto") },
   ];
 
-  // --- Productos: se intenta obtener de /data/productos.json, con fallback a PRODUCTOS_BASE ---
-  const [productos, setProductos] = useState(PRODUCTOS_BASE);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/data/productos.json", { cache: "no-store" });
-        if (!res.ok) throw new Error("No JSON");
-        const data = await res.json();
-        if (!cancelled && Array.isArray(data) && data.length) setProductos(data);
-      } catch {
-        // fallback ya está en state
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
+  // --- Productos: SOLO desde el JSON local (sin red, sin fallback) ---
+  const productos = useMemo(() => Array.isArray(PRODUCTOS_JSON) ? PRODUCTOS_JSON : [], []);
 
   // --- Filtros ---
   const [busqueda, setBusqueda] = useState("");
@@ -785,7 +753,6 @@ export default function Tienda() {
   useEffect(() => {
     try {
       const current = readFavsBySession(usuarioActivo);
-      // Si hay sesión y no tiene favoritos pero existe la clave global, migrar
       if ((usuarioActivo?.id) && (!current || current.length === 0)) {
         const legacy = JSON.parse(localStorage.getItem("favoritos") || "[]");
         if (legacy.length > 0) {
@@ -1343,7 +1310,7 @@ export default function Tienda() {
             )}
           </div>
 
-          <GridGeneral
+        <GridGeneral
             productos={generales}
             onOpen={(p) => { setQuickProducto(p); setQuickOpen(true); }}
             onAddCartAnim={addCartWithAnim}

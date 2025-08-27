@@ -16,6 +16,7 @@ import Contraseña from "./pages/Contraseña";
 import Restauracion from "./pages/Restauración";
 import Videos from "./pages/Videos";
 import Tienda from "./pages/Tienda";
+import Carrito from "./pages/Carrito";
 import Favoritos from "./pages/Favoritos";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
@@ -36,6 +37,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         <Route path="/videos" element={<Videos />} />
         <Route path="/tienda" element={<Tienda />} />
         <Route path="/favoritos" element={<Favoritos />} />
+        <Route path="/carrito" element={<Carrito />} />
         <Route path="*" element={<h1>404 - Página no encontrada</h1>} />
       </Routes>
     </BrowserRouter>

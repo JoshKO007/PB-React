@@ -1,4 +1,4 @@
-// src/Favoritos.jsx
+// src/pages/Favoritos.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
@@ -23,20 +23,7 @@ import {
   ChevronLeft,
   ChevronRight
 } from "lucide-react";
-
-/* ============================================================
-   Catálogo base (fallback). Alineado con el JSON de Tienda.
-   ============================================================ */
-const PRODUCTOS_BASE = [
-  { id: "p1", titulo: "Raíz de vida", descripcion: "Acrílico sobre lienzo. 60x80 cm.", descripcionDetallada: "Obra que explora la relación entre lo orgánico y lo ritual. Capas de acrílico veladas con pinceladas gestuales. Lienzo de algodón 380 g/m², bastidor de pino con acabado mate. Incluye sistema de colgado.", imagenes: ["/obras/obra3.jpg","/producto1b.jpg","/producto1c.jpg"], precio: 1200, moneda: "MXN", descuento: 10, etiquetas: ["acrílico","naturaleza"], disponible: true, tiempoEntrega: "Listo para envío", destacado: true, bajoPedido: false },
-  { id: "p2", titulo: "Aurora interna", descripcion: "Mixta sobre papel reciclado. 50x70 cm.", descripcionDetallada: "Técnica mixta con pigmentos y tintas sobre papel reciclado libre de ácido (300 g). La pieza combina texturas granulosas y transparencias para sugerir una luz interior.", imagenes: ["/producto2.jpg","/producto2b.jpg"], precio: 900, moneda: "MXN", descuento: 0, etiquetas: ["mixta","onírico"], disponible: true, tiempoEntrega: "Listo para envío", destacado: true, bajoPedido: false },
-  { id: "p3", titulo: "Serie Elementos (3 piezas)", descripcion: "Serie de 3 piezas. Técnica mixta.", descripcionDetallada: "Tríptico que dialoga con los cuatro elementos a través de tres abstracciones. Base acrílica, tinta y grafito sellado con barniz satinado. Se puede instalar en horizontal o vertical.", imagenes: ["/producto3.jpg","/producto3b.jpg"], precio: 2100, moneda: "MXN", descuento: 15, etiquetas: ["serie","mixta"], disponible: true, tiempoEntrega: "Hecho bajo pedido (2-3 semanas)", destacado: true, bajoPedido: true },
-  { id: "p4", titulo: "Cenit marino", descripcion: "Óleo sobre lienzo. 40x60 cm.", descripcionDetallada: "Pincelada suelta con veladuras de óleo para un efecto de profundidad acuosa. Lienzo tensado en bastidor de pino. Borde pintado para montaje sin marco.", imagenes: ["/producto4.jpg","/producto4b.jpg"], precio: 1500, moneda: "MXN", descuento: 0, etiquetas: ["óleo","mar"], disponible: true, tiempoEntrega: "Listo para envío", destacado: false, bajoPedido: false },
-  { id: "p5", titulo: "Bosque de susurros", descripcion: "Acuarela. 30x40 cm.", descripcionDetallada: "Acuarela sobre papel 100% algodón prensado en frío. Paleta fría con detalles húmedo-sobre-húmedo que enfatiza atmósferas y profundidad.", imagenes: ["/producto5.jpg","/producto5b.jpg"], precio: 600, moneda: "MXN", descuento: 5, etiquetas: ["acuarela","paisaje"], disponible: true, tiempoEntrega: "Listo para envío", destacado: true, bajoPedido: false },
-  { id: "p6", titulo: "Retrato en bruma", descripcion: "Mixta sobre madera. 60x60 cm.", descripcionDetallada: "Soporte de madera sellado y texturizado. Capas de acrílico y carbón para un gesto difuso que insinúa rostro. Barniz protector UV.", imagenes: ["/producto6.jpg","/producto6b.jpg"], precio: 1800, moneda: "MXN", descuento: 20, etiquetas: ["retrato","mixta"], disponible: true, tiempoEntrega: "Hecho bajo pedido (3 semanas)", destacado: true, bajoPedido: true },
-  { id: "p7", titulo: "Geometría íntima", descripcion: "Tinta y acrílico. 50x50 cm.", descripcionDetallada: "Composición abstracta con módulos geométricos y veladuras. Base acrílica con intervenciones en tinta indeleble. Montaje recomendado flotado.", imagenes: ["/producto7.jpg","/producto7b.jpg"], precio: 1100, moneda: "MXN", descuento: 0, etiquetas: ["tinta","abstracto"], disponible: true, tiempoEntrega: "Listo para envío", destacado: false, bajoPedido: false },
-  { id: "p8", titulo: "Luz de medianoche", descripcion: "Acrílico sobre lienzo. 70x90 cm.", descripcionDetallada: "Gran formato con capas espesas y raspados. Contrastes de azul profundo y toques nacarados. Ideal para muro principal.", imagenes: ["/producto8.jpg","/producto8b.jpg"], precio: 2500, moneda: "MXN", descuento: 12, etiquetas: ["acrílico","contemporáneo"], disponible: true, tiempoEntrega: "Hecho bajo pedido (4 semanas)", destacado: false, bajoPedido: true },
-];
+import PRODUCTOS_JSON from "../data/productos.json";
 
 /* ======================= Utiles ======================= */
 function formatoPrecio(valor, moneda) {
@@ -195,7 +182,7 @@ function QuickView({ open, onClose, producto, onAddCart }) {
               <ImageCarousel images={producto?.imagenes} title={producto?.titulo} />
             </div>
 
-            <div className="flex flex-col max-h-[70vh] md:max-h-[85vh]">
+            <div className="flex flex-col max-h=[70vh] md:max-h-[85vh]">
               <div className="px-4 md:px-6 pt-4 md:pt-6 overflow-y-auto">
                 <h3 className="text-lg md:text-2xl font-bold">{producto.titulo}</h3>
                 <p className="mt-2 text-sm md:text-base text-gray-600">{producto.descripcion}</p>
@@ -244,7 +231,7 @@ function QuickView({ open, onClose, producto, onAddCart }) {
                 )}
               </div>
 
-              {/* Botonera: se elimina “Añadir al carrito” */}
+              {/* Botonera */}
               <div className="sticky bottom-0 w-full px-4 md:px-6 pb-4 md:pb-6 pt-3 md:pt-4 bg-white/95 backdrop-blur border-t">
                 <div className="flex gap-2 md:gap-3">
                   <button
@@ -284,22 +271,8 @@ export default function Favoritos() {
   const [quickOpen, setQuickOpen] = useState(false);
   const [quickProducto, setQuickProducto] = useState(null);
 
-  // Productos (lee del mismo JSON externo de Tienda, con fallback)
-  const [productos, setProductos] = useState(PRODUCTOS_BASE);
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/data/productos.json", { cache: "no-store" });
-        if (!res.ok) throw new Error("No JSON");
-        const data = await res.json();
-        if (!cancelled && Array.isArray(data) && data.length) setProductos(data);
-      } catch {
-        // fallback
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
+  // Productos: SOLO desde el JSON local (sin red, sin fallback)
+  const productos = useMemo(() => Array.isArray(PRODUCTOS_JSON) ? PRODUCTOS_JSON : [], []);
 
   // Cargar sesión
   useEffect(() => {
@@ -481,7 +454,7 @@ export default function Favoritos() {
     if (!usuarioActivo?.id) return;
     const key = getCartKeyBySession(usuarioActivo);
     const raw = localStorage.getItem(key);
-    const cart = raw ? JSON.parse(raw) : []; // ojo: no romper si no existe
+    const cart = raw ? JSON.parse(raw) : [];
     const next = cart.filter((i) => i.id !== productoId);
     localStorage.setItem(key, JSON.stringify(next));
     setCartCount(safeCartCount(next));
@@ -498,7 +471,7 @@ export default function Favoritos() {
 
   /* ======================= Derivados ======================= */
   const favProductos = useMemo(() => {
-    const catalog = productos?.length ? productos : PRODUCTOS_BASE;
+    const catalog = Array.isArray(productos) ? productos : [];
     return favs
       .map((id) => catalog.find((p) => p.id === id))
       .filter(Boolean);
@@ -544,8 +517,8 @@ export default function Favoritos() {
             {/* User / carrito */}
             <div className="flex items-center gap-2 mt-2 sm:mt-0 pr-1 sm:pr-2">
               <div
-                onMouseEnter={handleUserMouseEnter}
-                onMouseLeave={handleUserMouseLeave}
+                onMouseEnter={() => { clearTimeout(userMenuTimeout.current); setShowUserMenu(true); }}
+                onMouseLeave={() => { userMenuTimeout.current = setTimeout(() => setShowUserMenu(false), 300); }}
                 className="relative"
               >
                 <button className="p-2 rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md hover:shadow-lg flex items-center">
@@ -558,8 +531,8 @@ export default function Favoritos() {
                       initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
-                      onMouseEnter={handleUserMouseEnter}
-                      onMouseLeave={handleUserMouseLeave}
+                      onMouseEnter={() => { clearTimeout(userMenuTimeout.current); setShowUserMenu(true); }}
+                      onMouseLeave={() => { userMenuTimeout.current = setTimeout(() => setShowUserMenu(false), 300); }}
                       className="absolute mt-2 w-60 left-1/2 -translate-x-1/2 sm:left-auto sm:right-0 sm:translate-x-0 bg-white border border-gray-200 rounded-lg shadow-xl py-3 text-left z-[9999]"
                     >
                       {usuarioActivo ? (
@@ -679,7 +652,7 @@ export default function Favoritos() {
             </div>
           )}
 
-          {/* Grid de favoritos (tarjetas a altura completa y secciones con min-height) */}
+          {/* Grid de favoritos */}
           <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 items-stretch">
             {favProductos.length === 0 ? (
               <div className="col-span-full rounded-2xl border border-dashed bg-white/60 p-8 text-center text-gray-600">
@@ -706,7 +679,7 @@ export default function Favoritos() {
                       transition={{ duration: 0.28 }}
                       className="group relative border rounded-2xl bg-white/80 shadow-sm overflow-hidden h-full flex flex-col"
                     >
-                      {/* Imagen con altura fija para uniformidad */}
+                      {/* Imagen */}
                       <button onClick={() => openQuick(p)} title="Ver detalles" className="relative">
                         <img
                           src={p.imagenes?.[0] || "/placeholder.jpg"}
@@ -724,12 +697,11 @@ export default function Favoritos() {
                           </h3>
                         </button>
 
-                        {/* Bloque título + descripción con altura mínima uniforme */}
                         <p className="text-sm text-gray-600 mt-1 line-clamp-2 min-h-[44px]">
                           {p.descripcion}
                         </p>
 
-                        {/* Precio con altura mínima uniforme */}
+                        {/* Precio */}
                         <div className="mt-3 min-h-[70px]">
                           {p.descuento > 0 ? (
                             <>
@@ -751,16 +723,15 @@ export default function Favoritos() {
                           </div>
                         </div>
 
-                        {/* Etiquetas (altura mínima suave para no mover acciones) */}
+                        {/* Etiquetas */}
                         {p.etiquetas?.length > 0 && (
                           <div className="mt-3 flex flex-wrap gap-1.5 min-h-[34px]">
                             {p.etiquetas.map((e) => <Etiqueta key={e}>{e}</Etiqueta>)}
                           </div>
                         )}
 
-                        {/* Acciones siempre al fondo gracias al flex-col de arriba */}
+                        {/* Acciones */}
                         <div className="mt-4 flex items-center gap-2">
-                          {/* Corazón activado: quita de favoritos */}
                           <motion.button
                             whileTap={{ scale: 0.9 }}
                             onClick={() => onRemoveFav(p.id)}
@@ -770,7 +741,6 @@ export default function Favoritos() {
                             <Heart size={16} className="fill-rose-600 text-rose-600" />
                           </motion.button>
 
-                          {/* Se elimina botón “Añadir al carrito” y “Eliminar del carrito” */}
                           <button
                             onClick={() => addToCart(p, 1, true)}
                             className="rounded-full border px-3 py-1.5 text-xs font-semibold bg-white hover:bg-gray-50 border-gray-200 inline-flex items-center gap-1.5"
