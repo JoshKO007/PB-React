@@ -29,7 +29,10 @@ import {
   Tag,
   MapPin,
   CheckCircle2,
-  X
+  X,
+  CreditCard,
+  Landmark,
+  Wallet // <-- agregado
 } from "lucide-react";
 
 // === Catálogo: SOLO desde JSON local ===
@@ -244,6 +247,91 @@ function DireccionModal({ open, onClose, direcciones = [], onSelect, onAddNew })
   );
 }
 
+/* ======== Modal Selección de Pago ======== */
+function PagoModal({ open, onClose, isMexico, totalMXN, onChoose }) {
+  if (!open) return null;
+
+  const feeStripe = Math.round((totalMXN * 0.036 + 3) * 100) / 100;
+  const feePayPal = Math.round((totalMXN * 0.0395 + 4) * 100) / 100;
+  const ttlStripe = Math.round((totalMXN + feeStripe) * 100) / 100;
+  const ttlPayPal = Math.round((totalMXN + feePayPal) * 100) / 100;
+
+  const opciones = [
+    ...(isMexico ? [{
+      id: "spei",
+      title: "SPEI (transferencia)",
+      desc: "Sin comisión · Solo México",
+      icon: <Landmark className="text-emerald-600" />,
+      feeText: "Sin comisión",
+      totalText: formatoPrecio(totalMXN, "MXN"),
+    }] : []),
+    // PayPal solo en México (según solicitud “si no es de México solo Stripe”)
+    ...(isMexico ? [{
+      id: "paypal",
+      title: "PayPal",
+      desc: "3.95% + $4 MXN",
+      icon: <Wallet className="text-sky-700" />, // <-- cambiado a Wallet
+      feeText: `Comisión aprox: ${formatoPrecio(feePayPal, "MXN")}`,
+      totalText: `Total con comisión: ${formatoPrecio(ttlPayPal, "MXN")}`,
+    }] : []),
+    {
+      id: "stripe",
+      title: "Tarjeta", // <-- cambiado (antes: "Tarjeta (Stripe)")
+      desc: "3.6% + $3 MXN",
+      icon: <CreditCard className="text-indigo-600" />,
+      feeText: `Comisión aprox: ${formatoPrecio(feeStripe, "MXN")}`,
+      totalText: `Total con comisión: ${formatoPrecio(ttlStripe, "MXN")}`,
+    },
+  ];
+
+  return (
+    <AnimatePresence>
+      <motion.div className="fixed inset-0 z-[10020] flex items-center justify-center" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+        <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+        <motion.div
+          initial={{ scale: 0.95, y: 10, opacity: 0 }}
+          animate={{ scale: 1, y: 0, opacity: 1 }}
+          exit={{ scale: 0.98, y: 8, opacity: 0 }}
+          transition={{ type: "spring", stiffness: 380, damping: 28 }}
+          className="relative w-[92%] sm:max-w-2xl rounded-2xl bg-white shadow-2xl border border-gray-200 p-5"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-lg font-bold flex items-center gap-2"><Lock /> Selecciona método de pago</h3>
+            <button onClick={onClose} className="rounded-full bg-white/90 p-2 border"><X size={18} /></button>
+          </div>
+
+          <div className="space-y-3">
+            {opciones.map(op => (
+              <button
+                key={op.id}
+                onClick={() => onChoose(op.id)}
+                className="w-full text-left rounded-xl border bg-white/80 p-4 hover:border-gray-400 transition group"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5">{op.icon}</div>
+                  <div className="flex-1">
+                    <div className="font-semibold">{op.title}</div>
+                    <div className="text-sm text-gray-700">{op.desc}</div>
+                    <div className="text-xs text-gray-600 mt-1">{op.feeText}</div>
+                    <div className="text-xs font-semibold mt-0.5">{op.totalText}</div>
+                  </div>
+                  <CheckCircle2 className="opacity-0 group-hover:opacity-100 text-emerald-600" />
+                </div>
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-4 flex justify-end">
+            <button onClick={onClose} className="rounded-full px-4 py-2 text-sm font-semibold hover:bg-gray-100">
+              Cancelar
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
 /* ======================= Página Carrito / Compra ======================= */
 export default function Carrito() {
   const navigate = useNavigate();
@@ -297,6 +385,11 @@ export default function Carrito() {
   const [direccionSel, setDireccionSel] = useState(null);
   const [dirModalOpen, setDirModalOpen] = useState(false);
 
+  // Pago
+  const [pagoModalOpen, setPagoModalOpen] = useState(false);
+  const [metodoPago, setMetodoPago] = useState(null); // 'stripe' | 'paypal' | 'spei'
+  const [isMexico, setIsMexico] = useState(true);
+
   // Cargar sesión + contacto + direcciones (si hay)
   useEffect(() => {
     try {
@@ -308,6 +401,13 @@ export default function Carrito() {
       setUsuarioActivo(null);
       setFavs(readFavsBySession(null));
     }
+    // Heurística para detectar México
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone?.toLowerCase() || "";
+      const lang = (navigator.language || "").toLowerCase();
+      const isMx = tz.includes("mexico") || lang.includes("es-mx");
+      setIsMexico(!!isMx);
+    } catch { setIsMexico(true); }
   }, []);
 
   // Carga teléfono y direcciones desde Supabase cuando haya sesión
@@ -333,13 +433,12 @@ export default function Carrito() {
           const raw = localStorage.getItem(`direccionSeleccionada:${usuarioActivo.id}`);
           if (raw) {
             const parsed = JSON.parse(raw);
-            // Verificar que aún exista
             const stillThere = (dirs || []).find((d) => d.id === parsed.id);
             setDireccionSel(stillThere || null);
           }
         } catch {}
       } catch {
-        // en caso de error, dejamos vacíos (no rompe flujo)
+        // silencioso
       }
     };
     load();
@@ -479,7 +578,6 @@ export default function Carrito() {
   // Manejo selección de dirección
   const openSelectDireccion = async () => {
     if (!usuarioActivo?.id) return;
-    // Si no hay direcciones, mandamos a /direccion
     if (!direcciones || direcciones.length === 0) {
       navigate("/direccion");
       return;
@@ -493,7 +591,21 @@ export default function Carrito() {
     setDirModalOpen(false);
   };
 
-  // Si no hay sesión: bloquear acceso (como pediste)
+  // Continuar (abrir modal de pago)
+  const continuarPago = () => {
+    if (detailedItems.length === 0) return;
+    if (!direccionSel) {
+      if (direcciones.length === 0) {
+        navigate("/direccion");
+      } else {
+        setDirModalOpen(true);
+      }
+      return;
+    }
+    setPagoModalOpen(true);
+  };
+
+  // Si no hay sesión: bloquear acceso
   if (!usuarioActivo) {
     return (
       <div className="min-h-screen bg-[#f9f4ef] text-[#333] grid place-items-center px-6">
@@ -628,7 +740,7 @@ export default function Carrito() {
                 onMouseEnter={() => setHovered(index)}
                 onMouseLeave={() => setHovered(null)}
                 onClick={item.onClick}
-                className={`flex flex-col items-center gap-1 cursor-pointer px-2 sm:px-3 py-1 transition-all duration-300 ease-out
+                className={`flex flex-col items-center gap-1 cursor-pointer px-2 sm:px-3 py-1 transition-all duración-300 ease-out
                   ${hovered === index
                     ? "bg-white/50 backdrop-blur-sm shadow-inner rounded-md scale-105 underline underline-offset-4"
                     : "hover:bg-white/30 hover:backdrop-blur-sm hover:shadow-sm hover:rounded-md"
@@ -821,22 +933,23 @@ export default function Carrito() {
               <div className="pt-2 flex flex-col gap-2">
                 <button
                   disabled={detailedItems.length === 0}
-                  onClick={() => {
-                    if (!direccionSel) {
-                      // si no hay dirección seleccionada, forzar selección
-                      if (direcciones.length === 0) {
-                        navigate("/direccion");
-                      } else {
-                        setDirModalOpen(true);
-                      }
-                      return;
-                    }
-                    navigate("/direccion"); // siguiente paso de flujo (puedes cambiar a /pago si prefieres)
-                  }}
+                  onClick={continuarPago}
                   className={`rounded-full text-white px-4 py-3 text-sm font-semibold shadow hover:shadow-md inline-flex items-center justify-center gap-2 ${detailedItems.length === 0 ? "bg-gray-400 cursor-not-allowed" : "bg-gray-900"}`}
                 >
                   <Lock size={16} /> Continuar con el pago
                 </button>
+
+                {/* Nota de comisiones justo debajo del botón */}
+                <div className="text-[11px] text-gray-600 -mt-1">
+                  {isMexico ? (
+                    <>
+                      <div>Stripe: 3.6% + $3 MXN · PayPal: 3.95% + $4 MXN · SPEI: sin comisión (solo México)</div>
+                    </>
+                  ) : (
+                    <div>Stripe: 3.6% + $3 (tu ubicación no es México, disponible solo Stripe)</div>
+                  )}
+                </div>
+
                 <button
                   onClick={() => navigate("/tienda")}
                   className="rounded-full border px-4 py-3 text-sm font-semibold bg-white hover:bg-gray-50 border-gray-200"
@@ -879,6 +992,28 @@ export default function Carrito() {
         direcciones={direcciones}
         onSelect={selectDireccion}
         onAddNew={() => navigate("/direccion")}
+      />
+
+      {/* Modal de selección de pago */}
+      <PagoModal
+        open={pagoModalOpen}
+        onClose={() => setPagoModalOpen(false)}
+        isMexico={isMexico}
+        totalMXN={total}
+        onChoose={(metodo) => {
+          setMetodoPago(metodo);
+          setPagoModalOpen(false);
+          // Guarda la elección por si quieres usarla en la siguiente pantalla:
+          try { localStorage.setItem(`metodoPago:${usuarioActivo.id}`, metodo); } catch {}
+          // Aquí decides a dónde ir: /pago o /direccion (ya tienes dirección seleccionada)
+          if (metodo === "spei") {
+            navigate("/pago/spei"); // crea esta ruta para instrucciones de transferencia
+          } else if (metodo === "paypal") {
+            navigate("/pago/paypal"); // crea esta ruta para redirección o smart buttons
+          } else {
+            navigate("/pago/stripe"); // crea esta ruta para Checkout o Payment Element
+          }
+        }}
       />
     </div>
   );
