@@ -1,6 +1,6 @@
 // src/App.jsx
-import { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import {
   Home,
@@ -15,28 +15,34 @@ import {
   LogOut,
   KeyRound,
   HeartIcon
-} from 'lucide-react';
+} from "lucide-react";
 
-const productos = [
-  {
-    titulo: 'Cuadro “Raíz onirica”',
-    descripcion: 'Acrílico sobre lienzo. 60x80 cm.',
-    imagen: '/producto1.jpg',
-    precio: '$1200 MXN'
-  },
-  {
-    titulo: 'Obra “Aurora interna”',
-    descripcion: 'Mixta sobre papel reciclado. 50x70 cm.',
-    imagen: '/producto2.jpg',
-    precio: '$900 MXN'
-  },
-  {
-    titulo: 'Serie “Elementos”',
-    descripcion: 'Serie de 3 piezas. Técnica mixta.',
-    imagen: '/producto3.jpg',
-    precio: '$2100 MXN'
-  }
-];
+// ===== Supabase =====
+import { createClient } from "@supabase/supabase-js";
+const supabase = createClient(
+  "https://ousgktyljynqzrnafoqd.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im91c2drdHlsanlucXpybmFmb3FkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2MDMxNjYsImV4cCI6MjA2ODE3OTE2Nn0.hG27iuA-iNH3e3PPRck7ELgO89aRTbMiM8I65085TcE"
+);
+
+/* ======================= Helpers imágenes ======================= */
+function buildImgUrl(pathLike) {
+  if (!pathLike) return "/placeholder.jpg";
+  if (/^https?:\/\//i.test(pathLike)) return pathLike;
+  if (/^\//.test(pathLike)) return pathLike;
+  return `/${String(pathLike).replace(/^public\//, "")}`;
+}
+
+function rowToProductUI(r) {
+  return {
+    id: r.id,
+    titulo: r.titulo,
+    descripcion: r.descripcion,
+    precio: Number(r.precio),
+    moneda: r.moneda || "MXN",
+    destacado: !!r.destacado,
+    imagenes: Array.isArray(r.imagenes) ? r.imagenes.map(buildImgUrl) : [],
+  };
+}
 
 /* ======================= Helpers carrito por usuario ======================= */
 function getCartKeyBySession(sesion) {
@@ -52,25 +58,56 @@ function safeCartCount(cartArray) {
 export default function App() {
   const [hovered, setHovered] = useState(null);
   const [index, setIndex] = useState(0);
+
+  // Usuario/menú/carro
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [usuarioActivo, setUsuarioActivo] = useState(null);
   const [cerrandoSesion, setCerrandoSesion] = useState(false);
-  const [cartCount, setCartCount] = useState(0); // contador inicia en 0
+  const [cartCount, setCartCount] = useState(0);
   const userMenuTimeout = useRef(null);
   const navigate = useNavigate();
 
-  // Slider de destacados
+  // ====== Destacados (solo Supabase) ======
+  const [destacados, setDestacados] = useState([]);
+  const [cargandoDest, setCargandoDest] = useState(true);
+
   useEffect(() => {
+    const loadFeatured = async () => {
+      setCargandoDest(true);
+      try {
+        const { data, error } = await supabase
+          .from("productos")
+          .select("id,titulo,descripcion,precio,moneda,imagenes,destacado")
+          .eq("destacado", true)
+          .is("disponible", true)
+          .order("id", { ascending: true });
+
+        if (error) throw error;
+        const mapped = (data || []).map(rowToProductUI);
+        setDestacados(mapped);
+      } catch (e) {
+        console.error("Error cargando destacados desde Supabase:", e);
+        setDestacados([]); // sin fallback local
+      } finally {
+        setCargandoDest(false);
+      }
+    };
+    loadFeatured();
+  }, []);
+
+  // Slider (solo corre si hay destacados)
+  useEffect(() => {
+    if (!destacados.length) return;
     const interval = setInterval(() => {
-      setIndex((prev) => (prev + 1) % productos.length);
+      setIndex((prev) => (prev + 1) % destacados.length);
     }, 4000);
     return () => clearInterval(interval);
-  }, []);
+  }, [destacados.length]);
 
   // Cargar sesión al montar
   useEffect(() => {
     try {
-      const sesion = JSON.parse(localStorage.getItem('sesionActiva'));
+      const sesion = JSON.parse(localStorage.getItem("sesionActiva"));
       if (sesion?.id && sesion.id !== usuarioActivo?.id) {
         setUsuarioActivo(sesion);
       }
@@ -97,8 +134,7 @@ export default function App() {
   // Escuchar cambios en localStorage (sesión y carrito del usuario actual)
   useEffect(() => {
     const onStorage = (e) => {
-      // Cambio de sesión en otra pestaña
-      if (e.key === 'sesionActiva') {
+      if (e.key === "sesionActiva") {
         try {
           const sesion = JSON.parse(e.newValue);
           setUsuarioActivo(sesion?.id ? sesion : null);
@@ -107,12 +143,11 @@ export default function App() {
         }
         return;
       }
-      // Cambios del carrito del usuario actual
       if (usuarioActivo?.id) {
         const myKey = getCartKeyBySession(usuarioActivo);
         if (e.key === myKey) {
           try {
-            const cart = JSON.parse(e.newValue || '[]');
+            const cart = JSON.parse(e.newValue || "[]");
             setCartCount(safeCartCount(cart));
           } catch {
             setCartCount(0);
@@ -120,15 +155,15 @@ export default function App() {
         }
       }
     };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, [usuarioActivo]);
 
   // Al volver el foco, re-sincronizar sesión y contador
   useEffect(() => {
     const onFocus = () => {
       try {
-        const sesion = JSON.parse(localStorage.getItem('sesionActiva'));
+        const sesion = JSON.parse(localStorage.getItem("sesionActiva"));
         setUsuarioActivo(sesion?.id ? sesion : null);
         if (sesion?.id) {
           const key = getCartKeyBySession(sesion);
@@ -142,8 +177,8 @@ export default function App() {
         setCartCount(0);
       }
     };
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
   }, []);
 
   const handleUserMouseEnter = () => {
@@ -158,64 +193,35 @@ export default function App() {
   };
 
   const menu = [
-    { label: "Inicio", icon: <Home size={28} />, onClick: () => navigate('/') },
-    { label: "Galería", icon: <ImageIcon size={24} />, onClick: () => navigate('/galeria')},
-    { label: "Videos", icon: <Video size={24} />, onClick: () => navigate('/videos') },
-    { label: "Tienda", icon: <ShoppingBag size={24} />, onClick: () => navigate('/tienda') },
-    { label: "Restauración", icon: <Brush size={24} />, onClick: () => navigate('/restauracion') },
-    { label: "Contacto", icon: <Mail size={24} />, onClick: () => navigate('/contacto') },
+    { label: "Inicio", icon: <Home size={28} />, onClick: () => navigate("/") },
+    { label: "Galería", icon: <ImageIcon size={24} />, onClick: () => navigate("/galeria") },
+    { label: "Videos", icon: <Video size={24} />, onClick: () => navigate("/videos") },
+    { label: "Tienda", icon: <ShoppingBag size={24} />, onClick: () => navigate("/tienda") },
+    { label: "Restauración", icon: <Brush size={24} />, onClick: () => navigate("/restauracion") },
+    { label: "Contacto", icon: <Mail size={24} />, onClick: () => navigate("/contacto") },
   ];
 
   const cerrarSesion = () => {
     setCerrandoSesion(true);
     setTimeout(() => {
       try {
-        // Limpia la clave global antigua por si quedó
-        localStorage.removeItem('carrito');
-        // Opcional: si quieres borrar TMB el carrito del usuario saliente, descomenta:
-        const prev = JSON.parse(localStorage.getItem('sesionActiva'));
+        localStorage.removeItem("carrito");
+        const prev = JSON.parse(localStorage.getItem("sesionActiva"));
         if (prev?.id) localStorage.removeItem(`carrito:${prev.id}`);
       } catch {}
-      localStorage.removeItem('sesionActiva');
+      localStorage.removeItem("sesionActiva");
       setUsuarioActivo(null);
-      setCartCount(0); // reset visual inmediato
+      setCartCount(0);
       setCerrandoSesion(false);
-      navigate('/');
+      navigate("/");
     }, 5000);
   };
 
-  // === Datos de la Línea de vida (usados para centrar el último si es impar) ===
-  const lineas = [
-    {
-      titulo: "Trayectoria profesional",
-      eventos: [
-        { año: "2005", evento: "“El caballete de la triste figura” – Galerías UAM." },
-        { año: "2012", evento: "“Mujeres: nuestros cuerpos, nuestras vidas” – Galería Aguafuerte." },
-        { año: "Anual", evento: "Exposiciones en el colectivo Esmeralda (Secretaría de Comunicaciones, Torre Pemex, Secretaría de Finanzas)." },
-        { año: "2017–2018", evento: "Exposición individual – Galería Antiqus." },
-        { año: "2024", evento: "Museo Barber Studio." }
-      ]
-    },
-    {
-      titulo: "Estudios",
-      eventos: [
-        { año: "2002–2005", evento: "Artes Plásticas, E.I.A No. 1 del INBA–CONACULTA." },
-        { año: "2005–2010 / 2011–2013", evento: "Antropología y Guion Cinematográfico." },
-        { año: "2007", evento: "Taller–Diplomado de Estética con el Dr. Moisés Ladrón de Guevara." },
-        { año: "2007", evento: "Técnica de materiales con el Dr. Moisés Ladrón de Guevara." },
-        { año: "2020–2022", evento: "Estudio independiente de Restauración." }
-      ]
-    },
-    {
-      titulo: "Premios y reconocimientos",
-      eventos: [
-        { año: "2010", evento: "Premio de Investigación CONACYT – Excelencia en investigación académica." },
-        { año: "s/f", evento: "Reconocimiento del Coloquio Internacional “El espejo simbolista”." },
-        { año: "s/f", evento: "Reconocimiento en el Simposio Internacional de Teoría sobre Arte." },
-        { año: "s/f", evento: "Reconocimiento en SITAC – Simposio Internacional de Teoría sobre Arte Contemporáneo." }
-      ]
-    }
-  ];
+  const destacadoActual = destacados[index] || null;
+  const imgActual =
+    destacadoActual?.imagenes?.[0] ??
+    buildImgUrl(destacadoActual?.imagen) ??
+    "/placeholder.jpg";
 
   return (
     <div className="min-h-screen bg-[#f9f4ef] text-[#333333] font-sans flex flex-col items-center">
@@ -272,16 +278,16 @@ export default function App() {
                           <div className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-gray-800">
                             <User size={16} /> {usuarioActivo.nombre || usuarioActivo.usuario}
                           </div>
-                          <button onClick={() => navigate('/usuario')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                          <button onClick={() => navigate("/usuario")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <User size={16} className="mr-2" /> Información de cuenta
                           </button>
-                          <button onClick={() => navigate('/direccion')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                          <button onClick={() => navigate("/direccion")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <Mail size={16} className="mr-2" /> Direcciones
                           </button>
-                          <button onClick={() => navigate('/favoritos')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                          <button onClick={() => navigate("/favoritos")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <HeartIcon size={16} className="mr-2" /> Favoritos
-                          </button>                          
-                          <button onClick={() => navigate('/contrasena')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                          </button>
+                          <button onClick={() => navigate("/contrasena")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <KeyRound size={16} className="mr-2" /> Cambiar contraseña
                           </button>
                           <button onClick={cerrarSesion} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100 text-red-600">
@@ -290,10 +296,10 @@ export default function App() {
                         </>
                       ) : (
                         <>
-                          <button onClick={() => navigate('/iniciar-sesion')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                          <button onClick={() => navigate("/iniciar-sesion")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <LogIn size={16} className="mr-2" /> Iniciar sesión
                           </button>
-                          <button onClick={() => navigate('/registro')} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                          <button onClick={() => navigate("/registro")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <UserPlus size={16} className="mr-2" /> Crear cuenta
                           </button>
                         </>
@@ -305,12 +311,11 @@ export default function App() {
 
               {usuarioActivo && (
                 <button
-                  onClick={() => navigate('/carrito')}
+                  onClick={() => navigate("/carrito")}
                   className="relative group"
                   title="Carrito"
-                  aria-label={`Carrito con ${cartCount} ${cartCount === 1 ? 'artículo' : 'artículos'}`}
+                  aria-label={`Carrito con ${cartCount} ${cartCount === 1 ? "artículo" : "artículos"}`}
                 >
-                  {/* Botón base */}
                   <span
                     className="grid place-items-center rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md transition
                                h-11 w-11 group-hover:shadow-lg group-hover:scale-105"
@@ -318,7 +323,6 @@ export default function App() {
                     <ShoppingBag size={22} className="text-[#a16207]" />
                   </span>
 
-                  {/* Badge del contador (solo si > 0) */}
                   {cartCount > 0 && (
                     <span
                       className="absolute -right-1 -top-1 rounded-full text-[11px] font-bold
@@ -352,8 +356,8 @@ export default function App() {
                 onClick={item.onClick}
                 className={`flex flex-col items-center gap-1 cursor-pointer px-2 sm:px-3 py-1 transition-all duration-300 ease-out
                   ${hovered === index
-                    ? 'bg-white/50 backdrop-blur-sm shadow-inner rounded-md scale-105 underline underline-offset-4'
-                    : 'hover:bg-white/30 hover:backdrop-blur-sm hover:shadow-sm hover:rounded-md'
+                    ? "bg-white/50 backdrop-blur-sm shadow-inner rounded-md scale-105 underline underline-offset-4"
+                    : "hover:bg-white/30 hover:backdrop-blur-sm hover:shadow-sm hover:rounded-md"
                   }`}
                 whileHover={{ scale: 1.05 }}
               >
@@ -371,7 +375,7 @@ export default function App() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.8 }}
         className="w-full relative overflow-hidden border-t border-gray-200"
-        style={{ height: '400px' }}
+        style={{ height: "400px" }}
       >
         <video
           src="/Pintura1.mov"
@@ -382,7 +386,7 @@ export default function App() {
           className="absolute inset-0 w-full h-full object-cover"
         />
         <div className="absolute inset-0 bg-black/20 z-10" />
-        <div className="relative z-20 h-full flex flex-col justify-center items-center text-center px-4">
+        <div className="relative z-20 h-full flex flex-col justify-center items-center textcenter px-4">
           <h2 className="text-4xl sm:text-5xl font-bold mb-4 text-white rounded-lg px-4 py-2">
             Bienvenido a la nueva experiencia visual
           </h2>
@@ -392,6 +396,7 @@ export default function App() {
           <motion.button
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.97 }}
+            onClick={() => navigate("/tienda")}
             className="mt-8 px-6 py-3 bg-[#a16207] text-white border border-[#a16207] rounded-full shadow-lg hover:bg-[#854d06] hover:scale-105 transition-all duration-300"
           >
             Ver colección destacada
@@ -426,21 +431,34 @@ export default function App() {
             <div className="relative w-full max-w-md flex items-center justify-center overflow-hidden min-h-[400px]">
               <AnimatePresence mode="wait">
                 <motion.div
-                  key={index}
+                  key={cargandoDest ? "loading" : index}
                   initial={{ opacity: 0, x: 100 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -100 }}
                   transition={{ duration: 0.6 }}
                   className="absolute w-full p-6 bg-white/60 backdrop-blur-md border border-gray-300 rounded-xl shadow-lg text-center"
                 >
-                  <img
-                    src={productos[index].imagen}
-                    alt={productos[index].titulo}
-                    className="w-full h-56 object-cover rounded mb-4"
-                  />
-                  <h4 className="text-lg font-semibold">{productos[index].titulo}</h4>
-                  <p className="text-sm text-gray-700">{productos[index].descripcion}</p>
-                  <p className="text-base font-medium mt-2 text-[#a16207]">{productos[index].precio}</p>
+                  {cargandoDest ? (
+                    <div className="py-24 text-gray-600">Cargando destacados…</div>
+                  ) : destacados.length === 0 ? (
+                    <div className="py-24 text-gray-600">No hay obras destacadas disponibles.</div>
+                  ) : (
+                    <>
+                      <img
+                        src={imgActual}
+                        alt={destacadoActual?.titulo || "Obra destacada"}
+                        className="w-full h-56 object-cover rounded mb-4"
+                        onError={(e) => (e.currentTarget.src = "/placeholder.jpg")}
+                      />
+                      <h4 className="text-lg font-semibold">{destacadoActual?.titulo}</h4>
+                      <p className="text-sm text-gray-700">{destacadoActual?.descripcion}</p>
+                      {Number.isFinite(destacadoActual?.precio) && (
+                        <p className="text-base font-medium mt-2 text-[#a16207]">
+                          ${destacadoActual.precio} {destacadoActual.moneda || "MXN"}
+                        </p>
+                      )}
+                    </>
+                  )}
                 </motion.div>
               </AnimatePresence>
             </div>
@@ -448,6 +466,7 @@ export default function App() {
             <motion.button
               whileHover={{ scale: 1.08 }}
               whileTap={{ scale: 0.95 }}
+              onClick={() => navigate("/tienda")}
               className="px-6 py-3 bg-[#a16207] text-white border border-[#a16207] rounded-full shadow-md hover:bg-[#854d06] transition-all duration-300"
             >
               Ver más obras
@@ -455,8 +474,6 @@ export default function App() {
           </div>
         </div>
       </section>
-
-      {/* ===================== SECCIONES SOBRE LA ARTISTA (mismo diseño) ===================== */}
 
       {/* Bio + imagen */}
       <section className="w-full py-20 px-6 max-w-6xl mx-auto">
@@ -479,15 +496,41 @@ export default function App() {
         {/* Línea de vida */}
         <h3 className="text-3xl font-bold text-center text-[#a16207] mt-24 mb-20">Línea de vida artística</h3>
 
-        {/* Grid: centra el último si queda solo */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-20 justify-items-center">
-          {lineas.map((seccion, i) => {
-            const isLastSingle = i === lineas.length - 1 && lineas.length % 2 !== 0;
+          {[
+            {
+              titulo: "Trayectoria profesional",
+              eventos: [
+                { año: "2005", evento: "“El caballete de la triste figura” – Galerías UAM." },
+                { año: "2012", evento: "“Mujeres: nuestros cuerpos, nuestras vidas” – Galería Aguafuerte." },
+                { año: "Anual", evento: "Exposiciones en el colectivo Esmeralda (Secretaría de Comunicaciones, Torre Pemex, Secretaría de Finanzas)." },
+                { año: "2017–2018", evento: "Exposición individual – Galería Antiqus." },
+                { año: "2024", evento: "Museo Barber Studio." }
+              ]
+            },
+            {
+              titulo: "Estudios",
+              eventos: [
+                { año: "2002–2005", evento: "Artes Plásticas, E.I.A No. 1 del INBA–CONACULTA." },
+                { año: "2005–2010 / 2011–2013", evento: "Antropología y Guion Cinematográfico." },
+                { año: "2007", evento: "Taller–Diplomado de Estética con el Dr. Moisés Ladrón de Guevara." },
+                { año: "2007", evento: "Técnica de materiales con el Dr. Moisés Ladrón de Guevara." },
+                { año: "2020–2022", evento: "Estudio independiente de Restauración." }
+              ]
+            },
+            {
+              titulo: "Premios y reconocimientos",
+              eventos: [
+                { año: "2010", evento: "Premio de Investigación CONACYT – Excelencia en investigación académica." },
+                { año: "s/f", evento: "Reconocimiento del Coloquio Internacional “El espejo simbolista”." },
+                { año: "s/f", evento: "Reconocimiento en el Simposio Internacional de Teoría sobre Arte." },
+                { año: "s/f", evento: "Reconocimiento en SITAC – Simposio Internacional de Teoría sobre Arte Contemporáneo." }
+              ]
+            }
+          ].map((seccion, i) => {
+            const isLastSingle = i === 2 && 3 % 2 !== 0;
             return (
-              <div
-                key={i}
-                className={isLastSingle ? 'md:col-span-2 flex justify-center' : ''}
-              >
+              <div key={i} className={isLastSingle ? "md:col-span-2 flex justify-center" : ""}>
                 <div className="space-y-6 w-full max-w-xl">
                   <h4 className="text-2xl font-semibold text-[#854d06]">{seccion.titulo}</h4>
                   <div className="relative border-l-4 border-[#a16207] pl-8 space-y-8">
@@ -584,18 +627,13 @@ export default function App() {
       <section className="max-w-6xl mx-auto px-6 py-20">
         <h3 className="text-3xl font-bold text-center text-[#a16207] mb-10">Técnicas y materiales</h3>
         <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6 text-center">
-          {[
-            "Óleo",
-            "Acrílico",
-            "Cera",
-            "Tintas mixtas",
-            "Fotografía digital",
-            "Composición digital"
-          ].map((item, idx) => (
-            <div key={idx} className="bg-white/70 p-6 rounded-xl shadow-md hover:shadow-lg transition">
-              <p className="text-lg font-medium text-gray-800">{item}</p>
-            </div>
-          ))}
+          {["Óleo", "Acrílico", "Cera", "Tintas mixtas", "Fotografía digital", "Composición digital"].map(
+            (item, idx) => (
+              <div key={idx} className="bg-white/70 p-6 rounded-xl shadow-md hover:shadow-lg transition">
+                <p className="text-lg font-medium text-gray-800">{item}</p>
+              </div>
+            )
+          )}
         </div>
       </section>
 

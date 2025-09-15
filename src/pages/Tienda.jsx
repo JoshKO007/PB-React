@@ -2,7 +2,6 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import PRODUCTOS_JSON from "../data/productos.json";
 import {
   // Header / Footer / Menú
   Home,
@@ -32,6 +31,14 @@ import {
   ChevronDown,
   ShieldAlert
 } from "lucide-react";
+
+// ===== Supabase =====
+import { createClient } from "@supabase/supabase-js";
+const supabase = createClient(
+  // Usa las mismas credenciales que ya usaste en Carrito.jsx
+  "https://ousgktyljynqzrnafoqd.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im91c2drdHlsanlucXpybmFmb3FkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2MDMxNjYsImV4cCI6MjA2ODE3OTE2Nn0.hG27iuA-iNH3e3PPRck7ELgO89aRTbMiM8I65085TcE"
+);
 
 /* ======================= Ordenes / Categorías ======================= */
 const ORDENES = [
@@ -68,8 +75,34 @@ function Etiqueta({ children }) {
   );
 }
 
+/* ======================= Helpers imágenes ======================= */
+function buildImgUrl(pathLike) {
+  if (!pathLike) return "/placeholder.jpg";
+  if (/^https?:\/\//i.test(pathLike)) return pathLike; // absoluta
+  if (/^\//.test(pathLike)) return pathLike;           // raíz del sitio
+  return `/${String(pathLike).replace(/^public\//, "")}`;
+}
+
+// Mapea el row de Supabase al shape del UI
+function rowToProductUI(r) {
+  return {
+    id: r.id,
+    titulo: r.titulo,
+    descripcion: r.descripcion,
+    descripcionDetallada: r.descripcion_detallada,
+    precio: Number(r.precio),
+    moneda: r.moneda || "MXN",
+    descuento: r.descuento || 0,
+    etiquetas: Array.isArray(r.etiquetas) ? r.etiquetas : [],
+    imagenes: Array.isArray(r.imagenes) ? r.imagenes.map(buildImgUrl) : [],
+    destacado: !!r.destacado,
+    bajoPedido: !!r.bajo_pedido,
+    disponible: !!r.disponible,
+    tiempoEntrega: r.tiempo_entrega || "",
+  };
+}
+
 /* ======================= (B) Helpers de Carrito & Favoritos ======================= */
-// Carrito por usuario
 function getCartKeyBySession(sesion) {
   return sesion?.id ? `carrito:${sesion.id}` : null;
 }
@@ -80,8 +113,6 @@ function safeCartCount(cartArray) {
     return sum + Math.max(0, qty);
   }, 0);
 }
-
-// Favoritos por usuario + sincronización
 function getFavsKeyBySession(sesion) {
   return sesion?.id ? `favoritos:${sesion.id}` : "favoritos";
 }
@@ -94,17 +125,9 @@ function readFavsBySession(sesion) {
 }
 function writeFavsBySession(sesion, list) {
   const key = getFavsKeyBySession(sesion);
-  try {
-    localStorage.setItem(key, JSON.stringify(list));
-  } catch {}
-  try {
-    window.dispatchEvent(new CustomEvent("favs:changed", { detail: { key, list } }));
-  } catch {}
-  try {
-    const bc = new BroadcastChannel("favs");
-    bc.postMessage({ key, list });
-    bc.close();
-  } catch {}
+  try { localStorage.setItem(key, JSON.stringify(list)); } catch {}
+  try { window.dispatchEvent(new CustomEvent("favs:changed", { detail: { key, list } })); } catch {}
+  try { const bc = new BroadcastChannel("favs"); bc.postMessage({ key, list }); bc.close(); } catch {}
 }
 
 /* ======================= HeartBurst (partículas) ======================= */
@@ -687,6 +710,42 @@ export default function Tienda() {
   const [cerrandoSesion, setCerrandoSesion] = useState(false);
   const userMenuTimeout = useRef(null);
 
+  // --- Productos (solo Supabase) ---
+  const [productos, setProductos] = useState([]);
+  const [cargando, setCargando] = useState(true);
+
+  useEffect(() => {
+    // sesión (solo para carrito/favs)
+    try {
+      const sesion = JSON.parse(localStorage.getItem("sesionActiva"));
+      setUsuarioActivo(sesion?.id ? sesion : null);
+    } catch {
+      setUsuarioActivo(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    const load = async () => {
+      setCargando(true);
+      try {
+        const { data, error } = await supabase
+          .from("productos")
+          .select("id,titulo,descripcion,descripcion_detallada,precio,moneda,descuento,etiquetas,imagenes,destacado,bajo_pedido,disponible,tiempo_entrega")
+          .is("disponible", true)
+          .order("destacado", { ascending: false });
+        if (error) throw error;
+        const mapped = (data || []).map(rowToProductUI);
+        setProductos(mapped); // sin fallback local
+      } catch (e) {
+        console.error("Error cargando productos desde Supabase:", e);
+        setProductos([]); // sin fallback local
+      } finally {
+        setCargando(false);
+      }
+    };
+    load();
+  }, []);
+
   const handleUserMouseEnter = () => {
     clearTimeout(userMenuTimeout.current);
     setShowUserMenu(true);
@@ -713,16 +772,6 @@ export default function Tienda() {
     }, 5000);
   };
 
-  // Cargar sesión activa (si existe)
-  useEffect(() => {
-    try {
-      const sesion = JSON.parse(localStorage.getItem("sesionActiva"));
-      setUsuarioActivo(sesion?.id ? sesion : null);
-    } catch {
-      setUsuarioActivo(null);
-    }
-  }, []);
-
   const menu = [
     { label: "Inicio", icon: <Home size={28} />, onClick: () => navigate("/") },
     { label: "Galería", icon: <ImageIcon size={24} />, onClick: () => navigate("/galeria") },
@@ -731,9 +780,6 @@ export default function Tienda() {
     { label: "Restauración", icon: <Brush size={24} />, onClick: () => navigate("/restauracion") },
     { label: "Contacto", icon: <Mail size={24} />, onClick: () => navigate("/contacto") },
   ];
-
-  // --- Productos: SOLO desde el JSON local (sin red, sin fallback) ---
-  const productos = useMemo(() => Array.isArray(PRODUCTOS_JSON) ? PRODUCTOS_JSON : [], []);
 
   // --- Filtros ---
   const [busqueda, setBusqueda] = useState("");
@@ -749,7 +795,6 @@ export default function Tienda() {
   // --- Favoritos (sincronizados) ---
   const [favoritos, setFavoritos] = useState([]);
 
-  // Carga inicial + migración global "favoritos" -> "favoritos:<id>"
   useEffect(() => {
     try {
       const current = readFavsBySession(usuarioActivo);
@@ -768,7 +813,6 @@ export default function Tienda() {
     }
   }, [usuarioActivo]);
 
-  // Escuchar cambios (storage + custom event + BroadcastChannel)
   useEffect(() => {
     const myKey = getFavsKeyBySession(usuarioActivo);
 
@@ -1010,7 +1054,6 @@ export default function Tienda() {
   // Datos para secciones
   const destacados = productos.filter((p) => p.destacado);
   const bajoPedido = productos.filter((p) => p.bajoPedido);
-  const generales = filtrosAplicados ? productosFiltrados : productos;
 
   return (
     <div className="min-h-screen bg-[#f9f4ef] text-[#333] font-sans flex flex-col">
@@ -1103,15 +1146,12 @@ export default function Tienda() {
                   title="Carrito"
                   aria-label={`Carrito con ${cartCount} ${cartCount === 1 ? "artículo" : "artículos"}`}
                 >
-                  {/* Bolita grande */}
                   <span
                     className="grid place-items-center rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md transition
                                h-11 w-11 group-hover:shadow-lg group-hover:scale-105"
                   >
                     <ShoppingBag size={22} className="text-[#a16207]" />
                   </span>
-
-                  {/* Contador fusionado: solo si > 0 */}
                   {cartCount > 0 && (
                     <motion.span
                       key={cartCount}
@@ -1165,7 +1205,7 @@ export default function Tienda() {
         </div>
       </motion.header>
 
-      {/* ================= CONTENIDO TIENDA ================= */}
+      {/* ================= CONTENIDO TIENDA ======================= */}
       <div className="mx-auto max-w-7xl px-4 sm:px-6 w-full">
         {/* INTRO */}
         <section className="pt-6 sm:pt-10">
@@ -1270,8 +1310,13 @@ export default function Tienda() {
           </div>
         </section>
 
+        {/* Cargando estado */}
+        {cargando && (
+          <div className="mt-10 text-center text-sm text-gray-600">Cargando obras…</div>
+        )}
+
         {/* Secciones limitadas (solo sin filtros) */}
-        {!filtrosAplicados && (
+        {!cargando && !filtrosAplicados && (
           <SeccionGridLimitada
             titulo="Obras destacadas"
             icon={<Sparkles className="text-amber-600" />}
@@ -1285,7 +1330,7 @@ export default function Tienda() {
           />
         )}
 
-        {!filtrosAplicados && (
+        {!cargando && !filtrosAplicados && (
           <SeccionGridLimitada
             titulo="Obras bajo pedido"
             icon={<Brush className="text-indigo-600" />}
@@ -1300,31 +1345,33 @@ export default function Tienda() {
         )}
 
         {/* Resultados / General */}
-        <section id="lista-general" className="mt-10">
-          <div className="flex items-baseline justify-between">
-            <h2 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
-              <Package /> {filtrosAplicados ? "Resultados" : "Todas las obras"}
-            </h2>
-            {filtrosAplicados && (
-              <div className="text-sm text-gray-500">{generales.length} resultado(s)</div>
-            )}
-          </div>
-
-        <GridGeneral
-            productos={generales}
-            onOpen={(p) => { setQuickProducto(p); setQuickOpen(true); }}
-            onAddCartAnim={addCartWithAnim}
-            onFav={(p) => toggleFav(p)}
-            favs={favoritos}
-          />
-
-          {filtrosAplicados && generales.length === 0 && (
-            <div className="mt-6 text-sm text-gray-600">
-              No encontramos obras con esos filtros.{" "}
-              <button onClick={limpiarFiltros} className="underline font-semibold">Limpiar filtros</button>
+        {!cargando && (
+          <section id="lista-general" className="mt-10">
+            <div className="flex items-baseline justify-between">
+              <h2 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
+                <Package /> {filtrosAplicados ? "Resultados" : "Todas las obras"}
+              </h2>
+              {filtrosAplicados && (
+                <div className="text-sm text-gray-500">{productosFiltrados.length} resultado(s)</div>
+              )}
             </div>
-          )}
-        </section>
+
+            <GridGeneral
+              productos={filtrosAplicados ? productosFiltrados : productos}
+              onOpen={(p) => { setQuickProducto(p); setQuickOpen(true); }}
+              onAddCartAnim={addCartWithAnim}
+              onFav={(p) => toggleFav(p)}
+              favs={favoritos}
+            />
+
+            {filtrosAplicados && productosFiltrados.length === 0 && (
+              <div className="mt-6 text-sm text-gray-600">
+                No encontramos obras con esos filtros.{" "}
+                <button onClick={limpiarFiltros} className="underline font-semibold">Limpiar filtros</button>
+              </div>
+            )}
+          </section>
+        )}
 
         {/* Cinta informativa */}
         <section className="mt-14 mb-10">

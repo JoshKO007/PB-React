@@ -32,13 +32,13 @@ import {
   X,
   CreditCard,
   Landmark,
-  Wallet // <-- agregado
+  Wallet
 } from "lucide-react";
 
 // === Catálogo: SOLO desde JSON local ===
 import PRODUCTOS_JSON from "../data/productos.json";
 
-// === Supabase para leer direcciones del usuario ===
+// === Supabase para direcciones (y FAVORITOS ahora) ===
 import { createClient } from "@supabase/supabase-js";
 const supabase = createClient(
   "https://ousgktyljynqzrnafoqd.supabase.co",
@@ -65,22 +65,6 @@ function safeCartCount(cartArray) {
 }
 function getCartKeyBySession(sesion) {
   return sesion?.id ? `carrito:${sesion.id}` : null;
-}
-function getFavsKeyBySession(sesion) {
-  return sesion?.id ? `favoritos:${sesion.id}` : "favoritos";
-}
-function readFavsBySession(sesion) {
-  try {
-    const key = getFavsKeyBySession(sesion);
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
-}
-function writeFavsBySession(sesion, list) {
-  const key = getFavsKeyBySession(sesion);
-  try { localStorage.setItem(key, JSON.stringify(list)); } catch {}
-  try { window.dispatchEvent(new CustomEvent("favs:changed", { detail: { key, list } })); } catch {}
-  try { const bc = new BroadcastChannel("favs"); bc.postMessage({ key, list }); bc.close(); } catch {}
 }
 function Etiqueta({ children }) {
   return (
@@ -265,18 +249,17 @@ function PagoModal({ open, onClose, isMexico, totalMXN, onChoose }) {
       feeText: "Sin comisión",
       totalText: formatoPrecio(totalMXN, "MXN"),
     }] : []),
-    // PayPal solo en México (según solicitud “si no es de México solo Stripe”)
     ...(isMexico ? [{
       id: "paypal",
       title: "PayPal",
       desc: "3.95% + $4 MXN",
-      icon: <Wallet className="text-sky-700" />, // <-- cambiado a Wallet
+      icon: <Wallet className="text-sky-700" />,
       feeText: `Comisión aprox: ${formatoPrecio(feePayPal, "MXN")}`,
       totalText: `Total con comisión: ${formatoPrecio(ttlPayPal, "MXN")}`,
     }] : []),
     {
       id: "stripe",
-      title: "Tarjeta", // <-- cambiado (antes: "Tarjeta (Stripe)")
+      title: "Tarjeta",
       desc: "3.6% + $3 MXN",
       icon: <CreditCard className="text-indigo-600" />,
       feeText: `Comisión aprox: ${formatoPrecio(feeStripe, "MXN")}`,
@@ -373,8 +356,38 @@ export default function Carrito() {
 
   // Productos (fuente única)
   const productos = useMemo(() => (Array.isArray(PRODUCTOS_JSON) ? PRODUCTOS_JSON : []), []);
-  // Favoritos
-  const [favs, setFavs] = useState([]);
+
+  // ===== Favoritos: ahora en Supabase =====
+  const [favs, setFavs] = useState([]); // array de strings (ids)
+  useEffect(() => {
+    const fetchFavs = async (uid) => {
+      try {
+        const { data, error } = await supabase
+          .from("favoritos")
+          .select("producto_id")
+          .eq("usuario_id", uid);
+        if (error) throw error;
+        setFavs((data || []).map(r => String(r.producto_id)));
+      } catch (e) {
+        console.error("Error cargando favoritos:", e);
+        setFavs([]);
+      }
+    };
+    if (usuarioActivo?.id) {
+      fetchFavs(usuarioActivo.id);
+      const ch = supabase
+        .channel("rt-favoritos-carrito")
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "favoritos", filter: `usuario_id=eq.${usuarioActivo.id}` },
+          () => fetchFavs(usuarioActivo.id)
+        )
+        .subscribe();
+      return () => { try { supabase.removeChannel(ch); } catch {} };
+    } else {
+      setFavs([]);
+    }
+  }, [usuarioActivo]);
 
   // Datos de contacto
   const [telefono, setTelefono] = useState("");
@@ -390,16 +403,18 @@ export default function Carrito() {
   const [metodoPago, setMetodoPago] = useState(null); // 'stripe' | 'paypal' | 'spei'
   const [isMexico, setIsMexico] = useState(true);
 
-  // Cargar sesión + contacto + direcciones (si hay)
+  // Loading checkout / errores
+  const [loadingCheckout, setLoadingCheckout] = useState(false);
+  const [errorCheckout, setErrorCheckout] = useState("");
+
+  // Cargar sesión + contacto (sin favoritos locales)
   useEffect(() => {
     try {
       const sesion = JSON.parse(localStorage.getItem("sesionActiva"));
       setUsuarioActivo(sesion?.id ? sesion : null);
-      setFavs(readFavsBySession(sesion?.id ? sesion : null));
       setEmail(sesion?.email || sesion?.correo || "");
     } catch {
       setUsuarioActivo(null);
-      setFavs(readFavsBySession(null));
     }
     // Heurística para detectar México
     try {
@@ -542,7 +557,7 @@ export default function Carrito() {
 
   const total = Math.max(0, subtotal - descuento + costoEnvio);
 
-  // Acciones carrito
+  // Acciones carrito (localStorage por sesión — se mantiene)
   const writeCart = (next) => {
     if (!usuarioActivo?.id) return;
     const key = getCartKeyBySession(usuarioActivo);
@@ -558,21 +573,31 @@ export default function Carrito() {
   };
   const clearCart = () => writeCart([]);
 
-  // Favoritos
-  const toggleFav = (id) => {
-    const list = favs.includes(id) ? favs.filter((f) => f !== id) : [...favs, id];
-    writeFavsBySession(usuarioActivo, list);
-    setFavs(list);
-  };
-
-  // Cupones de ejemplo (cliente)
-  const applyCoupon = () => {
-    const code = cupon.trim().toUpperCase();
-    if (!code) { setCuponAplicado(null); return; }
-    if (code === "ARTE10") setCuponAplicado({ type: "percent", value: 10, code });
-    else if (code === "BIENVENIDA100") setCuponAplicado({ type: "flat", value: 100, code });
-    else if (code === "ENVIOGRATIS") { setCuponAplicado(null); setEnvio("retiro"); }
-    else setCuponAplicado({ type: "none", value: 0, code });
+  // Favoritos (Supabase)
+  const toggleFav = async (id) => {
+    if (!usuarioActivo?.id) return;
+    const isFav = favs.includes(String(id));
+    // Optimista
+    setFavs((prev) => isFav ? prev.filter(fid => fid !== String(id)) : [...prev, String(id)]);
+    try {
+      if (isFav) {
+        const { error } = await supabase
+          .from("favoritos")
+          .delete()
+          .eq("usuario_id", usuarioActivo.id)
+          .eq("producto_id", id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("favoritos")
+          .insert({ usuario_id: usuarioActivo.id, producto_id: id });
+        if (error) throw error;
+      }
+    } catch (e) {
+      console.error("Error al alternar favorito:", e);
+      // Revertir si falló
+      setFavs((prev) => isFav ? [...prev, String(id)] : prev.filter(fid => fid !== String(id)));
+    }
   };
 
   // Manejo selección de dirección
@@ -584,11 +609,93 @@ export default function Carrito() {
     }
     setDirModalOpen(true);
   };
-
   const selectDireccion = (d) => {
     setDireccionSel(d);
     try { localStorage.setItem(`direccionSeleccionada:${usuarioActivo.id}`, JSON.stringify(d)); } catch {}
     setDirModalOpen(false);
+  };
+
+  // Cupón (ejemplos cliente)
+  const applyCoupon = () => {
+    const code = cupon.trim().toUpperCase();
+    if (!code) { setCuponAplicado(null); return; }
+    if (code === "ARTE10") setCuponAplicado({ type: "percent", value: 10, code });
+    else if (code === "BIENVENIDA100") setCuponAplicado({ type: "flat", value: 100, code });
+    else if (code === "ENVIOGRATIS") { setCuponAplicado(null); setEnvio("retiro"); }
+    else setCuponAplicado({ type: "none", value: 0, code });
+  };
+
+  // === Snapshot de checkout (útil para /success y /cancel) ===
+  const buildCheckoutSnapshot = () => {
+    const items = detailedItems.map(({ id, cantidad, precioUnit }) => ({
+      id,
+      cantidad,
+      unit_price: precioUnit,
+      subtotal: Math.round(precioUnit * cantidad * 100) / 100,
+    }));
+    return {
+      userId: usuarioActivo?.id,
+      email,
+      envio,
+      direccion: direccionSel,
+      cupon: cuponAplicado?.code || null,
+      totals: {
+        subtotal,
+        envio: costoEnvio,
+        descuento,
+        total,
+        moneda: "MXN",
+      },
+      items,
+      createdAt: Date.now(),
+      metodoPago: "stripe",
+    };
+  };
+
+  // === Crear sesión de Stripe y redirigir ===
+  const goStripeCheckout = async () => {
+    if (loadingCheckout) return;
+    setErrorCheckout("");
+
+    if (!usuarioActivo?.id) { setErrorCheckout("Debes iniciar sesión."); return; }
+    if (!direccionSel) { setErrorCheckout("Selecciona una dirección de envío."); setDirModalOpen(true); return; }
+    if (detailedItems.length === 0) { setErrorCheckout("Tu carrito está vacío."); return; }
+
+    try {
+      setLoadingCheckout(true);
+
+      // Guardar snapshot local para consultas posteriores
+      const snapshot = buildCheckoutSnapshot();
+      try { localStorage.setItem(`checkout:${usuarioActivo.id}`, JSON.stringify(snapshot)); } catch {}
+
+      // Preparar payload mínimo para el backend
+      const payload = {
+        userId: usuarioActivo.id,
+        email,
+        envio,
+        direccion: direccionSel,
+        cupon: cuponAplicado?.code || null,
+        cart: (rawCart || []).map(i => ({ id: i.id, cantidad: Math.max(1, Number(i.cantidad || 1)) })),
+        origin: window.location.origin, // útil si el backend lo usa
+      };
+
+      const resp = await fetch("/api/create_checkout_session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data?.error || "No se pudo crear la sesión de pago.");
+      if (!data?.url) throw new Error("Respuesta inválida del servidor.");
+
+      // Redirigir a Stripe Checkout
+      window.location.assign(data.url);
+    } catch (e) {
+      console.error("Stripe checkout error:", e);
+      setErrorCheckout(e.message || "Ocurrió un error al iniciar el pago.");
+      setLoadingCheckout(false);
+    }
   };
 
   // Continuar (abrir modal de pago)
@@ -676,7 +783,7 @@ export default function Carrito() {
                       exit={{ opacity: 0, y: -10 }}
                       onMouseEnter={handleUserMouseEnter}
                       onMouseLeave={handleUserMouseLeave}
-                      className="absolute mt-2 w-60 left-1/2 -translate-x-1/2 sm:left-auto sm:right-0 sm:translate-x-0 bg-white border border-gray-200 rounded-lg shadow-xl py-3 text-left z=[9999]"
+                      className="absolute mt-2 w-60 left-1/2 -translate-x-1/2 sm:left-auto sm:right-0 sm:translate-x-0 bg-white border border-gray-200 rounded-lg shadow-xl py-3 text-left z-[9999]"
                     >
                       <div className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-gray-800">
                         <User size={16} /> {usuarioActivo.nombre || usuarioActivo.usuario}
@@ -740,7 +847,7 @@ export default function Carrito() {
                 onMouseEnter={() => setHovered(index)}
                 onMouseLeave={() => setHovered(null)}
                 onClick={item.onClick}
-                className={`flex flex-col items-center gap-1 cursor-pointer px-2 sm:px-3 py-1 transition-all duración-300 ease-out
+                className={`flex flex-col items-center gap-1 cursor-pointer px-2 sm:px-3 py-1 transition-all duration-300 ease-out
                   ${hovered === index
                     ? "bg-white/50 backdrop-blur-sm shadow-inner rounded-md scale-105 underline underline-offset-4"
                     : "hover:bg-white/30 hover:backdrop-blur-sm hover:shadow-sm hover:rounded-md"
@@ -794,7 +901,7 @@ export default function Carrito() {
                         onQty={(q) => updateQty(id, q)}
                         onRemove={() => removeItem(id)}
                         onToggleFav={() => toggleFav(id)}
-                        isFav={favs.includes(id)}
+                        isFav={favs.includes(String(id))}
                       />
                     ))}
                   </AnimatePresence>
@@ -928,23 +1035,25 @@ export default function Carrito() {
                   <span>{formatoPrecio(total, "MXN")}</span>
                 </div>
                 <div className="text-[11px] text-gray-500">Impuestos y costos finales se calculan en el último paso.</div>
+
+                {errorCheckout && (
+                  <div className="text-[12px] text-rose-700 mt-1">{errorCheckout}</div>
+                )}
               </section>
 
               <div className="pt-2 flex flex-col gap-2">
                 <button
-                  disabled={detailedItems.length === 0}
+                  disabled={detailedItems.length === 0 || loadingCheckout}
                   onClick={continuarPago}
-                  className={`rounded-full text-white px-4 py-3 text-sm font-semibold shadow hover:shadow-md inline-flex items-center justify-center gap-2 ${detailedItems.length === 0 ? "bg-gray-400 cursor-not-allowed" : "bg-gray-900"}`}
+                  className={`rounded-full text-white px-4 py-3 text-sm font-semibold shadow hover:shadow-md inline-flex items-center justify-center gap-2 ${detailedItems.length === 0 || loadingCheckout ? "bg-gray-400 cursor-not-allowed" : "bg-gray-900"}`}
                 >
-                  <Lock size={16} /> Continuar con el pago
+                  {loadingCheckout ? "Procesando..." : (<><Lock size={16} /> Continuar con el pago</>)}
                 </button>
 
                 {/* Nota de comisiones justo debajo del botón */}
                 <div className="text-[11px] text-gray-600 -mt-1">
                   {isMexico ? (
-                    <>
-                      <div>Stripe: 3.6% + $3 MXN · PayPal: 3.95% + $4 MXN · SPEI: sin comisión (solo México)</div>
-                    </>
+                    <div>Stripe: 3.6% + $3 MXN · PayPal: 3.95% + $4 MXN · SPEI: sin comisión (solo México)</div>
                   ) : (
                     <div>Stripe: 3.6% + $3 (tu ubicación no es México, disponible solo Stripe)</div>
                   )}
@@ -1000,18 +1109,18 @@ export default function Carrito() {
         onClose={() => setPagoModalOpen(false)}
         isMexico={isMexico}
         totalMXN={total}
-        onChoose={(metodo) => {
+        onChoose={async (metodo) => {
           setMetodoPago(metodo);
           setPagoModalOpen(false);
-          // Guarda la elección por si quieres usarla en la siguiente pantalla:
           try { localStorage.setItem(`metodoPago:${usuarioActivo.id}`, metodo); } catch {}
-          // Aquí decides a dónde ir: /pago o /direccion (ya tienes dirección seleccionada)
+
           if (metodo === "spei") {
-            navigate("/pago/spei"); // crea esta ruta para instrucciones de transferencia
+            navigate("/pago/spei");
           } else if (metodo === "paypal") {
-            navigate("/pago/paypal"); // crea esta ruta para redirección o smart buttons
+            navigate("/pago/paypal");
           } else {
-            navigate("/pago/stripe"); // crea esta ruta para Checkout o Payment Element
+            // STRIPE: crear sesión y redirigir
+            await goStripeCheckout();
           }
         }}
       />

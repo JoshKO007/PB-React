@@ -21,11 +21,18 @@ import {
   X,
   Clock,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  ShieldAlert
 } from "lucide-react";
-import PRODUCTOS_JSON from "../data/productos.json";
 
-/* ======================= Utiles ======================= */
+// ===== Supabase (solo para catálogo) =====
+import { createClient } from "@supabase/supabase-js";
+const supabase = createClient(
+  "https://ousgktyljynqzrnafoqd.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im91c2drdHlsanlucXpybmFmb3FkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2MDMxNjYsImV4cCI6MjA2ODE3OTE2Nn0.hG27iuA-iNH3e3PPRck7ELgO89aRTbMiM8I65085TcE"
+);
+
+/* ======================= Utils comunes ======================= */
 function formatoPrecio(valor, moneda) {
   try {
     return new Intl.NumberFormat("es-MX", { style: "currency", currency: moneda || "MXN" }).format(valor);
@@ -37,17 +44,18 @@ function getPrecioFinal(precio, descuento = 0) {
   const pct = Math.max(0, Math.min(100, Number(descuento) || 0));
   return Math.round(precio * (1 - pct / 100) * 100) / 100;
 }
+function getCartKeyBySession(sesion) {
+  return sesion?.id ? `carrito:${sesion.id}` : null;
+}
 function safeCartCount(cartArray) {
   return (cartArray || []).reduce((sum, it) => {
     const qty = Number.isFinite(Number(it?.cantidad)) ? Number(it.cantidad) : 1;
     return sum + Math.max(0, qty);
   }, 0);
 }
-function getCartKeyBySession(sesion) {
-  return sesion?.id ? `carrito:${sesion.id}` : null;
-}
+
+/* ======================= Favoritos: misma lógica que Tienda.jsx ======================= */
 function getFavsKeyBySession(sesion) {
-  // Favoritos por usuario; si no hay sesión, usamos 'favoritos' (se migra al iniciar sesión)
   return sesion?.id ? `favoritos:${sesion.id}` : "favoritos";
 }
 function readFavsBySession(sesion) {
@@ -59,19 +67,34 @@ function readFavsBySession(sesion) {
 }
 function writeFavsBySession(sesion, list) {
   const key = getFavsKeyBySession(sesion);
-  try {
-    localStorage.setItem(key, JSON.stringify(list));
-  } catch {}
-  // Notifica a otras partes de la app (misma pestaña)
-  try {
-    window.dispatchEvent(new CustomEvent("favs:changed", { detail: { key, list } }));
-  } catch {}
-  // Notifica a otras pestañas
-  try {
-    const bc = new BroadcastChannel("favs");
-    bc.postMessage({ key, list });
-    bc.close();
-  } catch {}
+  try { localStorage.setItem(key, JSON.stringify(list || [])); } catch {}
+  try { window.dispatchEvent(new CustomEvent("favs:changed", { detail: { key, list: list || [] } })); } catch {}
+  try { const bc = new BroadcastChannel("favs"); bc.postMessage({ key, list: list || [] }); bc.close(); } catch {}
+}
+
+/* ======================= Imagen / mapeo productos ======================= */
+function buildImgUrl(pathLike) {
+  if (!pathLike) return "/placeholder.jpg";
+  if (/^https?:\/\//i.test(pathLike)) return pathLike;
+  if (/^\//.test(pathLike)) return pathLike;
+  return `/${String(pathLike).replace(/^public\//, "")}`;
+}
+function rowToProductUI(r) {
+  return {
+    id: r.id,
+    titulo: r.titulo,
+    descripcion: r.descripcion,
+    descripcionDetallada: r.descripcion_detallada,
+    precio: Number(r.precio),
+    moneda: r.moneda || "MXN",
+    descuento: r.descuento || 0,
+    etiquetas: Array.isArray(r.etiquetas) ? r.etiquetas : [],
+    imagenes: Array.isArray(r.imagenes) ? r.imagenes.map(buildImgUrl) : [],
+    destacado: !!r.destacado,
+    bajoPedido: !!r.bajo_pedido,
+    disponible: !!r.disponible,
+    tiempoEntrega: r.tiempo_entrega || "—",
+  };
 }
 
 /* ======================= Etiqueta ======================= */
@@ -182,7 +205,7 @@ function QuickView({ open, onClose, producto, onAddCart }) {
               <ImageCarousel images={producto?.imagenes} title={producto?.titulo} />
             </div>
 
-            <div className="flex flex-col max-h=[70vh] md:max-h-[85vh]">
+            <div className="flex flex-col max-h-[70vh] md:max-h-[85vh]">
               <div className="px-4 md:px-6 pt-4 md:pt-6 overflow-y-auto">
                 <h3 className="text-lg md:text-2xl font-bold">{producto.titulo}</h3>
                 <p className="mt-2 text-sm md:text-base text-gray-600">{producto.descripcion}</p>
@@ -255,6 +278,47 @@ function QuickView({ open, onClose, producto, onAddCart }) {
   );
 }
 
+/* ======================= Modal: requiere login (solo carrito) ======================= */
+function SignInRequiredModal({ open, onClose, onGoLogin }) {
+  if (!open) return null;
+  return (
+    <AnimatePresence>
+      <motion.div
+        className="fixed inset-0 z-[10001] flex items-center justify-center"
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      >
+        <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+        <motion.div
+          initial={{ scale: 0.92, y: 10, opacity: 0 }}
+          animate={{ scale: 1, y: 0, opacity: 1 }}
+          exit={{ scale: 0.96, y: 8, opacity: 0 }}
+          transition={{ type: "spring", stiffness: 380, damping: 28 }}
+          className="relative w-[92%] sm:w-full sm:max-w-md rounded-2xl bg-white shadow-2xl border border-gray-200 p-5"
+        >
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-amber-100 text-amber-700 grid place-items-center">
+              <ShieldAlert size={20} />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Necesitas iniciar sesión</h3>
+              <p className="text-sm text-gray-600">Para guardar artículos en tu carrito, inicia sesión en tu cuenta.</p>
+            </div>
+          </div>
+
+          <div className="mt-4 flex gap-2 justify-end">
+            <button onClick={onClose} className="rounded-full border px-4 py-2 text-sm font-semibold bg-white hover:bg-gray-50 border-gray-200">
+              Más tarde
+            </button>
+            <button onClick={onGoLogin} className="rounded-full bg-gray-900 text-white px-4 py-2 text-sm font-semibold shadow hover:shadow-md inline-flex items-center gap-2">
+              <LogIn size={16} /> Iniciar sesión
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
 /* ======================= Página Favoritos ======================= */
 export default function Favoritos() {
   const navigate = useNavigate();
@@ -271,8 +335,16 @@ export default function Favoritos() {
   const [quickOpen, setQuickOpen] = useState(false);
   const [quickProducto, setQuickProducto] = useState(null);
 
-  // Productos: SOLO desde el JSON local (sin red, sin fallback)
-  const productos = useMemo(() => Array.isArray(PRODUCTOS_JSON) ? PRODUCTOS_JSON : [], []);
+  // Requiere login (solo para carrito)
+  const [needLoginOpen, setNeedLoginOpen] = useState(false);
+
+  // Productos
+  const [catalogo, setCatalogo] = useState([]);
+  const [cargandoCat, setCargandoCat] = useState(true);
+
+  // Favoritos ids (desde localStorage estilo Tienda.jsx)
+  const [favoritos, setFavoritos] = useState([]);
+  const [loadingFavs, setLoadingFavs] = useState(true);
 
   // Cargar sesión
   useEffect(() => {
@@ -284,7 +356,30 @@ export default function Favoritos() {
     }
   }, []);
 
-  // Recalc contador cuando cambia sesión
+  // Cargar catálogo (SOLO Supabase)
+  useEffect(() => {
+    const load = async () => {
+      setCargandoCat(true);
+      try {
+        const { data, error } = await supabase
+          .from("productos")
+          .select("id,titulo,descripcion,descripcion_detallada,precio,moneda,descuento,etiquetas,imagenes,destacado,bajo_pedido,disponible,tiempo_entrega")
+          .is("disponible", true)
+          .order("destacado", { ascending: false });
+        if (error) throw error;
+        const mapped = (data || []).map(rowToProductUI);
+        setCatalogo(mapped);
+      } catch (e) {
+        console.error("Error cargando catálogo desde Supabase:", e);
+        setCatalogo([]); // sin fallback local
+      } finally {
+        setCargandoCat(false);
+      }
+    };
+    load();
+  }, []);
+
+  // Contador carrito
   useEffect(() => {
     try {
       if (!usuarioActivo?.id) { setCartCount(0); return; }
@@ -294,7 +389,6 @@ export default function Favoritos() {
     } catch { setCartCount(0); }
   }, [usuarioActivo]);
 
-  // Escuchar cambios storage (carrito) + sesión
   useEffect(() => {
     const onStorage = (e) => {
       if (e.key === "sesionActiva") {
@@ -318,98 +412,54 @@ export default function Favoritos() {
     return () => window.removeEventListener("storage", onStorage);
   }, [usuarioActivo]);
 
-  // Focus sync
+  // ====== Favoritos: hydrate + listeners ======
   useEffect(() => {
-    const onFocus = () => {
-      try {
-        const sesion = JSON.parse(localStorage.getItem("sesionActiva"));
-        setUsuarioActivo(sesion?.id ? sesion : null);
-        if (sesion?.id) {
-          const key = getCartKeyBySession(sesion);
-          const cart = JSON.parse(localStorage.getItem(key) || "[]");
-          setCartCount(safeCartCount(cart));
-        } else { setCartCount(0); }
-      } catch { setUsuarioActivo(null); setCartCount(0); }
-    };
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
-  }, []);
-
-  const handleUserMouseEnter = () => { clearTimeout(userMenuTimeout.current); setShowUserMenu(true); };
-  const handleUserMouseLeave = () => { userMenuTimeout.current = setTimeout(() => setShowUserMenu(false), 300); };
-  const cerrarSesion = () => {
-    setCerrandoSesion(true);
-    setTimeout(() => {
-      try {
-        localStorage.removeItem("carrito"); // legacy
-        const prev = JSON.parse(localStorage.getItem("sesionActiva"));
-        if (prev?.id) {
-          localStorage.removeItem(`carrito:${prev.id}`);
-        }
-      } catch {}
-      localStorage.removeItem("sesionActiva");
-      setUsuarioActivo(null);
-      setCartCount(0);
-      setCerrandoSesion(false);
-      navigate("/");
-    }, 5000);
-  };
-
-  const menu = [
-    { label: "Inicio", icon: <Home size={28} />, onClick: () => navigate("/") },
-    { label: "Galería", icon: <ImageIcon size={24} />, onClick: () => navigate("/galeria") },
-    { label: "Videos", icon: <Video size={24} />, onClick: () => navigate("/videos") },
-    { label: "Tienda", icon: <ShoppingBag size={24} />, onClick: () => navigate("/tienda") },
-    { label: "Restauración", icon: <Brush size={24} />, onClick: () => navigate("/restauracion") },
-    { label: "Contacto", icon: <Mail size={24} />, onClick: () => navigate("/contacto") },
-  ];
-
-  /* ======================= Favoritos (por usuario, sincronizados) ======================= */
-  const [favs, setFavs] = useState([]);
-  useEffect(() => {
+    setLoadingFavs(true);
     try {
       const current = readFavsBySession(usuarioActivo);
-      // migración desde global si hay sesión y no tiene favs
+      // migración opcional si existiera clave global (legacy)
       if ((usuarioActivo?.id) && (!current || current.length === 0)) {
         const legacy = JSON.parse(localStorage.getItem("favoritos") || "[]");
-        if (legacy.length > 0) {
+        if (legacy?.length > 0) {
           writeFavsBySession(usuarioActivo, legacy);
-          localStorage.removeItem("favoritos");
-          setFavs(legacy);
+          try { localStorage.removeItem("favoritos"); } catch {}
+          setFavoritos(legacy);
+          setLoadingFavs(false);
           return;
         }
       }
-      setFavs(current || []);
+      setFavoritos(current || []);
     } catch {
-      setFavs([]);
+      setFavoritos([]);
+    } finally {
+      setLoadingFavs(false);
     }
   }, [usuarioActivo]);
 
-  // Escucha cambios de favoritos (misma pestaña + otras pestañas)
   useEffect(() => {
-    const myKey = getFavsKeyBySession(usuarioActivo);
+    const key = getFavsKeyBySession(usuarioActivo);
 
     const onStorage = (e) => {
-      if (e.key === myKey) {
-        try { setFavs(JSON.parse(e.newValue || "[]") || []); } catch { setFavs([]); }
+      if (e.key === key) {
+        try { setFavoritos(JSON.parse(e.newValue || "[]") || []); } catch {}
       }
       if (e.key === "sesionActiva") {
         try {
           const ses = JSON.parse(e.newValue);
-          setFavs(readFavsBySession(ses?.id ? ses : null));
+          setFavoritos(readFavsBySession(ses?.id ? ses : null));
         } catch {}
       }
     };
 
     const onLocalFavs = (e) => {
-      if (e.detail?.key === myKey) setFavs(e.detail.list || []);
+      if (e.detail?.key === key) setFavoritos(e.detail.list || []);
     };
 
     let bc;
     try {
       bc = new BroadcastChannel("favs");
       bc.onmessage = (msg) => {
-        if (msg?.data?.key === myKey) setFavs(msg.data.list || []);
+        if (msg?.data?.key === key) setFavoritos(msg.data.list || []);
       };
     } catch {}
 
@@ -422,17 +472,22 @@ export default function Favoritos() {
     };
   }, [usuarioActivo]);
 
-  const saveFavs = (list) => {
-    writeFavsBySession(usuarioActivo, list);
-    setFavs(list);
+  // --- Acciones favoritos (NO requiere login) ---
+  const removeFav = (productoId) => {
+    setFavoritos(prev => {
+      const next = prev.filter((id) => String(id) !== String(productoId));
+      writeFavsBySession(usuarioActivo, next);
+      return next;
+    });
+  };
+  const clearAllFavs = () => {
+    writeFavsBySession(usuarioActivo, []);
+    setFavoritos([]);
   };
 
-  /* ======================= Carrito ======================= */
+  // --- Carrito helpers (sí requiere login) ---
   const addToCart = (producto, qty = 1, goCheckout = false) => {
-    if (!usuarioActivo?.id) {
-      navigate("/iniciar-sesion");
-      return;
-    }
+    if (!usuarioActivo?.id) { setNeedLoginOpen(true); return; }
     const key = getCartKeyBySession(usuarioActivo);
     const raw = localStorage.getItem(key);
     const cart = raw ? JSON.parse(raw) : [];
@@ -450,39 +505,39 @@ export default function Favoritos() {
     if (goCheckout) navigate("/carrito");
   };
 
-  const removeFromCart = (productoId) => {
-    if (!usuarioActivo?.id) return;
-    const key = getCartKeyBySession(usuarioActivo);
-    const raw = localStorage.getItem(key);
-    const cart = raw ? JSON.parse(raw) : [];
-    const next = cart.filter((i) => i.id !== productoId);
-    localStorage.setItem(key, JSON.stringify(next));
-    setCartCount(safeCartCount(next));
-  };
-
-  const isInCart = (productoId) => {
-    if (!usuarioActivo?.id) return false;
-    try {
-      const key = getCartKeyBySession(usuarioActivo);
-      const cart = JSON.parse(localStorage.getItem(key) || "[]");
-      return cart.some((i) => i.id === productoId);
-    } catch { return false; }
-  };
-
-  /* ======================= Derivados ======================= */
+  // Productos favoritos completos
   const favProductos = useMemo(() => {
-    const catalog = Array.isArray(productos) ? productos : [];
-    return favs
-      .map((id) => catalog.find((p) => p.id === id))
+    const cat = Array.isArray(catalogo) ? catalogo : [];
+    return (favoritos || [])
+      .map((fid) => cat.find((p) => String(p.id) === String(fid)))
       .filter(Boolean);
-  }, [favs, productos]);
+  }, [favoritos, catalogo]);
 
-  /* ======================= Acciones UI ======================= */
-  const onRemoveFav = (id) => saveFavs(favs.filter((f) => f !== id));
-  const onClearAll = () => saveFavs([]);
+  // Header/menu
+  const menu = [
+    { label: "Inicio", icon: <Home size={28} />, onClick: () => navigate("/") },
+    { label: "Galería", icon: <ImageIcon size={24} />, onClick: () => navigate("/galeria") },
+    { label: "Videos", icon: <Video size={24} />, onClick: () => navigate("/videos") },
+    { label: "Tienda", icon: <ShoppingBag size={24} />, onClick: () => navigate("/tienda") },
+    { label: "Restauración", icon: <Brush size={24} />, onClick: () => navigate("/restauracion") },
+    { label: "Contacto", icon: <Mail size={24} />, onClick: () => navigate("/contacto") },
+  ];
 
-  const openQuick = (p) => { setQuickProducto(p); setQuickOpen(true); };
-  const closeQuick = () => { setQuickOpen(false); setQuickProducto(null); };
+  const cerrarSesion = () => {
+    setCerrandoSesion(true);
+    setTimeout(() => {
+      try {
+        localStorage.removeItem("carrito");
+        const prev = JSON.parse(localStorage.getItem("sesionActiva"));
+        if (prev?.id) localStorage.removeItem(`carrito:${prev.id}`);
+      } catch {}
+      localStorage.removeItem("sesionActiva");
+      setUsuarioActivo(null);
+      setCartCount(0);
+      setCerrandoSesion(false);
+      navigate("/");
+    }, 5000);
+  };
 
   /* ======================= Render ======================= */
   return (
@@ -533,7 +588,7 @@ export default function Favoritos() {
                       exit={{ opacity: 0, y: -10 }}
                       onMouseEnter={() => { clearTimeout(userMenuTimeout.current); setShowUserMenu(true); }}
                       onMouseLeave={() => { userMenuTimeout.current = setTimeout(() => setShowUserMenu(false), 300); }}
-                      className="absolute mt-2 w-60 left-1/2 -translate-x-1/2 sm:left-auto sm:right-0 sm:translate-x-0 bg-white border border-gray-200 rounded-lg shadow-xl py-3 text-left z-[9999]"
+                      className="absolute mt-2 w-60 left-1/2 -translate-x-1/2 sm:left-auto sm:right-0 sm:translate-x-0 bg-white border border-gray-200 rounded-lg shadow-xl py-3 text-left z=[9999]"
                     >
                       {usuarioActivo ? (
                         <>
@@ -581,7 +636,6 @@ export default function Favoritos() {
                   >
                     <ShoppingBag size={22} className="text-[#a16207]" />
                   </span>
-
                   {cartCount > 0 && (
                     <span
                       className="absolute -right-1 -top-1 rounded-full text-[11px] font-bold
@@ -635,16 +689,16 @@ export default function Favoritos() {
             <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
               <Heart className="text-rose-600" /> Favoritos
             </h1>
-            {favProductos.length > 0 && (
+            {(!loadingFavs && favProductos.length > 0) && (
               <div className="text-sm text-gray-600">{favProductos.length} artículo(s)</div>
             )}
           </div>
 
           {/* Acciones superiores */}
-          {favProductos.length > 0 && (
+          {!loadingFavs && favProductos.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-2">
               <button
-                onClick={onClearAll}
+                onClick={clearAllFavs}
                 className="ml-auto rounded-full px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50 inline-flex items-center gap-2"
               >
                 <Trash2 size={16} /> Limpiar lista
@@ -652,127 +706,144 @@ export default function Favoritos() {
             </div>
           )}
 
-          {/* Grid de favoritos */}
-          <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 items-stretch">
-            {favProductos.length === 0 ? (
-              <div className="col-span-full rounded-2xl border border-dashed bg-white/60 p-8 text-center text-gray-600">
-                <p className="text-lg font-semibold">Tu lista de favoritos está vacía</p>
-                <p className="text-sm mt-1">Explora la tienda y guarda piezas que te encanten.</p>
-                <button
-                  onClick={() => navigate("/tienda")}
-                  className="mt-4 rounded-full bg-gray-900 text-white px-4 py-2 text-sm font-semibold shadow hover:shadow-md"
-                >
-                  Ir a la tienda
-                </button>
-              </div>
-            ) : (
-              <AnimatePresence initial={false}>
-                {favProductos.map((p) => {
-                  const precioFinal = getPrecioFinal(p.precio, p.descuento);
-                  return (
-                    <motion.div
-                      key={p.id}
-                      layout
-                      initial={{ opacity: 0, y: 12 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -14, height: 0, marginTop: 0, marginBottom: 0, paddingTop: 0, paddingBottom: 0 }}
-                      transition={{ duration: 0.28 }}
-                      className="group relative border rounded-2xl bg-white/80 shadow-sm overflow-hidden h-full flex flex-col"
-                    >
-                      {/* Imagen */}
-                      <button onClick={() => openQuick(p)} title="Ver detalles" className="relative">
-                        <img
-                          src={p.imagenes?.[0] || "/placeholder.jpg"}
-                          alt={p.titulo}
-                          className="h-56 w-full object-cover"
-                          onError={(e) => { e.currentTarget.src = "/placeholder.jpg"; }}
-                        />
-                      </button>
+          {/* Cargando */}
+          {loadingFavs && (
+            <div className="mt-6 text-sm text-gray-600">Cargando tus favoritos…</div>
+          )}
 
-                      {/* Contenido */}
-                      <div className="p-4 flex-1 flex flex-col">
-                        <button onClick={() => openQuick(p)} title="Ver detalles" className="text-left">
-                          <h3 className="text-base font-semibold leading-tight hover:underline line-clamp-1">
-                            {p.titulo}
-                          </h3>
+          {/* Grid de favoritos */}
+          {!loadingFavs && (
+            <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 items-stretch">
+              {favProductos.length === 0 ? (
+                <div className="col-span-full rounded-2xl border border-dashed bg-white/60 p-8 text-center text-gray-600">
+                  <p className="text-lg font-semibold">Tu lista de favoritos está vacía</p>
+                  <p className="text-sm mt-1">Explora la tienda y guarda piezas que te encanten.</p>
+                  <button
+                    onClick={() => navigate("/tienda")}
+                    className="mt-4 rounded-full bg-gray-900 text-white px-4 py-2 text-sm font-semibold shadow hover:shadow-md"
+                  >
+                    Ir a la tienda
+                  </button>
+                </div>
+              ) : (
+                <AnimatePresence initial={false}>
+                  {favProductos.map((p) => {
+                    const precioFinal = getPrecioFinal(p.precio, p.descuento);
+                    return (
+                      <motion.div
+                        key={p.id}
+                        layout
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -14, height: 0, marginTop: 0, marginBottom: 0, paddingTop: 0, paddingBottom: 0 }}
+                        transition={{ duration: 0.28 }}
+                        className="group relative border rounded-2xl bg-white/80 shadow-sm overflow-hidden h-full flex flex-col"
+                      >
+                        {/* Imagen */}
+                        <button onClick={() => { setQuickProducto(p); setQuickOpen(true); }} title="Ver detalles" className="relative">
+                          <img
+                            src={p.imagenes?.[0] || "/placeholder.jpg"}
+                            alt={p.titulo}
+                            className="h-56 w-full object-cover"
+                            onError={(e) => { e.currentTarget.src = "/placeholder.jpg"; }}
+                          />
                         </button>
 
-                        <p className="text-sm text-gray-600 mt-1 line-clamp-2 min-h-[44px]">
-                          {p.descripcion}
-                        </p>
+                        {/* Contenido */}
+                        <div className="p-4 flex-1 flex flex-col">
+                          <button onClick={() => { setQuickProducto(p); setQuickOpen(true); }} title="Ver detalles" className="text-left">
+                            <h3 className="text-base font-semibold leading-tight hover:underline line-clamp-1">
+                              {p.titulo}
+                            </h3>
+                          </button>
 
-                        {/* Precio */}
-                        <div className="mt-3 min-h-[70px]">
-                          {p.descuento > 0 ? (
-                            <>
-                              <div className="text-xs text-gray-400 line-through">
+                          <p className="text-sm text-gray-600 mt-1 line-clamp-2 min-h-[44px]">
+                            {p.descripcion}
+                          </p>
+
+                          {/* Precio */}
+                          <div className="mt-3 min-h-[70px]">
+                            {p.descuento > 0 ? (
+                              <>
+                                <div className="text-xs text-gray-400 line-through">
+                                  {formatoPrecio(p.precio, p.moneda)}
+                                </div>
+                                <div className="text-lg font-extrabold text-gray-900">
+                                  {formatoPrecio(precioFinal, p.moneda)}
+                                </div>
+                                <div className="text-[11px] text-rose-600">−{p.descuento}%</div>
+                              </>
+                            ) : (
+                              <div className="text-lg font-bold text-gray-900">
                                 {formatoPrecio(p.precio, p.moneda)}
                               </div>
-                              <div className="text-lg font-extrabold text-gray-900">
-                                {formatoPrecio(precioFinal, p.moneda)}
-                              </div>
-                              <div className="text-[11px] text-rose-600">−{p.descuento}%</div>
-                            </>
-                          ) : (
-                            <div className="text-lg font-bold text-gray-900">
-                              {formatoPrecio(p.precio, p.moneda)}
+                            )}
+                            <div className="text-xs text-gray-500 mt-1 inline-flex items-center gap-1">
+                              <Clock size={12} /> {p.tiempoEntrega || "—"}
+                            </div>
+                          </div>
+
+                          {/* Etiquetas */}
+                          {p.etiquetas?.length > 0 && (
+                            <div className="mt-3 flex flex-wrap gap-1.5 min-h-[34px]">
+                              {p.etiquetas.map((e) => <Etiqueta key={e}>{e}</Etiqueta>)}
                             </div>
                           )}
-                          <div className="text-xs text-gray-500 mt-1 inline-flex items-center gap-1">
-                            <Clock size={12} /> {p.tiempoEntrega || "—"}
+
+                          {/* Acciones */}
+                          <div className="mt-4 flex items-center gap-2">
+                            <motion.button
+                              whileTap={{ scale: 0.9 }}
+                              onClick={() => removeFav(p.id)}
+                              className="rounded-full bg-white/90 p-2 shadow hover:shadow-md ring-2 ring-rose-500"
+                              title="Quitar de favoritos"
+                            >
+                              <Heart size={16} className="fill-rose-600 text-rose-600" />
+                            </motion.button>
+
+                            <button
+                              onClick={() => addToCart(p, 1, true)}
+                              className="rounded-full border px-3 py-1.5 text-xs font-semibold bg-white hover:bg-gray-50 border-gray-200 inline-flex items-center gap-1.5"
+                              title="Comprar ahora"
+                            >
+                              <BadgeDollarSign size={14} /> Comprar ahora
+                            </button>
+
+                            <button
+                              onClick={() => { setQuickProducto(p); setQuickOpen(true); }}
+                              className="ml-auto rounded-full px-3 py-1.5 text-xs font-semibold hover:bg-gray-100"
+                              title="Ver detalles"
+                            >
+                              Ver detalles
+                            </button>
                           </div>
                         </div>
-
-                        {/* Etiquetas */}
-                        {p.etiquetas?.length > 0 && (
-                          <div className="mt-3 flex flex-wrap gap-1.5 min-h-[34px]">
-                            {p.etiquetas.map((e) => <Etiqueta key={e}>{e}</Etiqueta>)}
-                          </div>
-                        )}
-
-                        {/* Acciones */}
-                        <div className="mt-4 flex items-center gap-2">
-                          <motion.button
-                            whileTap={{ scale: 0.9 }}
-                            onClick={() => onRemoveFav(p.id)}
-                            className="rounded-full bg-white/90 p-2 shadow hover:shadow-md ring-2 ring-rose-500"
-                            title="Quitar de favoritos"
-                          >
-                            <Heart size={16} className="fill-rose-600 text-rose-600" />
-                          </motion.button>
-
-                          <button
-                            onClick={() => addToCart(p, 1, true)}
-                            className="rounded-full border px-3 py-1.5 text-xs font-semibold bg-white hover:bg-gray-50 border-gray-200 inline-flex items-center gap-1.5"
-                            title="Comprar ahora"
-                          >
-                            <BadgeDollarSign size={14} /> Comprar ahora
-                          </button>
-
-                          <button
-                            onClick={() => openQuick(p)}
-                            className="ml-auto rounded-full px-3 py-1.5 text-xs font-semibold hover:bg-gray-100"
-                            title="Ver detalles"
-                          >
-                            Ver detalles
-                          </button>
-                        </div>
-                      </div>
-                    </motion.div>
-                  );
-                })}
-              </AnimatePresence>
-            )}
-          </div>
+                      </motion.div>
+                    );
+                  })}
+                </AnimatePresence>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
       {/* QuickView */}
       <QuickView
         open={quickOpen}
-        onClose={closeQuick}
+        onClose={() => { setQuickOpen(false); setQuickProducto(null); }}
         producto={quickProducto}
         onAddCart={(p, qty = 1, go = false) => addToCart(p, qty, go)}
+      />
+
+      {/* Modal Requiere Login (carrito) */}
+      <SignInRequiredModal
+        open={needLoginOpen}
+        onClose={() => setNeedLoginOpen(false)}
+        onGoLogin={() => {
+          setNeedLoginOpen(false);
+          navigate("/iniciar-sesion");
+        }}
       />
 
       {/* ================= FOOTER ================= */}
