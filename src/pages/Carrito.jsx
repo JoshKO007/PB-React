@@ -679,7 +679,7 @@ export default function Carrito() {
         origin: window.location.origin, // útil si el backend lo usa
       };
 
-      const resp = await fetch("/api/create_checkout_session", {
+      const resp = await fetch("/api/stripe_checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
