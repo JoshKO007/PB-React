@@ -1,0 +1,7 @@
+{
+  "imports": {
+    // alias opcional; no es estrictamente necesario,
+    // pero así puedes usar `import Stripe from "stripe"`
+    "stripe": "npm:stripe@16.6.0"
+  }
+}
