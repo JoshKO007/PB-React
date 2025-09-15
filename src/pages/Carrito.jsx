@@ -269,7 +269,7 @@ function PagoModal({ open, onClose, isMexico, totalMXN, onChoose }) {
 
   return (
     <AnimatePresence>
-      <motion.div className="fixed inset-0 z-[10020] flex items-center justify-center" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+      <motion.div className="fixed inset-0 z=[10020] flex items-center justify-center" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
         <div className="absolute inset-0 bg-black/50" onClick={onClose} />
         <motion.div
           initial={{ scale: 0.95, y: 10, opacity: 0 }}
@@ -439,7 +439,6 @@ export default function Carrito() {
           .eq("id_usuario", usuarioActivo.id);
         setDirecciones(dirs || []);
 
-        // Leer selección previa si existe
         try {
           const raw = localStorage.getItem(`direccionSeleccionada:${usuarioActivo.id}`);
           if (raw) {
@@ -448,9 +447,7 @@ export default function Carrito() {
             setDireccionSel(stillThere || null);
           }
         } catch {}
-      } catch {
-        // silencioso
-      }
+      } catch { /* noop */ }
     };
     load();
   }, [usuarioActivo]);
@@ -573,7 +570,6 @@ export default function Carrito() {
   const toggleFav = async (id) => {
     if (!usuarioActivo?.id) return;
     const isFav = favs.includes(String(id));
-    // Optimista
     setFavs((prev) => isFav ? prev.filter(fid => fid !== String(id)) : [...prev, String(id)]);
     try {
       if (isFav) {
@@ -591,7 +587,6 @@ export default function Carrito() {
       }
     } catch (e) {
       console.error("Error al alternar favorito:", e);
-      // Revertir si falló
       setFavs((prev) => isFav ? [...prev, String(id)] : prev.filter(fid => fid !== String(id)));
     }
   };
@@ -617,8 +612,14 @@ export default function Carrito() {
     if (!code) { setCuponAplicado(null); return; }
     if (code === "ARTE10") setCuponAplicado({ type: "percent", value: 10, code });
     else if (code === "BIENVENIDA100") setCuponAplicado({ type: "flat", value: 100, code });
-    else if (code === "ENVIOGRATIS") { setCuponAplicado(null); setEnvio("retiro"); }
+    else if (code === "ENVIOGRATIS") { setCuponAplicado(null); setEnvio("retiro"); try { localStorage.setItem(`envio:${usuarioActivo.id}`, "retiro"); } catch {} }
     else setCuponAplicado({ type: "none", value: 0, code });
+  };
+
+  // >>> Guardar envío en localStorage cada vez que se elige
+  const setEnvioAndPersist = (value) => {
+    setEnvio(value);
+    try { if (usuarioActivo?.id) localStorage.setItem(`envio:${usuarioActivo.id}`, value); } catch {}
   };
 
   // Continuar (abrir modal de pago)
@@ -632,6 +633,8 @@ export default function Carrito() {
       }
       return;
     }
+    // >>> Persistir envío por si no se guardó antes
+    try { if (usuarioActivo?.id) localStorage.setItem(`envio:${usuarioActivo.id}`, envio); } catch {}
     setPagoModalOpen(true);
   };
 
@@ -923,15 +926,33 @@ export default function Carrito() {
                 <div className="text-sm font-semibold mb-1">Método de envío</div>
                 <div className="space-y-2 text-sm">
                   <label className="flex items-center gap-2">
-                    <input type="radio" name="envio" className="accent-[#a16207]" checked={envio==="estandar"} onChange={() => setEnvio("estandar")} />
+                    <input
+                      type="radio"
+                      name="envio"
+                      className="accent-[#a16207]"
+                      checked={envio==="estandar"}
+                      onChange={() => setEnvioAndPersist("estandar")}
+                    />
                     Envío estándar (3–6 días) — {formatoPrecio(detailedItems.length ? 200 : 0, "MXN")}
                   </label>
                   <label className="flex items-center gap-2">
-                    <input type="radio" name="envio" className="accent-[#a16207]" checked={envio==="express"} onChange={() => setEnvio("express")} />
+                    <input
+                      type="radio"
+                      name="envio"
+                      className="accent-[#a16207]"
+                      checked={envio==="express"}
+                      onChange={() => setEnvioAndPersist("express")}
+                    />
                     Envío express (1–2 días) — {formatoPrecio(detailedItems.length ? 350 : 0, "MXN")}
                   </label>
                   <label className="flex items-center gap-2">
-                    <input type="radio" name="envio" className="accent-[#a16207]" checked={envio==="retiro"} onChange={() => setEnvio("retiro")} />
+                    <input
+                      type="radio"
+                      name="envio"
+                      className="accent-[#a16207]"
+                      checked={envio==="retiro"}
+                      onChange={() => setEnvioAndPersist("retiro")}
+                    />
                     Retiro en taller — {formatoPrecio(0, "MXN")}
                   </label>
                 </div>
@@ -972,9 +993,7 @@ export default function Carrito() {
                 {/* Nota de comisiones justo debajo del botón */}
                 <div className="text-[11px] text-gray-600 -mt-1">
                   {isMexico ? (
-                    <>
-                      <div>Stripe: 3.6% + $3 MXN · PayPal: 3.95% + $4 MXN · SPEI: sin comisión (solo México)</div>
-                    </>
+                    <div>Stripe: 3.6% + $3 MXN · PayPal: 3.95% + $4 MXN · SPEI: sin comisión (solo México)</div>
                   ) : (
                     <div>Stripe: 3.6% + $3 (tu ubicación no es México, disponible solo Stripe)</div>
                   )}
