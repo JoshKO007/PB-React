@@ -403,10 +403,6 @@ export default function Carrito() {
   const [metodoPago, setMetodoPago] = useState(null); // 'stripe' | 'paypal' | 'spei'
   const [isMexico, setIsMexico] = useState(true);
 
-  // Loading checkout / errores
-  const [loadingCheckout, setLoadingCheckout] = useState(false);
-  const [errorCheckout, setErrorCheckout] = useState("");
-
   // Cargar sesión + contacto (sin favoritos locales)
   useEffect(() => {
     try {
@@ -623,79 +619,6 @@ export default function Carrito() {
     else if (code === "BIENVENIDA100") setCuponAplicado({ type: "flat", value: 100, code });
     else if (code === "ENVIOGRATIS") { setCuponAplicado(null); setEnvio("retiro"); }
     else setCuponAplicado({ type: "none", value: 0, code });
-  };
-
-  // === Snapshot de checkout (útil para /success y /cancel) ===
-  const buildCheckoutSnapshot = () => {
-    const items = detailedItems.map(({ id, cantidad, precioUnit }) => ({
-      id,
-      cantidad,
-      unit_price: precioUnit,
-      subtotal: Math.round(precioUnit * cantidad * 100) / 100,
-    }));
-    return {
-      userId: usuarioActivo?.id,
-      email,
-      envio,
-      direccion: direccionSel,
-      cupon: cuponAplicado?.code || null,
-      totals: {
-        subtotal,
-        envio: costoEnvio,
-        descuento,
-        total,
-        moneda: "MXN",
-      },
-      items,
-      createdAt: Date.now(),
-      metodoPago: "stripe",
-    };
-  };
-
-  // === Crear sesión de Stripe y redirigir ===
-  const goStripeCheckout = async () => {
-    if (loadingCheckout) return;
-    setErrorCheckout("");
-
-    if (!usuarioActivo?.id) { setErrorCheckout("Debes iniciar sesión."); return; }
-    if (!direccionSel) { setErrorCheckout("Selecciona una dirección de envío."); setDirModalOpen(true); return; }
-    if (detailedItems.length === 0) { setErrorCheckout("Tu carrito está vacío."); return; }
-
-    try {
-      setLoadingCheckout(true);
-
-      // Guardar snapshot local para consultas posteriores
-      const snapshot = buildCheckoutSnapshot();
-      try { localStorage.setItem(`checkout:${usuarioActivo.id}`, JSON.stringify(snapshot)); } catch {}
-
-      // Preparar payload mínimo para el backend
-      const payload = {
-        userId: usuarioActivo.id,
-        email,
-        envio,
-        direccion: direccionSel,
-        cupon: cuponAplicado?.code || null,
-        cart: (rawCart || []).map(i => ({ id: i.id, cantidad: Math.max(1, Number(i.cantidad || 1)) })),
-        origin: window.location.origin, // útil si el backend lo usa
-      };
-
-      const resp = await fetch("/api/stripe_checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data?.error || "No se pudo crear la sesión de pago.");
-      if (!data?.url) throw new Error("Respuesta inválida del servidor.");
-
-      // Redirigir a Stripe Checkout
-      window.location.assign(data.url);
-    } catch (e) {
-      console.error("Stripe checkout error:", e);
-      setErrorCheckout(e.message || "Ocurrió un error al iniciar el pago.");
-      setLoadingCheckout(false);
-    }
   };
 
   // Continuar (abrir modal de pago)
@@ -1035,25 +958,23 @@ export default function Carrito() {
                   <span>{formatoPrecio(total, "MXN")}</span>
                 </div>
                 <div className="text-[11px] text-gray-500">Impuestos y costos finales se calculan en el último paso.</div>
-
-                {errorCheckout && (
-                  <div className="text-[12px] text-rose-700 mt-1">{errorCheckout}</div>
-                )}
               </section>
 
               <div className="pt-2 flex flex-col gap-2">
                 <button
-                  disabled={detailedItems.length === 0 || loadingCheckout}
+                  disabled={detailedItems.length === 0}
                   onClick={continuarPago}
-                  className={`rounded-full text-white px-4 py-3 text-sm font-semibold shadow hover:shadow-md inline-flex items-center justify-center gap-2 ${detailedItems.length === 0 || loadingCheckout ? "bg-gray-400 cursor-not-allowed" : "bg-gray-900"}`}
+                  className={`rounded-full text-white px-4 py-3 text-sm font-semibold shadow hover:shadow-md inline-flex items-center justify-center gap-2 ${detailedItems.length === 0 ? "bg-gray-400 cursor-not-allowed" : "bg-gray-900"}`}
                 >
-                  {loadingCheckout ? "Procesando..." : (<><Lock size={16} /> Continuar con el pago</>)}
+                  <Lock size={16} /> Continuar con el pago
                 </button>
 
                 {/* Nota de comisiones justo debajo del botón */}
                 <div className="text-[11px] text-gray-600 -mt-1">
                   {isMexico ? (
-                    <div>Stripe: 3.6% + $3 MXN · PayPal: 3.95% + $4 MXN · SPEI: sin comisión (solo México)</div>
+                    <>
+                      <div>Stripe: 3.6% + $3 MXN · PayPal: 3.95% + $4 MXN · SPEI: sin comisión (solo México)</div>
+                    </>
                   ) : (
                     <div>Stripe: 3.6% + $3 (tu ubicación no es México, disponible solo Stripe)</div>
                   )}
@@ -1109,18 +1030,16 @@ export default function Carrito() {
         onClose={() => setPagoModalOpen(false)}
         isMexico={isMexico}
         totalMXN={total}
-        onChoose={async (metodo) => {
+        onChoose={(metodo) => {
           setMetodoPago(metodo);
           setPagoModalOpen(false);
           try { localStorage.setItem(`metodoPago:${usuarioActivo.id}`, metodo); } catch {}
-
           if (metodo === "spei") {
             navigate("/pago/spei");
           } else if (metodo === "paypal") {
             navigate("/pago/paypal");
           } else {
-            // STRIPE: crear sesión y redirigir
-            await goStripeCheckout();
+            navigate("/pago/stripe");
           }
         }}
       />
