@@ -1,82 +1,77 @@
 // supabase/functions/create-checkout/index.ts
-// IMPORTANTE: esto es SOLO en la Edge Function, NO en React.
+import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
 import Stripe from "npm:stripe@16.6.0";
 
-const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, {
-  apiVersion: "2024-06-20",
-});
-
-type Item = {
-  title: string;
-  unit_amount: number; // MXN en pesos (ej: 199.99)
-  quantity: number;
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
-type Body = {
-  items: Item[];
-  shipping?: "estandar" | "express" | "retiro";
-  customer_email?: string;
-  success_url: string;
-  cancel_url: string;
-};
-
-Deno.serve(async (req) => {
-  if (req.method !== "POST") {
-    return new Response("Method Not Allowed", { status: 405 });
+serve(async (req: Request) => {
+  // 1) Preflight
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
   }
-  try {
-    const { items, shipping, customer_email, success_url, cancel_url } = (await req.json()) as Body;
 
-    if (!Array.isArray(items) || items.length === 0) {
-      return new Response(JSON.stringify({ error: "No items" }), { status: 400 });
+  try {
+    const STRIPE_SECRET_KEY = Deno.env.get("STRIPE_SECRET_KEY");
+    if (!STRIPE_SECRET_KEY) {
+      return new Response(JSON.stringify({ error: "Missing STRIPE_SECRET_KEY" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // Mapea a line_items con cents
-    const line_items = items.map((it) => ({
+    const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: "2024-06-20" });
+    const { items = [], shipping = "estandar", customer_email, success_url, cancel_url } = await req.json();
+
+    const line_items = items.map((it: any) => ({
       price_data: {
         currency: "mxn",
-        product_data: { name: it.title.slice(0, 126) },
-        unit_amount: Math.round(Number(it.unit_amount) * 100), // a centavos
+        product_data: { name: it.title },
+        unit_amount: Math.round(Number(it.unit_amount) * 100), // MXN -> centavos
       },
       quantity: Math.max(1, Number(it.quantity || 1)),
     }));
 
-    // Opciones de envío fijas (una sola opción según lo elegido)
-    const shipping_options =
-      shipping === "retiro"
-        ? []
-        : [
-            {
-              shipping_rate_data: {
-                type: "fixed_amount",
-                fixed_amount: {
-                  amount: shipping === "express" ? 35000 : 20000, // $350 o $200 MXN en centavos
-                  currency: "mxn",
-                },
-                display_name: shipping === "express" ? "Envío express (1–2 días)" : "Envío estándar (3–6 días)",
-              },
-            },
-          ];
+    // costo de envío fijo según selección
+    const envioMx =
+      shipping === "express" ? 35000 :
+      shipping === "retiro"  ? 0 :
+      20000;
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
+      customer_email: customer_email || undefined,
       line_items,
-      customer_email,
-      // Si necesitas dirección de envío:
-      shipping_address_collection: { allowed_countries: ["MX", "US", "CA"] },
-      shipping_options,
-      success_url: success_url, // e.g. https://tu-sitio.com/gracias?session_id={CHECKOUT_SESSION_ID}
-      cancel_url: cancel_url,   // e.g. https://tu-sitio.com/carrito
-      // Opcional:
-      // allow_promotion_codes: true,
-      // metadata: { usuario_id: "..." }
+      shipping_address_collection: { allowed_countries: ["MX"] },
+      shipping_options: [{
+        shipping_rate_data: {
+          display_name: shipping === "retiro" ? "Retiro en taller" : (shipping === "express" ? "Envío express" : "Envío estándar"),
+          type: "fixed_amount",
+          fixed_amount: { amount: envioMx, currency: "mxn" },
+          delivery_estimate: shipping === "retiro" ? undefined : {
+            minimum: { unit: "business_day", value: shipping === "express" ? 1 : 3 },
+            maximum: { unit: "business_day", value: shipping === "express" ? 2 : 6 },
+          },
+        },
+      }],
+      success_url,
+      cancel_url,
+      allow_promotion_codes: true,
+      locale: "es-419",
     });
 
     return new Response(JSON.stringify({ url: session.url }), {
-      headers: { "content-type": "application/json" },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
     console.error(e);
-    return new Response(JSON.stringify({ error: String(e) }), { status: 500 });
+    return new Response(JSON.stringify({ error: String(e) }), {
+      status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
