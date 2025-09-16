@@ -10,6 +10,7 @@ import {
   Mail,
   ArrowRight,
   Loader2,
+  ShoppingBag,
 } from "lucide-react";
 
 /* =========================
@@ -51,6 +52,30 @@ const shippingLabel = (v) =>
 
 const safeNumber = (v, def = 0) =>
   (Number.isFinite(Number(v)) ? Number(v) : def);
+
+/** Limpia el carrito en distintos keys comunes de la app */
+function clearCart() {
+  try {
+    const keys = [
+      "carrito", "cart", "carritoItems", "cartItems",
+      "shopping_cart", "pb_cart", "tienda:carrito",
+      "checkout_items", "checkout:cart"
+    ];
+    keys.forEach((k) => localStorage.removeItem(k));
+    // Señal simple para que otros componentes reaccionen
+    localStorage.setItem("cart:clearedAt", String(Date.now()));
+    window.dispatchEvent(new Event("storage"));
+  } catch {}
+}
+
+/** Asegura limpiar una sola vez por session_id */
+function ensureCartClearedOnce(sessionId) {
+  const flagKey = `cartCleared:${sessionId}`;
+  if (!localStorage.getItem(flagKey)) {
+    clearCart();
+    localStorage.setItem(flagKey, "1");
+  }
+}
 
 /* =========================
    Componente principal
@@ -97,6 +122,8 @@ export default function Gracias() {
     const cached = localStorage.getItem(idemKey);
     if (cached) {
       const data = JSON.parse(cached);
+      // Limpia el carrito aunque venga de caché
+      ensureCartClearedOnce(sessionId);
       setState({ loading: false, error: "", data });
       return;
     }
@@ -149,6 +176,7 @@ export default function Gracias() {
         const shipping_name        = ship.name || ship.nombre || d.customer_name || "";
         const shipping_line1       = ship.line1 || ship.calle || "";
         const shipping_line2       = ship.line2 || ship.referencia || "";
+        const shipping_line2_block = shipping_line2 ? `<br/>${shipping_line2}` : "";
         const shipping_city        = ship.city || ship.ciudad || "";
         const shipping_state       = ship.state || ship.estado || "";
         const shipping_postal_code = ship.postal_code || ship.cp || ship.codigo_postal || "";
@@ -164,7 +192,7 @@ export default function Gracias() {
         // 3) Inicializa EmailJS
         emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
 
-        // 4) Email al CLIENTE (tu template usa {{email}} como “To email”)
+        // 4) Email al CLIENTE
         if (d.customer_email && EMAILJS_SERVICE_ID && EMAILJS_TEMPLATE_CLIENT) {
           const varsCliente = {
             email: d.customer_email,           // destino
@@ -187,6 +215,7 @@ export default function Gracias() {
             shipping_name,
             shipping_line1,
             shipping_line2,
+            shipping_line2_block,   // para la plantilla
             shipping_city,
             shipping_state,
             shipping_postal_code,
@@ -199,7 +228,6 @@ export default function Gracias() {
           try {
             await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_CLIENT, varsCliente);
           } catch (e) {
-            // No rompemos la UX si falla el correo; solo log.
             console.warn("EmailJS (cliente) falló:", e);
           }
         }
@@ -230,6 +258,7 @@ export default function Gracias() {
             shipping_name,
             shipping_line1,
             shipping_line2,
+            shipping_line2_block,   // para la plantilla
             shipping_city,
             shipping_state,
             shipping_postal_code,
@@ -246,8 +275,10 @@ export default function Gracias() {
           }
         }
 
-        // 6) Cachea e imprime
+        // 6) Limpia carrito y cachea datos
+        ensureCartClearedOnce(sessionId);
         localStorage.setItem(idemKey, JSON.stringify(d));
+
         setState({ loading: false, error: "", data: d });
       } catch (err) {
         console.error("Gracias.jsx error:", err);
@@ -318,7 +349,7 @@ export default function Gracias() {
   }
 
   /* =========================
-     Render principal (bonito)
+     Render principal
      ========================= */
 
   const d = state.data || {};
@@ -364,7 +395,16 @@ export default function Gracias() {
             </div>
           </div>
 
+          {/* Botones PRINCIPALES arriba para mayor visibilidad */}
           <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => navigate("/tienda")}
+              className="inline-flex items-center gap-2 rounded-full bg-gray-900 px-4 py-2 text-sm font-semibold text-white shadow hover:shadow-md"
+              title="Seguir comprando"
+            >
+              <ShoppingBag size={16} /> Seguir comprando
+            </button>
+
             {d.order_url && (
               <a
                 href={d.order_url}
@@ -380,7 +420,7 @@ export default function Gracias() {
                 href={d.receipt_url}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-2 rounded-full bg-gray-900 px-4 py-2 text-sm font-semibold text-white shadow hover:shadow-md"
+                className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold hover:bg-gray-50"
               >
                 Ver recibo <Receipt size={16} />
               </a>
@@ -481,12 +521,6 @@ export default function Gracias() {
                 <Mail size={14} /> {OWNER_EMAIL}
               </a>.
             </p>
-            <button
-              className="mt-4 inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold hover:bg-gray-50"
-              onClick={() => navigate("/tienda")}
-            >
-              Seguir comprando <ArrowRight size={16} />
-            </button>
           </div>
         </div>
       </div>
