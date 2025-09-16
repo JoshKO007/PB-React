@@ -1,46 +1,76 @@
 // src/pages/Gracias.jsx
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import emailjs from "@emailjs/browser";
+import {
+  CheckCircle2,
+  Receipt,
+  ExternalLink,
+  Truck,
+  Mail,
+  ArrowRight,
+  Loader2,
+} from "lucide-react";
 
-// === Endpoint que finaliza el pedido y devuelve los datos ya calculados ===
+/* =========================
+   Configuración y constantes
+   ========================= */
+
+// Endpoint que finaliza el pedido y devuelve los datos ya calculados
 const FN_URL =
   import.meta.env.VITE_FINALIZE_ORDER_URL ||
   "https://ousgktyljynqzrnafoqd.supabase.co/functions/v1/finalize-order";
 
-// === EmailJS (puedes dejar estos hardcodeados en pruebas) ===
+// EmailJS (para pruebas puedes dejar hardcode, en prod usa VITE_*)
 const EMAILJS_PUBLIC_KEY      = "XfzYWVNrvPQL2coPj";
 const EMAILJS_SERVICE_ID      = "service_pfqtahh";
 const EMAILJS_TEMPLATE_CLIENT = "template_k7bkplm";
 const EMAILJS_TEMPLATE_OWNER  = "template_44872gn";
 
-// === Branding / Sitio ===
+// Branding / Sitio
 const SITE_NAME     = import.meta.env.VITE_SITE_NAME     || "Arte Restauración Visuales";
 const SITE_URL      = import.meta.env.VITE_SITE_URL      || (typeof window !== "undefined" ? window.location.origin : "");
 const SITE_LOGO_URL = import.meta.env.VITE_SITE_LOGO_URL || "https://pb-react-phi.vercel.app/logo.png";
 const OWNER_EMAIL   = import.meta.env.VITE_OWNER_EMAIL   || import.meta.env.VITE_FROM_EMAIL || "contacto@tu-dominio.com";
 
-// === Helpers de formateo ===
+/* ===========
+   Utilidades
+   =========== */
+
 const toMoneyNoSymbol = (n) =>
-  new Intl.NumberFormat("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n || 0));
-const currencySymbol = (code) => (String(code || "MXN").toUpperCase() === "MXN" ? "$" : ""); // puedes ajustar a MX$
+  new Intl.NumberFormat("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    .format(Number(n || 0));
+
+const currencySymbol = (code) =>
+  String(code || "MXN").toUpperCase() === "MXN" ? "$" : "";
+
 const shippingLabel = (v) =>
-  v === "express" ? "Envío express" : v === "retiro" ? "Retiro en taller" : "Envío estándar";
-const safeNumber = (v, def = 0) => (Number.isFinite(Number(v)) ? Number(v) : def);
+  v === "express" ? "Envío express" :
+  v === "retiro"  ? "Retiro en taller" :
+                    "Envío estándar";
+
+const safeNumber = (v, def = 0) =>
+  (Number.isFinite(Number(v)) ? Number(v) : def);
+
+/* =========================
+   Componente principal
+   ========================= */
 
 export default function Gracias() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const [state, setState] = useState({ loading: true, error: "", data: null });
 
-  // Dirección fallback desde tu app (si el backend no manda cada campo)
+  // Dirección fallback desde la app (por si el backend no manda cada campo)
   const shippingAddressHTML = useMemo(() => {
     try {
       const ses = JSON.parse(localStorage.getItem("sesionActiva") || "null");
       const dir = ses?.id
         ? JSON.parse(localStorage.getItem(`direccionSeleccionada:${ses.id}`) || "null")
         : null;
+
       if (!dir) return "—";
+
       const lines = [
         dir.nombre,
         dir.calle,
@@ -48,6 +78,7 @@ export default function Gracias() {
         `${dir.pais || ""} · CP ${dir.cp || ""}`.trim(),
         dir.referencia ? `<em>${dir.referencia}</em>` : "",
       ].filter(Boolean);
+
       return lines.join("<br/>");
     } catch {
       return "—";
@@ -61,7 +92,7 @@ export default function Gracias() {
       return;
     }
 
-    // Evita re-envíos si recargan
+    // Evitar re-envíos si recargan
     const idemKey = `finalized:${sessionId}`;
     const cached = localStorage.getItem(idemKey);
     if (cached) {
@@ -72,7 +103,7 @@ export default function Gracias() {
 
     (async () => {
       try {
-        // 1) Finaliza pedido (guarda BD, etc.) y trae los datos listos
+        // 1) Finaliza pedido (guarda en BD, calcula totales, etc.) y trae todos los datos listos
         const res = await fetch(FN_URL, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -85,11 +116,11 @@ export default function Gracias() {
         const moneda = (d.moneda || "MXN").toUpperCase();
         const C$ = currencySymbol(moneda);
 
-        // 2) Variables “básicas” compartidas
+        // 2) Variables base
         const orderId   = d.pedido_id || sessionId.slice(-10).toUpperCase();
         const orderDate = new Date().toLocaleString("es-MX");
 
-        // Totales y costos
+        // Totales / costos
         const subMXN = safeNumber(d.subtotal_mxn);
         const envMXN = safeNumber(d.envio_mxn);
         const feeMXN = safeNumber(d.fee_mxn);
@@ -99,7 +130,7 @@ export default function Gracias() {
         const taxLabel  = taxPct > 0 ? `Impuestos (${taxPct}%)` : "";
         const taxAmount = taxPct > 0 ? (subMXN + envMXN + feeMXN) * (taxPct / 100) : 0;
 
-        // Items -> HTML rows (tu template espera {{items_rows}})
+        // Items -> HTML rows (lo que espera la plantilla)
         const items = Array.isArray(d.line_items) ? d.line_items : [];
         const items_rows = items.map((it) => {
           const qty  = safeNumber(it.quantity, 1);
@@ -113,14 +144,8 @@ export default function Gracias() {
           </tr>`;
         }).join("");
 
-        // Dirección de envío (el template del cliente espera cada campo)
-        // Intentamos mapear desde distintos posibles orígenes:
-        const ship =
-          d.shipping ||
-          d.shipping_address ||
-          d.direccion ||
-          {};
-
+        // Dirección (intenta mapear desde distintos orígenes)
+        const ship = d.shipping || d.shipping_address || d.direccion || {};
         const shipping_name        = ship.name || ship.nombre || d.customer_name || "";
         const shipping_line1       = ship.line1 || ship.calle || "";
         const shipping_line2       = ship.line2 || ship.referencia || "";
@@ -130,35 +155,26 @@ export default function Gracias() {
         const shipping_country     = ship.country || ship.pais || "MX";
 
         const shipping_method_label = shippingLabel(d.shipping_metodo);
-        const payment_method_label  = d.payment_method_label || "Tarjeta"; // si tu backend no lo manda
+        const payment_method_label  = d.payment_method_label || "Tarjeta";
 
         const receipt_url     = d.receipt_url || "";
         const admin_order_url = d.admin_order_url || `${SITE_URL}/admin/pedidos/${orderId}`;
         const order_url       = d.order_url || `${SITE_URL}/pedidos/${orderId}`;
 
-        // 3) Inicializa EmailJS (SDK oficial)
+        // 3) Inicializa EmailJS
         emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
 
-        // 4) CLIENTE — tu template usa {{email}} como "To email"
+        // 4) Email al CLIENTE (tu template usa {{email}} como “To email”)
         if (d.customer_email && EMAILJS_SERVICE_ID && EMAILJS_TEMPLATE_CLIENT) {
           const varsCliente = {
-            // Routing (tu template usa {{email}} en "To email")
-            email: d.customer_email,
-
-            // Header / branding
+            email: d.customer_email,           // destino
             site_name: SITE_NAME,
             site_url: SITE_URL,
             year: String(new Date().getFullYear()),
-
-            // Pedido
             order_id: orderId,
             order_date: orderDate,
-
-            // Cliente
             customer_name: d.customer_name || "",
             customer_email: d.customer_email || "",
-
-            // Resumen (sin símbolo, el HTML antepone {{currency_symbol}})
             currency_symbol: C$,
             subtotal:       toMoneyNoSymbol(subMXN),
             shipping_cost:  toMoneyNoSymbol(envMXN),
@@ -166,8 +182,6 @@ export default function Gracias() {
             tax_label:      taxLabel,
             tax_amount:     taxPct > 0 ? toMoneyNoSymbol(taxAmount) : "",
             total:          toMoneyNoSymbol(totMXN),
-
-            // Items y envío
             items_rows,
             shipping_method_label,
             shipping_name,
@@ -177,42 +191,34 @@ export default function Gracias() {
             shipping_state,
             shipping_postal_code,
             shipping_country,
-
-            // Links / Soporte
             order_url,
             receipt_url,
             support_email: OWNER_EMAIL || "contacto@tu-dominio.com",
           };
 
-          await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_CLIENT, varsCliente);
+          try {
+            await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_CLIENT, varsCliente);
+          } catch (e) {
+            // No rompemos la UX si falla el correo; solo log.
+            console.warn("EmailJS (cliente) falló:", e);
+          }
         }
 
-        // 5) DUEÑO — tu template usa {{email}} como "To email"
+        // 5) Email al DUEÑO
         const ownerEmail = d.owner_email || OWNER_EMAIL;
         if (ownerEmail && EMAILJS_SERVICE_ID && EMAILJS_TEMPLATE_OWNER) {
           const varsDueno = {
-            // Routing
             email: ownerEmail,
-
-            // Branding
             site_name: SITE_NAME,
             site_url: SITE_URL,
             year: String(new Date().getFullYear()),
-
-            // Pedido
             order_id: orderId,
             order_date: orderDate,
-
-            // Cliente
             customer_name: d.customer_name || "",
             customer_email: d.customer_email || "",
             customer_phone: d.customer_phone || "",
-
-            // Pago / Envío
             payment_method_label,
             shipping_method_label,
-
-            // Resumen (sin símbolo)
             currency_symbol: C$,
             subtotal:       toMoneyNoSymbol(subMXN),
             shipping_cost:  toMoneyNoSymbol(envMXN),
@@ -220,8 +226,6 @@ export default function Gracias() {
             tax_label:      taxLabel,
             tax_amount:     taxPct > 0 ? toMoneyNoSymbol(taxAmount) : "",
             total:          toMoneyNoSymbol(totMXN),
-
-            // Items y envío
             items_rows,
             shipping_name,
             shipping_line1,
@@ -230,17 +234,19 @@ export default function Gracias() {
             shipping_state,
             shipping_postal_code,
             shipping_country,
-
-            // Admin / recibo / notas internas
             admin_order_url,
             receipt_url,
             internal_notes: d.internal_notes || "",
           };
 
-          await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_OWNER, varsDueno);
+          try {
+            await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_OWNER, varsDueno);
+          } catch (e) {
+            console.warn("EmailJS (dueño) falló:", e);
+          }
         }
 
-        // 6) Cachea para idempotencia y muestra confirmación
+        // 6) Cachea e imprime
         localStorage.setItem(idemKey, JSON.stringify(d));
         setState({ loading: false, error: "", data: d });
       } catch (err) {
@@ -250,48 +256,240 @@ export default function Gracias() {
     })();
   }, [params]);
 
+  /* =========================
+     UI Helpers para el render
+     ========================= */
+
+  const Chip = ({ children }) => (
+    <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
+      {children}
+    </span>
+  );
+
+  const Row = ({ label, value, strong }) => (
+    <div className="flex items-center justify-between py-1">
+      <span className="text-sm text-gray-600">{label}</span>
+      <span className={`text-sm ${strong ? "font-semibold text-gray-900" : "text-gray-800"}`}>
+        {value}
+      </span>
+    </div>
+  );
+
+  /* =========================
+     Estados de carga / error
+     ========================= */
+
   if (state.loading) {
     return (
-      <div className="min-h-[60vh] grid place-items-center">
-        <div>Cargando y enviando tu confirmación…</div>
+      <div className="min-h-[70vh] grid place-items-center px-4">
+        <div className="w-full max-w-3xl">
+          <div className="flex items-center gap-3">
+            <Loader2 className="animate-spin text-gray-700" size={24} />
+            <p className="text-gray-700">Procesando tu pedido y enviando confirmación…</p>
+          </div>
+
+          <div className="mt-6 grid gap-4">
+            <div className="h-24 rounded-2xl bg-white shadow-sm border animate-pulse" />
+            <div className="h-40 rounded-2xl bg-white shadow-sm border animate-pulse" />
+          </div>
+        </div>
       </div>
     );
   }
 
   if (state.error) {
     return (
-      <div className="min-h-[60vh] grid place-items-center text-center">
-        <div className="max-w-md">
-          <h1 className="text-xl font-bold">Ups</h1>
-          <p className="text-sm mt-2">{state.error}</p>
-          <button className="mt-4 border px-4 py-2 rounded" onClick={() => navigate("/tienda")}>
-            Volver a la tienda
+      <div className="min-h-[70vh] grid place-items-center px-4">
+        <div className="w-full max-w-md rounded-2xl border bg-white p-6 text-center shadow-sm">
+          <div className="mx-auto mb-3 h-12 w-12 grid place-items-center rounded-full bg-rose-100 text-rose-600">
+            !
+          </div>
+          <h1 className="text-xl font-semibold">Ups…</h1>
+          <p className="mt-2 text-gray-600 text-sm">{state.error}</p>
+          <button
+            className="mt-5 inline-flex items-center gap-2 rounded-full bg-gray-900 px-4 py-2 text-sm font-semibold text-white shadow hover:shadow-md"
+            onClick={() => navigate("/tienda")}
+          >
+            Volver a la tienda <ArrowRight size={16} />
           </button>
         </div>
       </div>
     );
   }
 
-  const d = state.data || {};
-  return (
-    <div className="max-w-3xl mx-auto px-4 py-10">
-      <h1 className="text-2xl font-bold">¡Gracias por tu compra!</h1>
-      <p className="text-sm mt-2">
-        Pedido <strong>{d.pedido_id || "N/A"}</strong>. Te enviamos un correo con el resumen.
-      </p>
+  /* =========================
+     Render principal (bonito)
+     ========================= */
 
-      <div className="mt-6 border rounded p-4 bg-white">
-        <div className="font-semibold">
-          Total pagado: {currencySymbol(d.moneda) + toMoneyNoSymbol(d.total_mxn || 0)}
-        </div>
-        <div className="text-sm text-gray-600">
-          Método de envío: {shippingLabel(d.shipping_metodo)}
+  const d = state.data || {};
+  const C$ = currencySymbol(d.moneda || "MXN");
+
+  const items = Array.isArray(d.line_items) ? d.line_items : [];
+  const subtotal = toMoneyNoSymbol(d.subtotal_mxn || 0);
+  const shippingCost = toMoneyNoSymbol(d.envio_mxn || 0);
+  const fee = toMoneyNoSymbol(d.fee_mxn || 0);
+  const taxPct = safeNumber(d.tax_pct || 0);
+  const taxAmount =
+    taxPct > 0
+      ? toMoneyNoSymbol(
+          (safeNumber(d.subtotal_mxn) + safeNumber(d.envio_mxn) + safeNumber(d.fee_mxn)) *
+            (taxPct / 100)
+        )
+      : "";
+  const total = toMoneyNoSymbol(d.total_mxn || 0);
+
+  return (
+    <div className="mx-auto max-w-5xl px-4 py-10">
+      {/* Encabezado de confirmación */}
+      <div className="rounded-3xl border bg-white p-6 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="h-10 w-10 shrink-0 grid place-items-center rounded-full bg-emerald-100 text-emerald-700">
+              <CheckCircle2 size={20} />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">¡Gracias por tu compra!</h1>
+              <p className="mt-1 text-sm text-gray-600">
+                Te enviamos un correo a{" "}
+                <a className="underline decoration-gray-300 hover:decoration-gray-700" href={`mailto:${d.customer_email}`}>
+                  {d.customer_email || "—"}
+                </a>{" "}
+                con el resumen.
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <Chip>Pedido: <span className="font-semibold">{d.pedido_id || "N/A"}</span></Chip>
+                <Chip className="whitespace-nowrap">Total: <span className="font-semibold">{C$}{total}</span></Chip>
+                <Chip><Truck size={14} /> {shippingLabel(d.shipping_metodo)}</Chip>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {d.order_url && (
+              <a
+                href={d.order_url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold hover:bg-gray-50"
+              >
+                Ver pedido <ExternalLink size={16} />
+              </a>
+            )}
+            {d.receipt_url && (
+              <a
+                href={d.receipt_url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 rounded-full bg-gray-900 px-4 py-2 text-sm font-semibold text-white shadow hover:shadow-md"
+              >
+                Ver recibo <Receipt size={16} />
+              </a>
+            )}
+          </div>
         </div>
       </div>
 
-      <button className="mt-6 border px-4 py-2 rounded" onClick={() => navigate("/tienda")}>
-        Seguir comprando
-      </button>
+      {/* Grid con resumen e items */}
+      <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Items */}
+        <div className="lg:col-span-2 rounded-3xl border bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-semibold">Artículos</h2>
+
+          {items.length === 0 ? (
+            <p className="mt-2 text-sm text-gray-600">No se encontraron artículos del pedido.</p>
+          ) : (
+            <div className="mt-4 overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="text-left text-gray-500">
+                    <th className="py-2 pr-3">Artículo</th>
+                    <th className="py-2 pr-3 text-center">Cant.</th>
+                    <th className="py-2 pr-3 text-right">Precio</th>
+                    <th className="py-2 text-right">Importe</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {items.map((it, idx) => {
+                    const qty = safeNumber(it.quantity || 1);
+                    const unit = safeNumber(it.unit_amount_mxn || 0);
+                    const imp = unit * qty;
+                    return (
+                      <tr key={idx}>
+                        <td className="py-2 pr-3">{it.title || "Artículo"}</td>
+                        <td className="py-2 pr-3 text-center">{qty}</td>
+                        <td className="py-2 pr-3 text-right">{C$}{toMoneyNoSymbol(unit)}</td>
+                        <td className="py-2 text-right">{C$}{toMoneyNoSymbol(imp)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Resumen / Dirección */}
+        <div className="space-y-6">
+          <div className="rounded-3xl border bg-white p-6 shadow-sm">
+            <h3 className="text-lg font-semibold">Resumen</h3>
+            <div className="mt-3 space-y-1.5">
+              <Row label="Subtotal" value={`${C$}${subtotal}`} />
+              <Row label={`Envío (${shippingLabel(d.shipping_metodo)})`} value={`${C$}${shippingCost}`} />
+              <Row label="Cargo por procesamiento" value={`${C$}${fee}`} />
+              {taxPct > 0 && <Row label={`Impuestos (${taxPct}%)`} value={`${C$}${taxAmount}`} />}
+              <div className="mt-2 border-t pt-2">
+                <Row label="Total" value={`${C$}${total}`} strong />
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border bg-white p-6 shadow-sm">
+            <h3 className="text-lg font-semibold">Envío</h3>
+            <div className="mt-2 text-sm text-gray-700">
+              <div className="flex items-start gap-2">
+                <Truck size={16} className="mt-0.5 text-gray-500" />
+                <div>
+                  <div className="font-medium">{shippingLabel(d.shipping_metodo)}</div>
+                  <div className="mt-2 leading-relaxed">
+                    {/* Si backend no manda cada campo, mostramos el HTML de fallback */}
+                    {d.shipping?.name || d.shipping_name ? (
+                      <>
+                        {(d.shipping_name || d.shipping?.name) || "—"} <br />
+                        {(d.shipping_line1 || d.shipping?.line1) || "—"}{" "}
+                        {(d.shipping_line2 || d.shipping?.line2) ? <><br />{d.shipping_line2 || d.shipping?.line2}</> : ""}
+                        <br />
+                        {(d.shipping_city || d.shipping?.city) || "—"},{" "}
+                        {(d.shipping_state || d.shipping?.state) || "—"}{" "}
+                        {(d.shipping_postal_code || d.shipping?.postal_code) || "—"} <br />
+                        {(d.shipping_country || d.shipping?.country) || "—"}
+                      </>
+                    ) : (
+                      <div dangerouslySetInnerHTML={{ __html: shippingAddressHTML }} />
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border bg-white p-6 shadow-sm">
+            <h3 className="text-lg font-semibold">Soporte</h3>
+            <p className="mt-2 text-sm text-gray-700">
+              Si necesitas ayuda con tu pedido, escríbenos a{" "}
+              <a className="inline-flex items-center gap-1 underline decoration-gray-300 hover:decoration-gray-700"
+                 href={`mailto:${OWNER_EMAIL}`}>
+                <Mail size={14} /> {OWNER_EMAIL}
+              </a>.
+            </p>
+            <button
+              className="mt-4 inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold hover:bg-gray-50"
+              onClick={() => navigate("/tienda")}
+            >
+              Seguir comprando <ArrowRight size={16} />
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
