@@ -17,15 +17,18 @@ import {
    Configuración y constantes
    ========================= */
 
+// Endpoint que finaliza el pedido y devuelve los datos ya calculados
 const FN_URL =
   import.meta.env.VITE_FINALIZE_ORDER_URL ||
   "https://ousgktyljynqzrnafoqd.supabase.co/functions/v1/finalize-order";
 
+// EmailJS (para pruebas puedes dejar hardcode, en prod usa VITE_*)
 const EMAILJS_PUBLIC_KEY      = "XfzYWVNrvPQL2coPj";
 const EMAILJS_SERVICE_ID      = "service_pfqtahh";
 const EMAILJS_TEMPLATE_CLIENT = "template_k7bkplm";
 const EMAILJS_TEMPLATE_OWNER  = "template_44872gn";
 
+// Branding / Sitio
 const SITE_NAME     = import.meta.env.VITE_SITE_NAME     || "Arte Restauración Visuales";
 const SITE_URL      = import.meta.env.VITE_SITE_URL      || (typeof window !== "undefined" ? window.location.origin : "");
 const SITE_LOGO_URL = import.meta.env.VITE_SITE_LOGO_URL || "https://pb-react-phi.vercel.app/logo.png";
@@ -59,6 +62,7 @@ function clearCart() {
       "checkout_items", "checkout:cart"
     ];
     keys.forEach((k) => localStorage.removeItem(k));
+    // Señal simple para que otros componentes reaccionen
     localStorage.setItem("cart:clearedAt", String(Date.now()));
     window.dispatchEvent(new Event("storage"));
   } catch {}
@@ -118,6 +122,7 @@ export default function Gracias() {
     const cached = localStorage.getItem(idemKey);
     if (cached) {
       const data = JSON.parse(cached);
+      // Limpia el carrito aunque venga de caché
       ensureCartClearedOnce(sessionId);
       setState({ loading: false, error: "", data });
       return;
@@ -125,7 +130,7 @@ export default function Gracias() {
 
     (async () => {
       try {
-        // 1) Finaliza pedido (guarda en BD, calcula totales, etc.) y trae todos los datos
+        // 1) Finaliza pedido (guarda en BD, calcula totales, etc.) y trae todos los datos listos
         const res = await fetch(FN_URL, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -152,21 +157,21 @@ export default function Gracias() {
         const taxLabel  = taxPct > 0 ? `Impuestos (${taxPct}%)` : "";
         const taxAmount = taxPct > 0 ? (subMXN + envMXN + feeMXN) * (taxPct / 100) : 0;
 
-        // Items -> arreglo para Handlebars (EmailJS)
-        const rawItems = Array.isArray(d.line_items) ? d.line_items : [];
-        const items = rawItems.map((it) => {
+        // Items -> HTML rows (lo que espera la plantilla)
+        const items = Array.isArray(d.line_items) ? d.line_items : [];
+        const items_rows = items.map((it) => {
           const qty  = safeNumber(it.quantity, 1);
           const unit = safeNumber(it.unit_amount_mxn);
           const imp  = unit * qty;
-          return {
-            title: it.title || "Artículo",
-            qty,
-            unit_fmt: toMoneyNoSymbol(unit),
-            amount_fmt: toMoneyNoSymbol(imp),
-          };
-        });
+          return `<tr>
+            <td style="padding:8px 0;border-top:1px solid #eee">${it.title || "Artículo"}</td>
+            <td align="center" style="padding:8px 0;border-top:1px solid #eee">${qty}</td>
+            <td align="right" style="padding:8px 0;border-top:1px solid #eee">${toMoneyNoSymbol(unit)}</td>
+            <td align="right" style="padding:8px 0;border-top:1px solid #eee">${toMoneyNoSymbol(imp)}</td>
+          </tr>`;
+        }).join("");
 
-        // Dirección
+        // Dirección (intenta mapear desde distintos orígenes)
         const ship = d.shipping || d.shipping_address || d.direccion || {};
         const shipping_name        = ship.name || ship.nombre || d.customer_name || "";
         const shipping_line1       = ship.line1 || ship.calle || "";
@@ -190,7 +195,7 @@ export default function Gracias() {
         // 4) Email al CLIENTE
         if (d.customer_email && EMAILJS_SERVICE_ID && EMAILJS_TEMPLATE_CLIENT) {
           const varsCliente = {
-            email: d.customer_email,
+            email: d.customer_email,           // destino
             site_name: SITE_NAME,
             site_url: SITE_URL,
             year: String(new Date().getFullYear()),
@@ -205,12 +210,12 @@ export default function Gracias() {
             tax_label:      taxLabel,
             tax_amount:     taxPct > 0 ? toMoneyNoSymbol(taxAmount) : "",
             total:          toMoneyNoSymbol(totMXN),
-            items,                          // <---
+            items_rows,
             shipping_method_label,
             shipping_name,
             shipping_line1,
             shipping_line2,
-            shipping_line2_block,           // <---
+            shipping_line2_block,   // para la plantilla
             shipping_city,
             shipping_state,
             shipping_postal_code,
@@ -249,11 +254,11 @@ export default function Gracias() {
             tax_label:      taxLabel,
             tax_amount:     taxPct > 0 ? toMoneyNoSymbol(taxAmount) : "",
             total:          toMoneyNoSymbol(totMXN),
-            items,                          // <---
+            items_rows,
             shipping_name,
             shipping_line1,
             shipping_line2,
-            shipping_line2_block,           // <---
+            shipping_line2_block,   // para la plantilla
             shipping_city,
             shipping_state,
             shipping_postal_code,
@@ -283,7 +288,7 @@ export default function Gracias() {
   }, [params]);
 
   /* =========================
-     UI Helpers
+     UI Helpers para el render
      ========================= */
 
   const Chip = ({ children }) => (
@@ -344,13 +349,13 @@ export default function Gracias() {
   }
 
   /* =========================
-     Render principal (bonito)
+     Render principal
      ========================= */
 
   const d = state.data || {};
   const C$ = currencySymbol(d.moneda || "MXN");
 
-  const itemsUI = Array.isArray(d.line_items) ? d.line_items : [];
+  const items = Array.isArray(d.line_items) ? d.line_items : [];
   const subtotal = toMoneyNoSymbol(d.subtotal_mxn || 0);
   const shippingCost = toMoneyNoSymbol(d.envio_mxn || 0);
   const fee = toMoneyNoSymbol(d.fee_mxn || 0);
@@ -430,7 +435,7 @@ export default function Gracias() {
         <div className="lg:col-span-2 rounded-3xl border bg-white p-6 shadow-sm">
           <h2 className="text-lg font-semibold">Artículos</h2>
 
-          {itemsUI.length === 0 ? (
+          {items.length === 0 ? (
             <p className="mt-2 text-sm text-gray-600">No se encontraron artículos del pedido.</p>
           ) : (
             <div className="mt-4 overflow-x-auto">
@@ -444,7 +449,7 @@ export default function Gracias() {
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {itemsUI.map((it, idx) => {
+                  {items.map((it, idx) => {
                     const qty = safeNumber(it.quantity || 1);
                     const unit = safeNumber(it.unit_amount_mxn || 0);
                     const imp = unit * qty;
@@ -486,6 +491,7 @@ export default function Gracias() {
                 <div>
                   <div className="font-medium">{shippingLabel(d.shipping_metodo)}</div>
                   <div className="mt-2 leading-relaxed">
+                    {/* Si backend no manda cada campo, mostramos el HTML de fallback */}
                     {d.shipping?.name || d.shipping_name ? (
                       <>
                         {(d.shipping_name || d.shipping?.name) || "—"} <br />
