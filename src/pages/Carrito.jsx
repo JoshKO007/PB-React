@@ -35,8 +35,7 @@ import {
   Wallet
 } from "lucide-react";
 
-// === Catálogo: SOLO desde JSON local ===
-import PRODUCTOS_JSON from "../data/productos.json";
+
 
 // === Supabase para direcciones (y FAVORITOS ahora) ===
 import { createClient } from "@supabase/supabase-js";
@@ -354,8 +353,27 @@ export default function Carrito() {
     { label: "Contacto", icon: <Mail size={24} />, onClick: () => navigate("/contacto") },
   ];
 
-  // Productos (fuente única)
-  const productos = useMemo(() => (Array.isArray(PRODUCTOS_JSON) ? PRODUCTOS_JSON : []), []);
+  // Productos: desde Supabase (como en Tienda)
+  const [productos, setProductos] = useState([]);
+  const [prodLoading, setProdLoading] = useState(false);
+  useEffect(() => {
+    const loadProductos = async () => {
+      setProdLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from("productos")
+          .select("id, titulo, descripcion, precio, descuento, moneda, imagenes, etiquetas");
+        if (error) throw error;
+        setProductos(Array.isArray(data) ? data : []);
+      } catch (e) {
+        console.error("Error cargando productos:", e);
+        setProductos([]);
+      } finally {
+        setProdLoading(false);
+      }
+    };
+    loadProductos();
+  }, []);
 
   // ===== Favoritos: ahora en Supabase =====
   const [favs, setFavs] = useState([]); // array de strings (ids)
