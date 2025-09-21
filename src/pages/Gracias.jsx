@@ -77,60 +77,6 @@ function ensureCartClearedOnce(sessionId) {
   }
 }
 
-
-/**
- * Normaliza la dirección EXACTAMENTE como se guarda en la BD (campo JSONB `direccion`).
- * Soporta que `d.direccion` venga como objeto o como string JSON.
- * Retorna un objeto plano con los mismos nombres que usamos en las plantillas de EmailJS.
- */
-function normalizeAddressFromDB(d) {
-  try {
-    const raw = d?.direccion ?? d?.shipping ?? d?.shipping_address ?? null;
-
-    // Si viene como string JSON, parsear; si viene como objeto, usarlo tal cual
-    const dir = typeof raw === "string" ? JSON.parse(raw) : raw;
-    if (!dir) return null;
-
-    // Estructura esperada en BD (según captura):
-    // { name, email, address: { city, line1, line2, postal_code, state, country } }
-    const a = dir.address || {};
-
-    const shipping_name        = dir.name || dir.nombre || "";
-    const shipping_line1       = a.line1 || a.calle || "";
-    const shipping_line2       = a.line2 || a.referencia || "";
-    const shipping_city        = a.city || a.ciudad || "";
-    const shipping_state       = a.state || a.estado || "";
-    const shipping_postal_code = a.postal_code || a.cp || a.codigo_postal || "";
-    const shipping_country     = a.country || a.pais || "MX";
-
-    const shipping_line2_block = shipping_line2 ? `<br/>${shipping_line2}` : "";
-    const shipping_block_html = [
-      shipping_name,
-      shipping_line1,
-      shipping_line2 ? shipping_line2 : null,
-      `${shipping_city}, ${shipping_state} ${shipping_postal_code}`.trim(),
-      shipping_country
-    ]
-      .filter(Boolean)
-      .join("<br/>");
-
-    return {
-      shipping_name,
-      shipping_line1,
-      shipping_line2,
-      shipping_line2_block,
-      shipping_city,
-      shipping_state,
-      shipping_postal_code,
-      shipping_country,
-      shipping_block_html,
-      shipping_raw_json: JSON.stringify(dir)
-    };
-  } catch {
-    return null;
-  }
-}
-
 /* =========================
    Componente principal
    ========================= */
@@ -225,18 +171,16 @@ export default function Gracias() {
           </tr>`;
         }).join("");
 
-        // Dirección: usar EXACTAMENTE el mismo JSON que se guardó en BD (`direccion` JSONB)
-        const normAddr = normalizeAddressFromDB(d);
-        const shipping_name        = normAddr?.shipping_name        || d.customer_name || "";
-        const shipping_line1       = normAddr?.shipping_line1       || "";
-        const shipping_line2       = normAddr?.shipping_line2       || "";
-        const shipping_line2_block = normAddr?.shipping_line2_block || (shipping_line2 ? `<br/>${shipping_line2}` : "");
-        const shipping_city        = normAddr?.shipping_city        || "";
-        const shipping_state       = normAddr?.shipping_state       || "";
-        const shipping_postal_code = normAddr?.shipping_postal_code || "";
-        const shipping_country     = normAddr?.shipping_country     || "MX";
-        const shipping_block_html  = normAddr?.shipping_block_html  || "";
-        const shipping_raw_json    = normAddr?.shipping_raw_json    || "";
+        // Dirección (intenta mapear desde distintos orígenes)
+        const ship = d.shipping || d.shipping_address || d.direccion || {};
+        const shipping_name        = ship.name || ship.nombre || d.customer_name || "";
+        const shipping_line1       = ship.line1 || ship.calle || "";
+        const shipping_line2       = ship.line2 || ship.referencia || "";
+        const shipping_line2_block = shipping_line2 ? `<br/>${shipping_line2}` : "";
+        const shipping_city        = ship.city || ship.ciudad || "";
+        const shipping_state       = ship.state || ship.estado || "";
+        const shipping_postal_code = ship.postal_code || ship.cp || ship.codigo_postal || "";
+        const shipping_country     = ship.country || ship.pais || "MX";
 
         const shipping_method_label = shippingLabel(d.shipping_metodo);
         const payment_method_label  = d.payment_method_label || "Tarjeta";
@@ -276,8 +220,6 @@ export default function Gracias() {
             shipping_state,
             shipping_postal_code,
             shipping_country,
-            shipping_block_html,
-            shipping_raw_json,
             order_url,
             receipt_url,
             support_email: OWNER_EMAIL || "contacto@tu-dominio.com",
@@ -321,19 +263,10 @@ export default function Gracias() {
             shipping_state,
             shipping_postal_code,
             shipping_country,
-            shipping_block_html,
-            shipping_raw_json,
             admin_order_url,
             receipt_url,
             internal_notes: d.internal_notes || "",
           };
-  // Exponer bloque/JSON de dirección en `d` para el render si aún no vienen desde backend
-  if (!d.shipping_block_html && typeof shipping_block_html === "string") {
-    d.shipping_block_html = shipping_block_html;
-  }
-  if (!d.shipping_raw_json && typeof shipping_raw_json === "string") {
-    d.shipping_raw_json = shipping_raw_json;
-  }
 
           try {
             await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_OWNER, varsDueno);
@@ -558,10 +491,18 @@ export default function Gracias() {
                 <div>
                   <div className="font-medium">{shippingLabel(d.shipping_metodo)}</div>
                   <div className="mt-2 leading-relaxed">
-                    {d.shipping_block_html ? (
-                      <div dangerouslySetInnerHTML={{ __html: d.shipping_block_html }} />
-                    ) : shipping_block_html ? (
-                      <div dangerouslySetInnerHTML={{ __html: shipping_block_html }} />
+                    {/* Si backend no manda cada campo, mostramos el HTML de fallback */}
+                    {d.shipping?.name || d.shipping_name ? (
+                      <>
+                        {(d.shipping_name || d.shipping?.name) || "—"} <br />
+                        {(d.shipping_line1 || d.shipping?.line1) || "—"}{" "}
+                        {(d.shipping_line2 || d.shipping?.line2) ? <><br />{d.shipping_line2 || d.shipping?.line2}</> : ""}
+                        <br />
+                        {(d.shipping_city || d.shipping?.city) || "—"},{" "}
+                        {(d.shipping_state || d.shipping?.state) || "—"}{" "}
+                        {(d.shipping_postal_code || d.shipping?.postal_code) || "—"} <br />
+                        {(d.shipping_country || d.shipping?.country) || "—"}
+                      </>
                     ) : (
                       <div dangerouslySetInnerHTML={{ __html: shippingAddressHTML }} />
                     )}
