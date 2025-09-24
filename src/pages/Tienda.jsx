@@ -1073,6 +1073,7 @@ export default function Tienda() {
         className="w-full text-center relative z-40 px-4 py-3 sm:px-6 sm:py-4 border-b border-gray-300 bg-[#f0eae2]/80 backdrop-blur-md shadow-xl rounded-b-xl"
       >
         <div className="max-w-7xl mx-auto w-full flex flex-col gap-2 relative z-40">
+
           {/* Top bar */}
           <div className="flex flex-col sm:flex-row justify-between items-center w-full relative gap-2 sm:gap-0">
             <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4">
@@ -1116,6 +1117,9 @@ export default function Tienda() {
                           <button onClick={() => navigate("/direccion")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <Mail size={16} className="mr-2" /> Direcciones
                           </button>
+                          <button onClick={() => navigate("/favoritos")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                            <HeartIcon size={16} className="mr-2" /> Favoritos
+                          </button>
                           <button onClick={() => navigate("/contrasena")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <KeyRound size={16} className="mr-2" /> Cambiar contraseña
                           </button>
@@ -1140,7 +1144,6 @@ export default function Tienda() {
 
               {usuarioActivo && (
                 <button
-                  ref={cartBtnRef}
                   onClick={() => navigate("/carrito")}
                   className="relative group"
                   title="Carrito"
@@ -1152,22 +1155,16 @@ export default function Tienda() {
                   >
                     <ShoppingBag size={22} className="text-[#a16207]" />
                   </span>
+
                   {cartCount > 0 && (
-                    <motion.span
-                      key={cartCount}
-                      initial={{ scale: 0.85 }}
-                      animate={{ scale: 1 }}
-                      transition={{ type: "spring", stiffness: 500, damping: 18 }}
+                    <span
                       className="absolute -right-1 -top-1 rounded-full text-[11px] font-bold
                                  bg-rose-600 text-white h-5 min-w-[20px] px-1.5 grid place-items-center
-                                 ring-2 ring-white shadow overflow-visible"
+                                 ring-2 ring-white shadow"
                       style={{ lineHeight: 1 }}
                     >
                       {cartCount > 99 ? "99+" : cartCount}
-                      <div className="absolute inset-0">
-                        <CartBurst fire={cartBurstId} />
-                      </div>
-                    </motion.span>
+                    </span>
                   )}
                 </button>
               )}
