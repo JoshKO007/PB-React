@@ -1,9 +1,9 @@
 // src/pages/Registro.jsx
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LogIn, Home, Image as ImageIcon, ShoppingBag, User, Newspaper,
-  Mail, UserPlus, Settings, Eye, EyeOff, Brush, Video, KeyRound, Heart
+  Mail, UserPlus, Settings, Eye, EyeOff, Brush, Video, KeyRound
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
@@ -12,34 +12,7 @@ import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = 'https://ousgktyljynqzrnafoqd.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im91c2drdHlsanlucXpybmFmb3FkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2MDMxNjYsImV4cCI6MjA2ODE3OTE2Nn0.hG27iuA-iNH3e3PPRck7ELgO89aRTbMiM8I65085TcE';
-
 const supabase = createClient(supabaseUrl, supabaseKey);
-
-/* ======================= Helpers carrito por usuario ======================= */
-function getCartKeyBySession(sesion) {
-  // Si hay sesión usa carrito:{id}; de lo contrario usa el carrito global como fallback
-  return sesion?.id ? `carrito:${sesion.id}` : 'carrito';
-}
-
-function safeCartCount(cartArray) {
-  return (cartArray || []).reduce((sum, it) => {
-    const qty = Number.isFinite(Number(it?.cantidad)) ? Number(it.cantidad) : 1;
-    return sum + Math.max(0, qty);
-  }, 0);
-}
-
-function readCartCountForSession(sesion) {
-  try {
-    // Intenta primero el carrito por usuario; si no existe, usa el global "carrito"
-    const perUserKey = sesion?.id ? `carrito:${sesion.id}` : null;
-    const rawUser = perUserKey ? localStorage.getItem(perUserKey) : null;
-    const rawGlobal = localStorage.getItem('carrito');
-    const parsed = rawUser ? JSON.parse(rawUser) : (rawGlobal ? JSON.parse(rawGlobal) : []);
-    return safeCartCount(parsed);
-  } catch {
-    return 0;
-  }
-}
 
 export default function Registro() {
   const [hovered, setHovered] = useState(null);
@@ -62,48 +35,6 @@ export default function Registro() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [usuarioActivo, setUsuarioActivo] = useState(null);
   const [cerrandoSesion, setCerrandoSesion] = useState(false);
-  const [cartCount, setCartCount] = useState(0);
-
-  // Cargar sesión y contador al montar
-  useEffect(() => {
-    try {
-      const sesion = JSON.parse(localStorage.getItem('sesionActiva'));
-      setUsuarioActivo(sesion?.id ? sesion : null);
-      setCartCount(readCartCountForSession(sesion));
-    } catch {
-      setUsuarioActivo(null);
-      setCartCount(0);
-    }
-  }, []);
-
-  // Sincronizar por cambios en storage y al recuperar foco
-  useEffect(() => {
-    const onStorage = (e) => {
-      try {
-        if (e.key === 'sesionActiva') {
-          const nueva = e.newValue ? JSON.parse(e.newValue) : null;
-          setUsuarioActivo(nueva?.id ? nueva : null);
-          setCartCount(readCartCountForSession(nueva));
-          return;
-        }
-        const keysToWatch = [];
-        if (usuarioActivo?.id) keysToWatch.push(`carrito:${usuarioActivo.id}`);
-        keysToWatch.push('carrito');
-        if (keysToWatch.includes(e.key)) {
-          setCartCount(readCartCountForSession(usuarioActivo));
-        }
-      } catch {
-        setCartCount(0);
-      }
-    };
-    const onFocus = () => setCartCount(readCartCountForSession(usuarioActivo));
-    window.addEventListener('storage', onStorage);
-    window.addEventListener('focus', onFocus);
-    return () => {
-      window.removeEventListener('storage', onStorage);
-      window.removeEventListener('focus', onFocus);
-    };
-  }, [usuarioActivo]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -123,28 +54,12 @@ export default function Registro() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const cerrarSesion = () => {
-    setCerrandoSesion(true);
-    setTimeout(() => {
-      try {
-        localStorage.removeItem('carrito');
-        const prev = JSON.parse(localStorage.getItem('sesionActiva'));
-        if (prev?.id) localStorage.removeItem(`carrito:${prev.id}`);
-      } catch {}
-      localStorage.removeItem('sesionActiva');
-      setUsuarioActivo(null);
-      setCartCount(0);
-      setCerrandoSesion(false);
-      navigate('/');
-    }, 5000);
-  };
-
-  const menu = [
+    const menu = [
     { label: "Inicio", icon: <Home size={28} />, onClick: () => navigate('/') },
     { label: "Galería", icon: <ImageIcon size={24} />, onClick: () => navigate('/galeria') },
-    { label: "Videos", icon: <Video size={24} />, onClick: () => navigate('/videos') },
-    { label: "Tienda", icon: <ShoppingBag size={24} />, onClick: () => navigate('/tienda') },
-    { label: "Restauración", icon: <Brush size={24} />, onClick: () => navigate('/restauracion') },
+    { label: "Videos", icon: <Video size={24} /> },
+    { label: "Tienda", icon: <ShoppingBag size={24} /> },
+    { label: "Restauración", icon: <Brush size={24} /> },
     { label: "Contacto", icon: <Mail size={24} />, onClick: () => navigate('/contacto') }
   ];
 
@@ -277,7 +192,7 @@ export default function Registro() {
                             <Mail size={16} className="mr-2" /> Direcciones
                           </button>
                           <button onClick={() => navigate("/favoritos")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
-                            <Heart size={16} className="mr-2" /> Favoritos
+                            <HeartIcon size={16} className="mr-2" /> Favoritos
                           </button>
                           <button onClick={() => navigate("/contrasena")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <KeyRound size={16} className="mr-2" /> Cambiar contraseña
