@@ -558,6 +558,7 @@ export default function Favoritos() {
         className="w-full text-center relative z-40 px-4 py-3 sm:px-6 sm:py-4 border-b border-gray-300 bg-[#f0eae2]/80 backdrop-blur-md shadow-xl rounded-b-xl"
       >
         <div className="max-w-7xl mx-auto w-full flex flex-col gap-2 relative z-40">
+
           {/* Top bar */}
           <div className="flex flex-col sm:flex-row justify-between items-center w-full relative gap-2 sm:gap-0">
             <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4">
@@ -572,8 +573,8 @@ export default function Favoritos() {
             {/* User / carrito */}
             <div className="flex items-center gap-2 mt-2 sm:mt-0 pr-1 sm:pr-2">
               <div
-                onMouseEnter={() => { clearTimeout(userMenuTimeout.current); setShowUserMenu(true); }}
-                onMouseLeave={() => { userMenuTimeout.current = setTimeout(() => setShowUserMenu(false), 300); }}
+                onMouseEnter={handleUserMouseEnter}
+                onMouseLeave={handleUserMouseLeave}
                 className="relative"
               >
                 <button className="p-2 rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md hover:shadow-lg flex items-center">
@@ -586,9 +587,9 @@ export default function Favoritos() {
                       initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
-                      onMouseEnter={() => { clearTimeout(userMenuTimeout.current); setShowUserMenu(true); }}
-                      onMouseLeave={() => { userMenuTimeout.current = setTimeout(() => setShowUserMenu(false), 300); }}
-                      className="absolute mt-2 w-60 left-1/2 -translate-x-1/2 sm:left-auto sm:right-0 sm:translate-x-0 bg-white border border-gray-200 rounded-lg shadow-xl py-3 text-left z=[9999]"
+                      onMouseEnter={handleUserMouseEnter}
+                      onMouseLeave={handleUserMouseLeave}
+                      className="absolute mt-2 w-60 left-1/2 -translate-x-1/2 sm:left-auto sm:right-0 sm:translate-x-0 bg-white border border-gray-200 rounded-lg shadow-xl py-3 text-left z-[9999]"
                     >
                       {usuarioActivo ? (
                         <>
@@ -600,6 +601,9 @@ export default function Favoritos() {
                           </button>
                           <button onClick={() => navigate("/direccion")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <Mail size={16} className="mr-2" /> Direcciones
+                          </button>
+                          <button onClick={() => navigate("/favoritos")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                            <HeartIcon size={16} className="mr-2" /> Favoritos
                           </button>
                           <button onClick={() => navigate("/contrasena")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <KeyRound size={16} className="mr-2" /> Cambiar contraseña
@@ -636,6 +640,7 @@ export default function Favoritos() {
                   >
                     <ShoppingBag size={22} className="text-[#a16207]" />
                   </span>
+
                   {cartCount > 0 && (
                     <span
                       className="absolute -right-1 -top-1 rounded-full text-[11px] font-bold
