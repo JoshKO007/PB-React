@@ -23,6 +23,10 @@ function money(n = 0) {
   }).format(Number(n || 0));
 }
 
+/**
+ * Generador de certificado (A4 landscape), con marco, medallón, caja central,
+ * banda inferior pegada al marco y firma centrada.
+ */
 export async function buildCertificatePDF(order, opts = {}) {
   const {
     siteName = "Arte Restauración Visuales",
@@ -30,19 +34,19 @@ export async function buildCertificatePDF(order, opts = {}) {
     logoUrl = "",
   } = opts;
 
-  // ✅ Horizontal
-  const doc = new jsPDF({ unit: "pt", format: "a4", orientation: "landscape", compress: true }); // 842 x 595
+  // Horizontal A4
+  const doc = new jsPDF({ unit: "pt", format: "a4", orientation: "landscape", compress: true });
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
 
-  // Paleta (dorado + azul/gris)
+  // Paleta
   const gold = [168, 134, 64];
   const goldSoft = [222, 200, 160];
   const ink = [43, 45, 66];
   const mute = [120, 120, 120];
   const line = [210, 210, 210];
 
-  const M = 48;
+  const M = 48; // margen interior del marco
 
   // Marco decorativo (doble borde)
   doc.setDrawColor(...gold);
@@ -53,26 +57,27 @@ export async function buildCertificatePDF(order, opts = {}) {
   doc.setLineWidth(0.8);
   doc.roundedRect(M + 10, M + 10, pageW - 2 * (M + 10), pageH - 2 * (M + 10), 12, 12);
 
-  // Sombra superior e inferior (líneas suaves)
+  // Líneas suaves para separar zonas
   doc.setDrawColor(...line);
   doc.setLineWidth(0.6);
   doc.line(M + 26, M + 64, pageW - M - 26, M + 64);
   doc.line(M + 26, pageH - M - 64, pageW - M - 26, pageH - M - 64);
 
-  // Logo como escudo/medallón al centro arriba
+  // Logo como medallón centrado en la parte superior
   const logo = await fetchImageAsDataURL(logoUrl);
   if (logo) {
     const badgeSize = 96;
     const badgeX = pageW / 2 - badgeSize / 2;
     const badgeY = M + 22;
 
-    // círculo suave “medalla”
+    // fondo circular blanco y borde suave
     doc.setFillColor(255, 255, 255);
     doc.circle(pageW / 2, badgeY + badgeSize / 2, badgeSize / 2 + 14, "F");
     doc.setDrawColor(...goldSoft);
     doc.setLineWidth(1.2);
     doc.circle(pageW / 2, badgeY + badgeSize / 2, badgeSize / 2 + 14);
 
+    // agregar logo (ajusta tamaño)
     doc.addImage(logo, "PNG", badgeX, badgeY, badgeSize, badgeSize);
   }
 
@@ -82,37 +87,39 @@ export async function buildCertificatePDF(order, opts = {}) {
   doc.setFontSize(34);
   doc.text("Certificado de Autenticidad", pageW / 2, M + 160, { align: "center" });
 
-  // Líneas finas debajo del título
+  // Línea dorada decorativa
   doc.setDrawColor(...gold);
   doc.setLineWidth(1.2);
   doc.line(pageW / 2 - 150, M + 170, pageW / 2 + 150, M + 170);
 
+  // Párrafo principal -> forzarlo a dos líneas y centrar
+  const paragraph =
+    `El presente documento certifica que la obra(s) adquirida(s) ` +
+    `corresponde(n) a una pieza original de ${siteName}.`;
+
+  // Forzar dos líneas balanceadas por palabra (para mantener sentido)
+  const words = paragraph.split(/\s+/).filter(Boolean);
+  const mid = Math.ceil(words.length / 2);
+  const line1 = words.slice(0, mid).join(" ");
+  const line2 = words.slice(mid).join(" ");
+
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(...mute);
+  doc.setFontSize(13);
+  const paraY = M + 200;
+  doc.text(line1, pageW / 2, paraY, { align: "center" });
+  doc.text(line2, pageW / 2, paraY + 18, { align: "center" });
+
+  // Datos centrales (caja)
   const orderId = order.pedido_id || (order.session_id ? order.session_id.slice(-10).toUpperCase() : "—");
   const orderDate =
     order.order_date ||
     new Date().toLocaleString("es-MX", { dateStyle: "long" });
 
-  // Texto principal centrado
-  const centerY = M + 240;
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(...mute);
-  doc.setFontSize(13);
-  doc.text(
-    `El presente documento certifica que la obra(s) adquirida(s) corresponde(n) a una pieza original de ${siteName}.`,
-    pageW / 2,
-    centerY,
-    { align: "center" }
-  );
-
-  doc.setTextColor(...ink);
-  doc.setFontSize(16);
-  doc.text("Datos de la compra", pageW / 2, centerY + 40, { align: "center" });
-
-  // Caja de datos al centro
   const boxW = 560;
   const boxH = 150;
   const boxX = pageW / 2 - boxW / 2;
-  const boxY = centerY + 56;
+  const boxY = M + 260;
 
   doc.setDrawColor(...line);
   doc.setFillColor(255, 255, 255);
@@ -123,7 +130,7 @@ export async function buildCertificatePDF(order, opts = {}) {
   doc.setFontSize(12);
 
   const customer = `${order.customer_name || "—"} <${order.customer_email || "—"}>`;
-  const total = `${(order.moneda || "MXN").toUpperCase() === "MXN" ? "$" : ""}${money(order.total_mxn || 0)}`;
+  const totalStr = `${(order.moneda || "MXN").toUpperCase() === "MXN" ? "$" : ""}${money(order.total_mxn || 0)}`;
 
   let y = boxY + 26;
   doc.text(`Pedido: ${orderId}`, boxX + 18, y);
@@ -135,9 +142,9 @@ export async function buildCertificatePDF(order, opts = {}) {
 
   y += 20;
   doc.setTextColor(...mute); doc.text("Total", boxX + 18, y);
-  doc.setTextColor(...ink);  doc.text(total, boxX + 120, y);
+  doc.setTextColor(...ink);  doc.text(totalStr, boxX + 120, y);
 
-  // Si quieres listar un título principal de la obra (primero de items)
+  // Obra destacada (si aplica)
   const firstItemTitle = Array.isArray(order.line_items) && order.line_items[0]?.title
     ? String(order.line_items[0].title)
     : null;
@@ -147,34 +154,45 @@ export async function buildCertificatePDF(order, opts = {}) {
     doc.setTextColor(...ink);  doc.text(firstItemTitle, boxX + 120, y);
   }
 
-  // Banda dorada inferior con “sello”
-  const bandH = 56;
-  const bandY = pageH - M - bandH - 20;
+  // Banda dorada inferior pegada al marco interior (muy abajo)
+  const bandH = 64;
+  // colocamos la banda de forma que su borde superior quede a 12pt del borde interior inferior del marco
+  const bandY = pageH - M - bandH - 12;
+  const bandX = M + 20;
+  const bandW = pageW - 2 * (M + 20);
+
   doc.setFillColor(...goldSoft);
-  doc.roundedRect(M + 20, bandY, pageW - 2 * (M + 20), bandH, 12, 12, "F");
+  doc.roundedRect(bandX, bandY, bandW, bandH, 12, 12, "F");
   doc.setDrawColor(...gold);
   doc.setLineWidth(1);
-  doc.roundedRect(M + 20, bandY, pageW - 2 * (M + 20), bandH, 12, 12);
+  doc.roundedRect(bandX, bandY, bandW, bandH, 12, 12);
 
+  // Texto del sello dentro de la banda (alineado a la izquierda, con margen)
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
   doc.setTextColor(...ink);
-  doc.text("Sello digital de autenticidad", M + 36, bandY + 24);
+  const bandPaddingX = 26;
+  doc.text("Sello digital de autenticidad", bandX + bandPaddingX, bandY + 26);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.setTextColor(...ink);
-  doc.text(`${siteName} · ${siteUrl}`, M + 36, bandY + 40);
+  doc.text(`${siteName} · ${siteUrl}`, bandX + bandPaddingX, bandY + 42);
 
-  // Firma / espacio para rubricar (opcional)
-  const signX = pageW - (M + 36 + 220);
-  const signY = bandY + 16;
+  // Firma: trazamos la línea centrada horizontalmente, ubicada justo arriba de la banda
+  const signWidth = 300; // líneas más largas se ven mejor centradas
+  const signX = pageW / 2 - signWidth / 2;
+  const signY = bandY - 36; // espacio entre la línea y la banda
+
   doc.setDrawColor(...ink);
   doc.setLineWidth(0.6);
-  doc.line(signX, signY + 28, signX + 220, signY + 28);
-  doc.setFontSize(10);
-  doc.text("Firma de la artista / taller", signX + 110, signY + 42, { align: "center" });
+  doc.line(signX, signY, signX + signWidth, signY);
 
+  doc.setFontSize(10);
+  doc.setTextColor(...ink);
+  doc.text("Firma de la artista / taller", pageW / 2, signY + 14, { align: "center" });
+
+  // Output as data URI
   const base64 = doc.output("datauristring");
   return {
     filename: `Certificado_${orderId}.pdf`,
