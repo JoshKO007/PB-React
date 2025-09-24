@@ -194,18 +194,48 @@ export default function Gracias() {
         const order_url       = d.order_url || `${SITE_URL}/pedidos/${orderId}`;
 
         // 2.5) Generar PDFs (Factura y Certificado) para adjuntar en los correos
+        // Nota: para evitar 413 (Payload Too Large) en EmailJS, generamos PDFs livianos (sin logo)
+        // y si la suma de adjuntos excede ~900 KB, enviamos solo la factura. Si aún excede, sin adjuntos.
         const pdfInvoice = await buildInvoicePDF(d, {
           siteName: SITE_NAME,
           siteUrl: SITE_URL,
-          logoUrl: SITE_LOGO_URL,
+          logoUrl: "", // evitar fetch pesado en el PDF
           currencySymbol: C$,
         });
         const pdfCert = await buildCertificatePDF(d, {
           siteName: SITE_NAME,
           siteUrl: SITE_URL,
-          logoUrl: SITE_LOGO_URL,
+          logoUrl: "", // evitar fetch pesado en el PDF
         });
-        const attachments = buildEmailJsAttachments([pdfInvoice, pdfCert]);
+
+        const estimateDataUriBytes = (dataUri) => {
+          try {
+            const comma = dataUri.indexOf(',');
+            const b64 = comma >= 0 ? dataUri.slice(comma + 1) : dataUri;
+            // bytes aproximados del base64
+            return Math.ceil((b64.length * 3) / 4);
+          } catch { return 0; }
+        };
+
+        const invoiceBytes = estimateDataUriBytes(pdfInvoice?.base64 || '');
+        const certBytes    = estimateDataUriBytes(pdfCert?.base64 || '');
+        let attachmentsArr = [pdfInvoice, pdfCert];
+        let totalBytes = invoiceBytes + certBytes;
+
+        // Límite conservador (~900KB) para no pegarse con 413
+        const MAX_BYTES = 900 * 1024;
+        if (totalBytes > MAX_BYTES) {
+          // Intenta solo factura
+          attachmentsArr = [pdfInvoice];
+          totalBytes = invoiceBytes;
+          if (totalBytes > MAX_BYTES) {
+            // En caso extremo, sin adjuntos (enviamos solo links/recibo en el cuerpo)
+            attachmentsArr = [];
+          }
+        }
+
+        const attachments = buildEmailJsAttachments(attachmentsArr);
+        console.log('[Email] invoiceBytes=', invoiceBytes, 'certBytes=', certBytes, 'total=', totalBytes, 'attachmentsCount=', attachments.length);
 
         // 3) Inicializa EmailJS (nota: los adjuntos van como dataURI base64 en el payload)
         emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
