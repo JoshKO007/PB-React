@@ -269,27 +269,25 @@ const handleEnviar = async () => {
   };
 
   const menu = [
-    {
-      label: "Inicio",
-      icon: <Home size={28} />,
-      onClick: () => navigate('/')
-    },
-    { label: "Galería", 
-      icon: <ImageIcon size={24} /> ,
-      onClick: () => navigate('/galeria')},
-    { label: "Videos", icon: <Video size={24} /> },                     
-    { label: "Tienda", icon: <ShoppingBag size={24} /> },
-    { label: "Restauración", icon: <Brush size={24} /> },               
-    { label: "Contacto", 
-      icon: <Mail size={24} />,
-     onClick: () => navigate('/contacto') }, 
+    { label: "Inicio", icon: <Home size={28} />, onClick: () => navigate('/') },
+    { label: "Galería", icon: <ImageIcon size={24} />, onClick: () => navigate('/galeria') },
+    { label: "Videos", icon: <Video size={24} />, onClick: () => navigate('/videos') },
+    { label: "Tienda", icon: <ShoppingBag size={24} />, onClick: () => navigate('/tienda') },
+    { label: "Restauración", icon: <Brush size={24} />, onClick: () => navigate('/restauracion') },
+    { label: "Contacto", icon: <Mail size={24} />, onClick: () => navigate('/contacto') },
   ];
   
   const cerrarSesion = () => {
     setCerrandoSesion(true);
     setTimeout(() => {
+      try {
+        localStorage.removeItem('carrito');
+        const prev = JSON.parse(localStorage.getItem('sesionActiva'));
+        if (prev?.id) localStorage.removeItem(`carrito:${prev.id}`);
+      } catch {}
       localStorage.removeItem('sesionActiva');
       setUsuarioActivo(null);
+      setCartCount(0);
       setCerrandoSesion(false);
       navigate('/');
     }, 5000);
