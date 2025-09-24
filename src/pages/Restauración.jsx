@@ -3,11 +3,38 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from "react-router-dom";
 import emailjs from '@emailjs/browser';
+
 import {
   Home, Image as ImageIcon, Video, ShoppingBag, Brush, User,
   Mail, LogIn, UserPlus, Settings, LogOut, Eye, KeyRound,
   CheckCircle, XCircle, AlertCircle, Heart
 } from 'lucide-react';
+
+/* ======================= Helpers carrito por usuario ======================= */
+function getCartKeyBySession(sesion) {
+  // Si hay sesión usa carrito:{id}; de lo contrario usa el carrito global como fallback
+  return sesion?.id ? `carrito:${sesion.id}` : 'carrito';
+}
+
+function safeCartCount(cartArray) {
+  return (cartArray || []).reduce((sum, it) => {
+    const qty = Number.isFinite(Number(it?.cantidad)) ? Number(it.cantidad) : 1;
+    return sum + Math.max(0, qty);
+  }, 0);
+}
+
+function readCartCountForSession(sesion) {
+  try {
+    // Intenta primero el carrito por usuario; si no existe, usa el global "carrito"
+    const perUserKey = sesion?.id ? `carrito:${sesion.id}` : null;
+    const rawUser = perUserKey ? localStorage.getItem(perUserKey) : null;
+    const rawGlobal = localStorage.getItem('carrito');
+    const parsed = rawUser ? JSON.parse(rawUser) : (rawGlobal ? JSON.parse(rawGlobal) : []);
+    return safeCartCount(parsed);
+  } catch {
+    return 0;
+  }
+}
 
 const productos = [
   { titulo: 'Cuadro “Raíz de vida”', descripcion: 'Acrílico sobre lienzo. 60x80 cm.', imagen: '/producto1.jpg', precio: '$1200 MXN' },
@@ -77,22 +104,48 @@ export default function App() {
     }
   }, []);
 
-  // Inicializa y sincroniza el contador del carrito desde localStorage
+  // Inicializa y sincroniza el contador del carrito desde localStorage (por usuario si existe sesión)
   useEffect(() => {
-    const leerCarrito = () => {
+    // Lectura inicial
+    setCartCount(readCartCountForSession(usuarioActivo));
+
+    const onStorage = (e) => {
       try {
-        const raw = localStorage.getItem('carrito');
-        const arr = raw ? JSON.parse(raw) : [];
-        setCartCount(Array.isArray(arr) ? arr.length : 0);
+        // Si cambió la sesión, vuelve a evaluar el contador
+        if (e.key === 'sesionActiva') {
+          const nueva = e.newValue ? JSON.parse(e.newValue) : null;
+          // Actualiza estado de sesión y contador acorde
+          setUsuarioActivo(nueva?.id ? nueva : null);
+          setCartCount(readCartCountForSession(nueva));
+          return;
+        }
+
+        // Si hay usuario, escucha su clave específica; también escucha el carrito global como respaldo
+        const keysToWatch = [];
+        if (usuarioActivo?.id) keysToWatch.push(`carrito:${usuarioActivo.id}`);
+        keysToWatch.push('carrito');
+
+        if (keysToWatch.includes(e.key)) {
+          const count = readCartCountForSession(usuarioActivo);
+          setCartCount(count);
+        }
       } catch {
         setCartCount(0);
       }
     };
 
-    leerCarrito();
-    window.addEventListener('storage', leerCarrito);
-    return () => window.removeEventListener('storage', leerCarrito);
-  }, []);
+    // Al volver el foco (pestaña activa), re-sincroniza
+    const onFocus = () => {
+      setCartCount(readCartCountForSession(usuarioActivo));
+    };
+
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [usuarioActivo]);
 
   
     const handleUserMouseEnter = () => {
