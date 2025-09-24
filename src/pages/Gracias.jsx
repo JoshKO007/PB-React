@@ -13,6 +13,10 @@ import {
   ShoppingBag,
 } from "lucide-react";
 
+import { buildInvoicePDF } from "../lib/pdf/invoice";
+import { buildCertificatePDF } from "../lib/pdf/certificate";
+import { buildEmailJsAttachments } from "../lib/email/attachments";
+
 /* =========================
    Configuración y constantes
    ========================= */
@@ -189,7 +193,21 @@ export default function Gracias() {
         const admin_order_url = d.admin_order_url || `${SITE_URL}/admin/pedidos/${orderId}`;
         const order_url       = d.order_url || `${SITE_URL}/pedidos/${orderId}`;
 
-        // 3) Inicializa EmailJS
+        // 2.5) Generar PDFs (Factura y Certificado) para adjuntar en los correos
+        const pdfInvoice = await buildInvoicePDF(d, {
+          siteName: SITE_NAME,
+          siteUrl: SITE_URL,
+          logoUrl: SITE_LOGO_URL,
+          currencySymbol: C$,
+        });
+        const pdfCert = await buildCertificatePDF(d, {
+          siteName: SITE_NAME,
+          siteUrl: SITE_URL,
+          logoUrl: SITE_LOGO_URL,
+        });
+        const attachments = buildEmailJsAttachments([pdfInvoice, pdfCert]);
+
+        // 3) Inicializa EmailJS (nota: los adjuntos van como dataURI base64 en el payload)
         emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
 
         // 4) Email al CLIENTE
@@ -226,7 +244,10 @@ export default function Gracias() {
           };
 
           try {
-            await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_CLIENT, varsCliente);
+            await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_CLIENT, {
+              ...varsCliente,
+              attachments,
+            });
           } catch (e) {
             console.warn("EmailJS (cliente) falló:", e);
           }
@@ -269,7 +290,10 @@ export default function Gracias() {
           };
 
           try {
-            await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_OWNER, varsDueno);
+            await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_OWNER, {
+              ...varsDueno,
+              attachments,
+            });
           } catch (e) {
             console.warn("EmailJS (dueño) falló:", e);
           }
