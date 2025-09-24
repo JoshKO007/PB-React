@@ -603,7 +603,7 @@ export default function Favoritos() {
                             <Mail size={16} className="mr-2" /> Direcciones
                           </button>
                           <button onClick={() => navigate("/favoritos")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
-                            <HeartIcon size={16} className="mr-2" /> Favoritos
+                            <Heart size={16} className="mr-2" /> Favoritos
                           </button>
                           <button onClick={() => navigate("/contrasena")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <KeyRound size={16} className="mr-2" /> Cambiar contraseña
@@ -860,3 +860,25 @@ export default function Favoritos() {
     </div>
   );
 }
+
+  // Al volver el foco, re-sincronizar sesión y contador
+  useEffect(() => {
+    const onFocus = () => {
+      try {
+        const sesion = JSON.parse(localStorage.getItem("sesionActiva"));
+        setUsuarioActivo(sesion?.id ? sesion : null);
+        if (sesion?.id) {
+          const key = getCartKeyBySession(sesion);
+          const cart = JSON.parse(localStorage.getItem(key) || "[]");
+          setCartCount(safeCartCount(cart));
+        } else {
+          setCartCount(0);
+        }
+      } catch {
+        setUsuarioActivo(null);
+        setCartCount(0);
+      }
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, []);
