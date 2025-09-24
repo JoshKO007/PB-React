@@ -5,16 +5,43 @@ import { createClient } from '@supabase/supabase-js';
 import { useNavigate } from 'react-router-dom';
 import {
   Home, Image as ImageIcon, Video, ShoppingBag, Brush, User, Mail, LogIn,
-  UserPlus, Settings, LogOut, Eye, EyeOff, X,  KeyRound
+  UserPlus, Settings, LogOut, Eye, EyeOff, X, KeyRound, Heart
 } from 'lucide-react';
 import sha256 from 'crypto-js/sha256';
 import { motion, AnimatePresence } from 'framer-motion';
+
+/* ======================= Helpers carrito por usuario ======================= */
+function getCartKeyBySession(sesion) {
+  // Si hay sesión usa carrito:{id}; de lo contrario usa el carrito global como fallback
+  return sesion?.id ? `carrito:${sesion.id}` : 'carrito';
+}
+
+function safeCartCount(cartArray) {
+  return (cartArray || []).reduce((sum, it) => {
+    const qty = Number.isFinite(Number(it?.cantidad)) ? Number(it.cantidad) : 1;
+    return sum + Math.max(0, qty);
+  }, 0);
+}
+
+function readCartCountForSession(sesion) {
+  try {
+    // Intenta primero el carrito por usuario; si no existe, usa el global "carrito"
+    const perUserKey = sesion?.id ? `carrito:${sesion.id}` : null;
+    const rawUser = perUserKey ? localStorage.getItem(perUserKey) : null;
+    const rawGlobal = localStorage.getItem('carrito');
+    const parsed = rawUser ? JSON.parse(rawUser) : (rawGlobal ? JSON.parse(rawGlobal) : []);
+    return safeCartCount(parsed);
+  } catch {
+    return 0;
+  }
+}
 
 const supabase = createClient('https://ousgktyljynqzrnafoqd.supabase.co',  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im91c2drdHlsanlucXpybmFmb3FkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2MDMxNjYsImV4cCI6MjA2ODE3OTE2Nn0.hG27iuA-iNH3e3PPRck7ELgO89aRTbMiM8I65085TcE');
 
 export default function PerfilUsuario() {
   const [usuarioActivo, setUsuarioActivo] = useState(null);
   const [cerrandoSesion, setCerrandoSesion] = useState(false);
+  const [cartCount, setCartCount] = useState(0);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [modalMensaje, setModalMensaje] = useState(null); // { tipo: 'exito' | 'error', mensaje: string }
   const userMenuTimeout = useRef(null);
@@ -27,19 +54,66 @@ export default function PerfilUsuario() {
   const [mostrarConfirmacion, setMostrarConfirmacion] = useState(false);
 
   useEffect(() => {
-    const sesion = JSON.parse(localStorage.getItem('sesionActiva'));
-    if (sesion?.id) {
-      setUsuarioActivo(sesion);
-    } else {
+    try {
+      const sesion = JSON.parse(localStorage.getItem('sesionActiva'));
+      if (sesion?.id) {
+        setUsuarioActivo(sesion);
+        setCartCount(readCartCountForSession(sesion));
+      } else {
+        navigate('/');
+      }
+    } catch {
       navigate('/');
     }
   }, []);
 
+  // Recalcular contador cuando cambia la sesión, y sincronizar por storage/focus
+  useEffect(() => {
+    // Recalcula en cambio de sesión
+    setCartCount(readCartCountForSession(usuarioActivo));
+
+    const onStorage = (e) => {
+      try {
+        if (e.key === 'sesionActiva') {
+          const nueva = e.newValue ? JSON.parse(e.newValue) : null;
+          setUsuarioActivo(nueva?.id ? nueva : null);
+          setCartCount(readCartCountForSession(nueva));
+          return;
+        }
+        const keysToWatch = [];
+        if (usuarioActivo?.id) keysToWatch.push(`carrito:${usuarioActivo.id}`);
+        keysToWatch.push('carrito');
+        if (keysToWatch.includes(e.key)) {
+          setCartCount(readCartCountForSession(usuarioActivo));
+        }
+      } catch {
+        setCartCount(0);
+      }
+    };
+
+    const onFocus = () => {
+      setCartCount(readCartCountForSession(usuarioActivo));
+    };
+
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [usuarioActivo]);
+
   const cerrarSesion = () => {
     setCerrandoSesion(true);
     setTimeout(() => {
+      try {
+        localStorage.removeItem('carrito');
+        const prev = JSON.parse(localStorage.getItem('sesionActiva'));
+        if (prev?.id) localStorage.removeItem(`carrito:${prev.id}`);
+      } catch {}
       localStorage.removeItem('sesionActiva');
       setUsuarioActivo(null);
+      setCartCount(0);
       setCerrandoSesion(false);
       navigate('/');
     }, 5000);
@@ -171,7 +245,7 @@ export default function PerfilUsuario() {
                             <Mail size={16} className="mr-2" /> Direcciones
                           </button>
                           <button onClick={() => navigate("/favoritos")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
-                            <HeartIcon size={16} className="mr-2" /> Favoritos
+                            <Heart size={16} className="mr-2" /> Favoritos
                           </button>
                           <button onClick={() => navigate("/contrasena")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <KeyRound size={16} className="mr-2" /> Cambiar contraseña
