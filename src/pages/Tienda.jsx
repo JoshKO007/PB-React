@@ -29,7 +29,8 @@ import {
   Clock,
   ChevronLeft,
   ChevronDown,
-  ShieldAlert
+  ShieldAlert,
+  HeartIcon
 } from "lucide-react";
 
 // ===== Supabase =====
