@@ -697,6 +697,7 @@ export default function Carrito() {
         className="w-full text-center relative z-40 px-4 py-3 sm:px-6 sm:py-4 border-b border-gray-300 bg-[#f0eae2]/80 backdrop-blur-md shadow-xl rounded-b-xl"
       >
         <div className="max-w-7xl mx-auto w-full flex flex-col gap-2 relative z-40">
+
           {/* Top bar */}
           <div className="flex flex-col sm:flex-row justify-between items-center w-full relative gap-2 sm:gap-0">
             <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4">
@@ -729,49 +730,68 @@ export default function Carrito() {
                       onMouseLeave={handleUserMouseLeave}
                       className="absolute mt-2 w-60 left-1/2 -translate-x-1/2 sm:left-auto sm:right-0 sm:translate-x-0 bg-white border border-gray-200 rounded-lg shadow-xl py-3 text-left z-[9999]"
                     >
-                      <div className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-gray-800">
-                        <User size={16} /> {usuarioActivo.nombre || usuarioActivo.usuario}
-                      </div>
-                      <button onClick={() => navigate("/usuario")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
-                        <User size={16} className="mr-2" /> Información de cuenta
-                      </button>
-                      <button onClick={() => navigate("/direccion")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
-                        <Mail size={16} className="mr-2" /> Direcciones
-                      </button>
-                      <button onClick={() => navigate("/contrasena")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
-                        <KeyRound size={16} className="mr-2" /> Cambiar contraseña
-                      </button>
-                      <button onClick={cerrarSesion} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100 text-red-600">
-                        <LogOut size={16} className="mr-2" /> Cerrar sesión
-                      </button>
+                      {usuarioActivo ? (
+                        <>
+                          <div className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-gray-800">
+                            <User size={16} /> {usuarioActivo.nombre || usuarioActivo.usuario}
+                          </div>
+                          <button onClick={() => navigate("/usuario")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                            <User size={16} className="mr-2" /> Información de cuenta
+                          </button>
+                          <button onClick={() => navigate("/direccion")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                            <Mail size={16} className="mr-2" /> Direcciones
+                          </button>
+                          <button onClick={() => navigate("/favoritos")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                            <HeartIcon size={16} className="mr-2" /> Favoritos
+                          </button>
+                          <button onClick={() => navigate("/contrasena")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                            <KeyRound size={16} className="mr-2" /> Cambiar contraseña
+                          </button>
+                          <button onClick={cerrarSesion} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100 text-red-600">
+                            <LogOut size={16} className="mr-2" /> Cerrar sesión
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button onClick={() => navigate("/iniciar-sesion")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                            <LogIn size={16} className="mr-2" /> Iniciar sesión
+                          </button>
+                          <button onClick={() => navigate("/registro")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                            <UserPlus size={16} className="mr-2" /> Crear cuenta
+                          </button>
+                        </>
+                      )}
                     </motion.div>
                   )}
                 </AnimatePresence>
               </div>
 
-              <button
-                onClick={() => {}}
-                className="relative group"
-                title="Carrito"
-                aria-label={`Carrito con ${cartCount} ${cartCount === 1 ? "artículo" : "artículos"}`}
-              >
-                <span
-                  className="grid place-items-center rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md transition
-                             h-11 w-11 group-hover:shadow-lg group-hover:scale-105"
+              {usuarioActivo && (
+                <button
+                  onClick={() => navigate("/carrito")}
+                  className="relative group"
+                  title="Carrito"
+                  aria-label={`Carrito con ${cartCount} ${cartCount === 1 ? "artículo" : "artículos"}`}
                 >
-                  <ShoppingBag size={22} className="text-[#a16207]" />
-                </span>
-                {cartCount > 0 && (
                   <span
-                    className="absolute -right-1 -top-1 rounded-full text-[11px] font-bold
-                               bg-rose-600 text-white h-5 min-w-[20px] px-1.5 grid place-items-center
-                               ring-2 ring-white shadow"
-                    style={{ lineHeight: 1 }}
+                    className="grid place-items-center rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md transition
+                               h-11 w-11 group-hover:shadow-lg group-hover:scale-105"
                   >
-                    {cartCount > 99 ? "99+" : cartCount}
+                    <ShoppingBag size={22} className="text-[#a16207]" />
                   </span>
-                )}
-              </button>
+
+                  {cartCount > 0 && (
+                    <span
+                      className="absolute -right-1 -top-1 rounded-full text-[11px] font-bold
+                                 bg-rose-600 text-white h-5 min-w-[20px] px-1.5 grid place-items-center
+                                 ring-2 ring-white shadow"
+                      style={{ lineHeight: 1 }}
+                    >
+                      {cartCount > 99 ? "99+" : cartCount}
+                    </span>
+                  )}
+                </button>
+              )}
             </div>
           </div>
 
