@@ -52,18 +52,27 @@ export default function Recibo() {
         const d = json.data || {};
         const C$ = currencySymbol(d.moneda || "MXN");
 
-        // Generar PDFs en cliente (sin logo para hacerlos livianos/rápidos)
+        // ✅ Generar PDFs en cliente con LOGO
         const [pdfInvoice, pdfCert] = await Promise.all([
-          buildInvoicePDF(d, { siteName: SITE_NAME, siteUrl: SITE_URL, logoUrl: "", currencySymbol: C$ }),
-          buildCertificatePDF(d, { siteName: SITE_NAME, siteUrl: SITE_URL, logoUrl: "" }),
+          buildInvoicePDF(d, {
+            siteName: SITE_NAME,
+            siteUrl: SITE_URL,
+            logoUrl: SITE_LOGO_URL,
+            currencySymbol: C$,
+          }),
+          buildCertificatePDF(d, {
+            siteName: SITE_NAME,
+            siteUrl: SITE_URL,
+            logoUrl: SITE_LOGO_URL,
+          }),
         ]);
 
         setState({
           loading: false,
           error: "",
           data: d,
-          invoice: pdfInvoice,      // { filename, base64, blob? }
-          certificate: pdfCert,     // { filename, base64, blob? }
+          invoice: pdfInvoice,      // { filename, base64 }
+          certificate: pdfCert,     // { filename, base64 }
         });
       } catch (err) {
         setState(s => ({...s, loading:false, error: String(err?.message || err)}));

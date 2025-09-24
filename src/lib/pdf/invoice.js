@@ -1,134 +1,215 @@
 // src/lib/pdf/invoice.js
-import { jsPDF } from 'jspdf';
-
-function toMoney(n, locale = 'es-MX') {
-  const num = Number.isFinite(Number(n)) ? Number(n) : 0;
-  return new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);
-}
+import jsPDF from "jspdf";
 
 /**
- * Factura simple en PDF
- * @param {Object} d   Datos del pedido (de tu finalize-order)
- * @param {Object} opts { siteName, siteUrl, logoUrl, currencySymbol }
- * @returns {{ filename: string, blob: Blob, base64: string }}
+ * Carga una imagen remota y la retorna como dataURL base64
  */
-export async function buildInvoicePDF(d = {}, opts = {}) {
+async function fetchImageAsDataURL(url) {
+  if (!url) return null;
+  try {
+    const res = await fetch(url, { mode: "cors", cache: "force-cache" });
+    const blob = await res.blob();
+    return await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+function money(n = 0) {
+  return new Intl.NumberFormat("es-MX", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(n || 0));
+}
+
+export async function buildInvoicePDF(order, opts = {}) {
   const {
-    siteName = 'Arte Restauración Visuales',
-    siteUrl = '',
-    logoUrl = '',
-    currencySymbol = '$',
+    siteName = "Arte Restauración Visuales",
+    siteUrl = "",
+    logoUrl = "",               // ✅ ahora usamos logo
+    currencySymbol = "$",
   } = opts;
 
-  const pdf = new jsPDF({ unit: 'pt', format: 'a4' });
-  const width = pdf.internal.pageSize.getWidth();
-  const margin = 40;
-  let y = margin;
+  const doc = new jsPDF({ unit: "pt", format: "a4", compress: true }); // 595 x 842
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
 
-  // Logo + encabezado
-  if (logoUrl) {
-    try {
-      const img = await fetch(logoUrl).then(r => r.blob()).then(b => new Promise((res) => {
-        const reader = new FileReader();
-        reader.onload = () => res(reader.result);
-        reader.readAsDataURL(b);
-      }));
-      pdf.addImage(img, 'PNG', margin, y, 80, 80, undefined, 'FAST');
-    } catch {}
+  // Colores y estilos
+  const brand = { primary: [161, 98, 7], text: [33, 37, 41], mute: [108, 117, 125] };
+  const lineGray = [230, 232, 236];
+
+  // Margen
+  const M = 48;
+  let y = M;
+
+  // Logo + Encabezado
+  const logoDataURL = await fetchImageAsDataURL(logoUrl);
+  if (logoDataURL) {
+    // ancho max 120pt, preservando proporción
+    doc.addImage(logoDataURL, "PNG", M, y, 120, 120 * 0.7);
   }
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(18);
-  pdf.text(siteName, margin + 90, y + 22);
-  pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(10);
-  if (siteUrl) pdf.text(siteUrl, margin + 90, y + 38);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(20);
+  doc.setTextColor(...brand.text);
+  doc.text(siteName, pageW - M, y + 10, { align: "right" });
 
-  pdf.setFontSize(16);
-  pdf.text('Factura', width - margin - 80, y + 18, { align: 'right' });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(...brand.mute);
+  doc.text(siteUrl, pageW - M, y + 26, { align: "right" });
 
-  y += 90;
-  pdf.setDrawColor(200);
-  pdf.line(margin, y, width - margin, y);
-  y += 16;
-
-  // Meta
-  const orderId    = d.pedido_id || (d.session_id ? String(d.session_id).slice(-10).toUpperCase() : '—');
-  const orderDate  = new Date().toLocaleString('es-MX');
-  const clientName = d.customer_name || '—';
-  const clientMail = d.customer_email || '—';
-
-  pdf.setFontSize(11);
-  pdf.text(`Pedido: ${orderId}`, margin, y);
-  pdf.text(`Fecha: ${orderDate}`, margin, y + 16);
-  pdf.text(`Cliente: ${clientName}`, width/2, y);
-  pdf.text(`Email: ${clientMail}`, width/2, y + 16);
+  // Línea
   y += 48;
+  doc.setDrawColor(...lineGray);
+  doc.line(M, y, pageW - M, y);
+  y += 24;
 
-  // Tabla
-  const th   = ['Artículo', 'Cant.', 'Precio', 'Importe'];
-  const colW = [width * 0.45, width * 0.12, width * 0.18, width * 0.18];
-  const startX = margin;
+  // Datos de la factura
+  const orderId = order.pedido_id || "—";
+  const orderDate =
+    order.order_date ||
+    new Date().toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" });
 
-  pdf.setFillColor(245);
-  pdf.rect(startX, y, width - margin * 2, 22, 'F');
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(11);
-  let x = startX + 8;
-  th.forEach((t, idx) => { pdf.text(t, x, y + 15); x += colW[idx]; });
+  doc.setFontSize(12);
+  doc.setTextColor(...brand.text);
+  doc.setFont("helvetica", "bold");
+  doc.text("Factura", M, y);
+  doc.setFont("helvetica", "normal");
+  y += 18;
+  doc.text(`Pedido: ${orderId}`, M, y);
+  y += 16;
+  doc.text(`Fecha: ${orderDate}`, M, y);
+
+  // Caja de shipping/billing
+  const leftColX = M;
+  const rightColX = pageW / 2;
+
+  const shipName = order.shipping_name || order.shipping?.name || order.customer_name || "—";
+  const shipL1   = order.shipping_line1 || order.shipping?.line1 || "—";
+  const shipL2   = order.shipping_line2 || order.shipping?.line2 || "";
+  const shipCSZ  = `${order.shipping_city || order.shipping?.city || "—"}, ` +
+                   `${order.shipping_state || order.shipping?.state || "—"} ` +
+                   `${order.shipping_postal_code || order.shipping?.postal_code || "—"}`;
+  const shipCountry = order.shipping_country || order.shipping?.country || "MX";
+
+  const method = order.shipping_metodo === "retiro" ? "Retiro en taller" :
+                 order.shipping_metodo === "express" ? "Envío express" : "Envío estándar";
+
   y += 26;
+  doc.setFont("helvetica", "bold"); doc.text("Envío a", leftColX, y);
+  doc.setFont("helvetica", "normal"); doc.setTextColor(...brand.text);
+  y += 16; doc.text(shipName, leftColX, y);
+  y += 14; doc.text(shipL1, leftColX, y);
+  if (shipL2) { y += 14; doc.text(shipL2, leftColX, y); }
+  y += 14; doc.text(shipCSZ, leftColX, y);
+  y += 14; doc.text(shipCountry, leftColX, y);
 
-  pdf.setFont('helvetica', 'normal');
-  const items = Array.isArray(d.line_items) ? d.line_items : [];
-  items.forEach((it) => {
-    const qty  = Number(it?.quantity) || 1;
-    const unit = Number(it?.unit_amount_mxn) || 0;
-    const imp  = qty * unit;
-    let colX = startX + 8;
-    const rowH = 18;
-    pdf.text(String(it?.title || 'Artículo'), colX, y + 12); colX += colW[0];
-    pdf.text(String(qty),                     colX, y + 12); colX += colW[1];
-    pdf.text(`${currencySymbol}${toMoney(unit)}`, colX, y + 12); colX += colW[2];
-    pdf.text(`${currencySymbol}${toMoney(imp)}`,  colX, y + 12);
+  doc.setFont("helvetica", "bold"); doc.text("Método de envío", rightColX, y - 56);
+  doc.setFont("helvetica", "normal"); doc.text(method, rightColX, y - 40);
+
+  // Tabla de items
+  y += 24;
+  doc.setDrawColor(...lineGray);
+  doc.line(M, y, pageW - M, y);
+  y += 18;
+
+  const colX = {
+    item: M,
+    qty: pageW - M - 220,
+    price: pageW - M - 140,
+    amount: pageW - M - 40,
+  };
+
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(...brand.mute);
+  doc.text("Artículo", colX.item, y);
+  doc.text("Cant.", colX.qty, y, { align: "right" });
+  doc.text("Precio", colX.price, y, { align: "right" });
+  doc.text("Importe", colX.amount, y, { align: "right" });
+
+  y += 10;
+  doc.setDrawColor(...lineGray);
+  doc.line(M, y, pageW - M, y);
+
+  const items = Array.isArray(order.line_items) ? order.line_items : [];
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(...brand.text);
+
+  const rowH = 18;
+  items.forEach((it, idx) => {
+    const qty = Number(it.quantity || 1);
+    const unit = Number(it.unit_amount_mxn || 0);
+    const imp = qty * unit;
+
     y += rowH;
+    // zebra
+    if (idx % 2 === 0) {
+      doc.setFillColor(248, 249, 250);
+      doc.rect(M, y - rowH + 4, pageW - 2 * M, rowH, "F");
+    }
+    const name = it.title || "Artículo";
+
+    doc.text(name, colX.item, y);
+    doc.text(String(qty), colX.qty, y, { align: "right" });
+    doc.text(`${currencySymbol}${money(unit)}`, colX.price, y, { align: "right" });
+    doc.text(`${currencySymbol}${money(imp)}`, colX.amount, y, { align: "right" });
   });
 
-  // Totales
-  y += 8;
-  pdf.setDrawColor(220);
-  pdf.line(margin, y, width - margin, y);
-  y += 20;
+  // Totales en una cajita
+  const subtotal = Number(order.subtotal_mxn || 0);
+  const envio    = Number(order.envio_mxn || 0);
+  const fee      = Number(order.fee_mxn || 0);
+  const taxPct   = Number(order.tax_pct || 0);
+  const taxAmt   = taxPct > 0 ? (subtotal + envio + fee) * (taxPct / 100) : 0;
+  const total    = Number(order.total_mxn || 0);
 
-  const subtotal = Number(d.subtotal_mxn) || 0;
-  const shipping = Number(d.envio_mxn)    || 0;
-  const fee      = Number(d.fee_mxn)      || 0;
-  const taxPct   = Number(d.tax_pct)      || 0;
-  const taxAmount = taxPct > 0 ? (subtotal + shipping + fee) * (taxPct / 100) : 0;
-  const total = Number(d.total_mxn) || (subtotal + shipping + fee + taxAmount);
+  const boxW = 260;
+  const boxH = 118 + (taxPct > 0 ? 18 : 0);
+  const boxX = pageW - M - boxW;
+  const boxY = Math.min(pageH - M - boxH, y + 28);
 
-  const totals = [
-    ['Subtotal', subtotal],
-    ['Envío', shipping],
-    ['Cargo por procesamiento', fee],
-  ];
-  if (taxPct > 0) totals.push([`Impuestos (${taxPct}%)`, taxAmount]);
-  totals.push(['Total', total]);
+  doc.setDrawColor(...lineGray);
+  doc.setFillColor(255, 255, 255);
+  doc.roundedRect(boxX, boxY, boxW, boxH, 8, 8, "FD");
 
-  const totalsX = width - margin - 220;
-  totals.forEach(([label, val], idx) => {
-    const isLast = idx === totals.length - 1;
-    pdf.setFont('helvetica', isLast ? 'bold' : 'normal');
-    pdf.text(label, totalsX, y + idx * 18);
-    pdf.text(`${currencySymbol}${toMoney(val)}`, totalsX + 160, y + idx * 18, { align: 'right' });
-  });
+  let yb = boxY + 18;
+  doc.setFont("helvetica", "bold"); doc.setTextColor(...brand.text);
+  doc.text("Resumen", boxX + 14, yb);
+  doc.setFont("helvetica", "normal"); doc.setTextColor(...brand.text);
+
+  yb += 18; doc.text("Subtotal", boxX + 14, yb);
+  doc.text(`${currencySymbol}${money(subtotal)}`, boxX + boxW - 14, yb, { align: "right" });
+
+  yb += 16; doc.text(`Envío (${method})`, boxX + 14, yb);
+  doc.text(`${currencySymbol}${money(envio)}`, boxX + boxW - 14, yb, { align: "right" });
+
+  yb += 16; doc.text("Cargo por procesamiento", boxX + 14, yb);
+  doc.text(`${currencySymbol}${money(fee)}`, boxX + boxW - 14, yb, { align: "right" });
+
+  if (taxPct > 0) {
+    yb += 16; doc.text(`Impuestos (${taxPct}%)`, boxX + 14, yb);
+    doc.text(`${currencySymbol}${money(taxAmt)}`, boxX + boxW - 14, yb, { align: "right" });
+  }
+
+  doc.setDrawColor(...lineGray);
+  yb += 10; doc.line(boxX + 14, yb, boxX + boxW - 14, yb);
+  yb += 16; doc.setFont("helvetica", "bold");
+  doc.text("Total", boxX + 14, yb);
+  doc.text(`${currencySymbol}${money(total)}`, boxX + boxW - 14, yb, { align: "right" });
 
   // Footer
-  const footerY = 800;
-  pdf.setFont('helvetica', 'italic');
-  pdf.setFontSize(9);
-  pdf.text('Gracias por tu compra.', margin, footerY);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(...brand.mute);
+  doc.text(`${siteName} · ${siteUrl}`, M, pageH - M);
 
-  const filename = `Factura_${orderId}.pdf`;
-  const blob     = pdf.output('blob');
-  const base64   = pdf.output('datauristring'); // data:application/pdf;base64,...
-  return { filename, blob, base64 };
+  const base64 = doc.output("datauristring"); // data:application/pdf;base64,...
+  return {
+    filename: `Factura_${orderId}.pdf`,
+    base64,
+  };
 }
