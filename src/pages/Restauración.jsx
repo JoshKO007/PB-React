@@ -6,7 +6,7 @@ import emailjs from '@emailjs/browser';
 import {
   Home, Image as ImageIcon, Video, ShoppingBag, Brush, User,
   Mail, LogIn, UserPlus, Settings, LogOut, Eye, KeyRound,
-  CheckCircle, XCircle, AlertCircle
+  CheckCircle, XCircle, AlertCircle, Heart
 } from 'lucide-react';
 
 const productos = [
@@ -59,6 +59,9 @@ export default function App() {
   const [telefonoContacto, setTelefonoContacto] = useState('');
   const [notifications, setNotifications] = useState([]);
 
+  // Contador del carrito (se obtiene de localStorage para que el header sea funcional)
+  const [cartCount, setCartCount] = useState(0);
+
   const TELEGRAM_BOT_TOKEN = "8434892736:AAFGF8N1zff5yge2rj0eEyZXadZ7twq3F9s";
   const TELEGRAM_CHAT_ID = "5308808183";
 
@@ -74,19 +77,23 @@ export default function App() {
     }
   }, []);
 
-    useEffect(() => {
-      const interval = setInterval(() => {
-        setIndex((prev) => (prev + 1) % productos.length);
-      }, 4000);
-      return () => clearInterval(interval);
-    }, []);
-  
-    useEffect(() => {
-      const sesion = JSON.parse(localStorage.getItem('sesionActiva'));
-     if (sesion?.id && sesion.id !== usuarioActivo?.id) {
-        setUsuarioActivo(sesion);
+  // Inicializa y sincroniza el contador del carrito desde localStorage
+  useEffect(() => {
+    const leerCarrito = () => {
+      try {
+        const raw = localStorage.getItem('carrito');
+        const arr = raw ? JSON.parse(raw) : [];
+        setCartCount(Array.isArray(arr) ? arr.length : 0);
+      } catch {
+        setCartCount(0);
       }
-    }, []);
+    };
+
+    leerCarrito();
+    window.addEventListener('storage', leerCarrito);
+    return () => window.removeEventListener('storage', leerCarrito);
+  }, []);
+
   
     const handleUserMouseEnter = () => {
       clearTimeout(userMenuTimeout.current);
@@ -310,7 +317,7 @@ const handleEnviar = async () => {
                             <Mail size={16} className="mr-2" /> Direcciones
                           </button>
                           <button onClick={() => navigate("/favoritos")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
-                            <HeartIcon size={16} className="mr-2" /> Favoritos
+                            <Heart size={16} className="mr-2" /> Favoritos
                           </button>
                           <button onClick={() => navigate("/contrasena")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <KeyRound size={16} className="mr-2" /> Cambiar contraseña
