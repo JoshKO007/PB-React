@@ -32,7 +32,8 @@ import {
   X,
   CreditCard,
   Landmark,
-  Wallet
+  Wallet,
+  HeartIcon
 } from "lucide-react";
 
 
