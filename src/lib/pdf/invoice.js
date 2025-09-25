@@ -44,6 +44,9 @@ export async function buildInvoicePDF(order, opts = {}) {
     siteUrl = "",
     logoUrl = "",
     currencySymbol = "$",
+    // por si también llegan por options:
+    shippingAddress: optShippingAddress,
+    shippingAddressText: optShippingAddressText,
   } = opts;
 
   const doc = new jsPDF({ unit: "pt", format: "a4", compress: true }); // 595 x 842
@@ -116,13 +119,71 @@ export async function buildInvoicePDF(order, opts = {}) {
   const rightColX = pageW / 2 + 20;
   const colY = y;
 
-  const shipName = order.shipping_name || order.shipping?.name || order.customer_name || "—";
-  const shipL1   = order.shipping_line1 || order.shipping?.line1 || "—";
-  const shipL2   = order.shipping_line2 || order.shipping?.line2 || "";
-  const shipCSZ  = `${order.shipping_city || order.shipping?.city || "—"}, ` +
-                   `${order.shipping_state || order.shipping?.state || "—"} ` +
-                   `${order.shipping_postal_code || order.shipping?.postal_code || "—"}`;
-  const shipCountry = order.shipping_country || order.shipping?.country || "MX";
+  // Dirección puede venir de:
+  // - Campos planos (shipping_*)
+  // - Objeto Stripe-like: order.shipping.{name,line1,line2,city,state,postal_code,country}
+  // - Objeto propio guardado: order.shipping_address u options.shippingAddress {nombre, calle, ciudad, estado, cp, pais, referencia}
+  // - Texto listo para imprimir: order.shipping_address_text u options.shippingAddressText
+  const savedAddrObj =
+    order.shipping_address ||
+    optShippingAddress ||
+    null;
+
+  const savedAddrText =
+    order.shipping_address_text ||
+    optShippingAddressText ||
+    null;
+
+  // Construir líneas de dirección
+  const computeLinesFromSaved = (a) => {
+    if (!a || typeof a !== "object") return null;
+    const nombre = a.nombre || a.name || order.customer_name || "—";
+    const l1 = a.calle || a.line1 || "";
+    const l2 = a.referencia || a.line2 || "";
+    const city = a.ciudad || a.city || "";
+    const state = a.estado || a.state || "";
+    const cp = a.cp || a.postal_code || a.postal || "";
+    const country = a.pais || a.country || "MX";
+    const cs = [city, state].filter(Boolean).join(", ");
+    const tail = [country, cp ? `CP ${cp}` : ""].filter(Boolean).join(" · ");
+    return [nombre, l1, l2, cs, tail].filter(Boolean);
+  };
+
+  const shipName =
+    order.shipping_name ||
+    order.shipping?.name ||
+    savedAddrObj?.nombre ||
+    order.customer_name ||
+    "—";
+
+  const fallbackLine1 =
+    order.shipping_line1 || order.shipping?.line1 || savedAddrObj?.calle || "—";
+
+  const fallbackLine2 =
+    order.shipping_line2 || order.shipping?.line2 || savedAddrObj?.referencia || "";
+
+  const fallbackCityState = `${order.shipping_city || order.shipping?.city || savedAddrObj?.ciudad || "—"}, ` +
+                            `${order.shipping_state || order.shipping?.state || savedAddrObj?.estado || "—"}`;
+
+  const fallbackCountry = (order.shipping_country || order.shipping?.country || savedAddrObj?.pais || "MX");
+  const fallbackPostal  = (order.shipping_postal_code || order.shipping?.postal_code || savedAddrObj?.cp || "—");
+  const fallbackTail    = [fallbackCountry, fallbackPostal ? `CP ${fallbackPostal}` : ""].filter(Boolean).join(" · ");
+
+  let addressLines = null;
+
+  if (typeof savedAddrText === "string" && savedAddrText.trim()) {
+    // Texto preformateado (de Recibo.jsx)
+    addressLines = savedAddrText.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  } else if (savedAddrObj) {
+    // Objeto guardado propio
+    addressLines = computeLinesFromSaved(savedAddrObj);
+  } else {
+    // Fallback: combinar campos planos / objeto tipo Stripe si existen
+    addressLines = [shipName, fallbackLine1, fallbackLine2, fallbackCityState, fallbackTail]
+      .map(s => String(s || "").trim())
+      .filter(Boolean);
+  }
+
   const method = order.shipping_metodo === "retiro" ? "Retiro en taller" :
                  order.shipping_metodo === "express" ? "Envío express" : "Envío estándar";
 
@@ -131,11 +192,16 @@ export async function buildInvoicePDF(order, opts = {}) {
   
   doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(...brand.text);
   let yAddr = colY + 16;
-  doc.text(shipName, leftColX, yAddr);
-  yAddr += 14; doc.text(shipL1, leftColX, yAddr);
-  if (shipL2) { yAddr += 14; doc.text(shipL2, leftColX, yAddr); }
-  yAddr += 14; doc.text(shipCSZ, leftColX, yAddr);
-  yAddr += 14; doc.text(shipCountry, leftColX, yAddr);
+
+  // Imprimir dirección con ajuste de ancho
+  const addrMaxWidth = pageW / 2 - (M + 10);
+  addressLines.forEach(line => {
+    const lines = doc.splitTextToSize(line, addrMaxWidth);
+    lines.forEach(l => {
+      doc.text(l, leftColX, yAddr);
+      yAddr += 14;
+    });
+  });
   
   doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(...brand.primary);
   doc.text("MÉTODO DE ENVÍO", rightColX, colY);
@@ -143,7 +209,7 @@ export async function buildInvoicePDF(order, opts = {}) {
   doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(...brand.text);
   doc.text(method, rightColX, colY + 16);
   
-  y = yAddr + 32;
+  y = yAddr + 18;
 
   // --- TABLA DE ARTÍCULOS ---
   doc.setDrawColor(...lineGray);
