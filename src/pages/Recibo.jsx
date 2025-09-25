@@ -17,6 +17,47 @@ const SITE_LOGO_URL = import.meta.env.VITE_SITE_LOGO_URL || "https://pb-react-ph
 const currencySymbol = (code) => (String(code || "MXN").toUpperCase() === "MXN" ? "$" : "");
 const toMoney = (n) => new Intl.NumberFormat("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
 
+/** Intenta recuperar la dirección seleccionada del localStorage para el usuario activo */
+function getSavedShippingAddress() {
+  try {
+    const sesion = JSON.parse(localStorage.getItem("sesionActiva") || "null");
+    const uid = sesion?.id;
+    if (!uid) return null;
+
+    // Preferir el objeto completo guardado al seleccionar
+    const rawSel = localStorage.getItem(`direccionSeleccionada:${uid}`);
+    if (rawSel) {
+      const obj = JSON.parse(rawSel);
+      if (obj && typeof obj === "object") return obj;
+    }
+
+    // Si solo hay predeterminada (id), no podemos reconstruir el objeto aquí
+    // porque no tenemos el catálogo de direcciones en esta pantalla.
+    // Aun así intentamos leer el id por si el generador de PDF lo usa de otra forma.
+    const defId = localStorage.getItem(`direccionPredeterminada:${uid}`);
+    if (defId) {
+      return { id: defId }; // fallback mínimo
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** Texto amigable de dirección en varias líneas para UI/PDF */
+function printableAddress(addr) {
+  if (!addr || typeof addr !== "object") return "";
+  const parts = [
+    addr.nombre,
+    addr.calle,
+    [addr.ciudad, addr.estado].filter(Boolean).join(", "),
+    [addr.pais, addr.cp ? `CP ${addr.cp}` : ""].filter(Boolean).join(" · "),
+    addr.referencia ? `“${addr.referencia}”` : "",
+  ].filter(Boolean);
+  return parts.join("\n");
+}
+
 export default function Recibo() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
@@ -52,25 +93,50 @@ export default function Recibo() {
         const d = json.data || {};
         const C$ = currencySymbol(d.moneda || "MXN");
 
-        // ✅ Generar PDFs en cliente con LOGO
+        // ✨ Recuperar dirección guardada en el flujo de compra
+        const savedAddr = getSavedShippingAddress();
+        const shippingAddress = savedAddr && typeof savedAddr === "object" ? savedAddr : null;
+        const shippingAddressText = shippingAddress ? printableAddress(shippingAddress) : "";
+
+        // ✅ Generar PDFs en cliente con LOGO + Dirección de envío
         const [pdfInvoice, pdfCert] = await Promise.all([
-          buildInvoicePDF(d, {
-            siteName: SITE_NAME,
-            siteUrl: SITE_URL,
-            logoUrl: SITE_LOGO_URL,
-            currencySymbol: C$,
-          }),
-          buildCertificatePDF(d, {
-            siteName: SITE_NAME,
-            siteUrl: SITE_URL,
-            logoUrl: SITE_LOGO_URL,
-          }),
+          buildInvoicePDF(
+            {
+              ...d,
+              // Incluimos la dirección directamente en el payload, por si tus plantillas la leen de "data"
+              shipping_address: shippingAddress,
+              shipping_address_text: shippingAddressText,
+            },
+            {
+              siteName: SITE_NAME,
+              siteUrl: SITE_URL,
+              logoUrl: SITE_LOGO_URL,
+              currencySymbol: C$,
+              // Y también por options, por si tus builders prefieren options.
+              shippingAddress,
+              shippingAddressText,
+            }
+          ),
+          buildCertificatePDF(
+            {
+              ...d,
+              shipping_address: shippingAddress,
+              shipping_address_text: shippingAddressText,
+            },
+            {
+              siteName: SITE_NAME,
+              siteUrl: SITE_URL,
+              logoUrl: SITE_LOGO_URL,
+              shippingAddress,
+              shippingAddressText,
+            }
+          ),
         ]);
 
         setState({
           loading: false,
           error: "",
-          data: d,
+          data: { ...d, shipping_address: shippingAddress, shipping_address_text: shippingAddressText },
           invoice: pdfInvoice,      // { filename, base64 }
           certificate: pdfCert,     // { filename, base64 }
         });
@@ -222,6 +288,16 @@ export default function Recibo() {
             </div>
           </div>
         </div>
+
+        {/* Dirección de envío visible en el recibo (además de incluirla en el PDF) */}
+        {d.shipping_address_text && (
+          <div className="mt-6 rounded-2xl border p-4">
+            <div className="font-semibold mb-1">Dirección de envío</div>
+            <pre className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+{d.shipping_address_text}
+            </pre>
+          </div>
+        )}
 
         <div className="mt-6">
           <button

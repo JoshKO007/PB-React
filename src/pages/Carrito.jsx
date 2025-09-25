@@ -171,6 +171,10 @@ function CartRow({ p, qty, onQty, onRemove, onToggleFav, isFav }) {
 /* ======== Modal Selección de Dirección ======== */
 function DireccionModal({ open, onClose, direcciones = [], onSelect, onAddNew }) {
   if (!open) return null;
+
+  // Nuevo: checkbox para recordar predeterminada
+  const [rememberDefault, setRememberDefault] = React.useState(false);
+
   return (
     <AnimatePresence>
       <motion.div className="fixed inset-0 z-[10010] flex items-center justify-center" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
@@ -199,7 +203,7 @@ function DireccionModal({ open, onClose, direcciones = [], onSelect, onAddNew })
               {direcciones.map((d) => (
                 <button
                   key={d.id}
-                  onClick={() => onSelect(d)}
+                  onClick={() => onSelect(d, rememberDefault)}
                   className="w-full text-left rounded-xl border bg-white/80 p-4 hover:border-gray-400 transition group"
                 >
                   <div className="flex items-start gap-3">
@@ -216,6 +220,20 @@ function DireccionModal({ open, onClose, direcciones = [], onSelect, onAddNew })
               ))}
             </div>
           )}
+
+          {/* Nuevo: checkbox de recordar como predeterminada */}
+          <div className="mt-3 flex items-center gap-2 text-sm">
+            <input
+              id="rememberDefaultDir"
+              type="checkbox"
+              className="accent-[#a16207]"
+              checked={rememberDefault}
+              onChange={(e) => setRememberDefault(e.target.checked)}
+            />
+            <label htmlFor="rememberDefaultDir" className="text-gray-700">
+              Recordar como dirección predeterminada
+            </label>
+          </div>
 
           <div className="mt-4 flex justify-end gap-2">
             <button onClick={onAddNew} className="rounded-full border px-4 py-2 text-sm font-semibold bg-white hover:bg-gray-50 border-gray-200">
@@ -370,7 +388,7 @@ export default function Carrito() {
         console.error("Error cargando productos:", e);
         setProductos([]);
       } finally {
-        setProdLoading(false);
+               setProdLoading(false);
       }
     };
     loadProductos();
@@ -458,12 +476,23 @@ export default function Carrito() {
           .eq("id_usuario", usuarioActivo.id);
         setDirecciones(dirs || []);
 
+        // Nuevo: preferir predeterminada; si no, última seleccionada
         try {
+          const defId = localStorage.getItem(`direccionPredeterminada:${usuarioActivo.id}`);
+          if (defId) {
+            const found = (dirs || []).find((d) => String(d.id) === String(defId));
+            if (found) {
+              setDireccionSel(found);
+              return;
+            }
+          }
           const raw = localStorage.getItem(`direccionSeleccionada:${usuarioActivo.id}`);
           if (raw) {
             const parsed = JSON.parse(raw);
             const stillThere = (dirs || []).find((d) => d.id === parsed.id);
             setDireccionSel(stillThere || null);
+          } else {
+            setDireccionSel(null);
           }
         } catch {}
       } catch { /* noop */ }
@@ -619,9 +648,14 @@ export default function Carrito() {
     }
     setDirModalOpen(true);
   };
-  const selectDireccion = (d) => {
+  const selectDireccion = (d, remember) => {
     setDireccionSel(d);
-    try { localStorage.setItem(`direccionSeleccionada:${usuarioActivo.id}`, JSON.stringify(d)); } catch {}
+    try {
+      localStorage.setItem(`direccionSeleccionada:${usuarioActivo.id}`, JSON.stringify(d));
+      if (remember) {
+        localStorage.setItem(`direccionPredeterminada:${usuarioActivo.id}`, String(d.id));
+      }
+    } catch {}
     setDirModalOpen(false);
   };
 
@@ -629,9 +663,7 @@ export default function Carrito() {
   const applyCoupon = () => {
     const code = cupon.trim().toUpperCase();
     if (!code) { setCuponAplicado(null); return; }
-    if (code === "ARTE10") setCuponAplicado({ type: "percent", value: 10, code });
-    else if (code === "BIENVENIDA100") setCuponAplicado({ type: "flat", value: 100, code });
-    else if (code === "ENVIOGRATIS") { setCuponAplicado(null); setEnvio("retiro"); try { localStorage.setItem(`envio:${usuarioActivo.id}`, "retiro"); } catch {} }
+
     else setCuponAplicado({ type: "none", value: 0, code });
   };
 
