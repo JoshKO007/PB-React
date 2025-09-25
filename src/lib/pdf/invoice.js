@@ -2,23 +2,35 @@
 import jsPDF from "jspdf";
 
 /**
- * Carga una imagen remota y la retorna como dataURL base64
+ * Carga una imagen remota, obtiene sus dimensiones y la retorna como dataURL base64.
  */
-async function fetchImageAsDataURL(url) {
+async function fetchImage(url) {
   if (!url) return null;
   try {
     const res = await fetch(url, { mode: "cors", cache: "force-cache" });
     const blob = await res.blob();
-    return await new Promise((resolve) => {
+    const dataURL = await new Promise((resolve) => {
       const reader = new FileReader();
       reader.onloadend = () => resolve(reader.result);
       reader.readAsDataURL(blob);
     });
+
+    const dimensions = await new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve({ w: img.width, h: img.height });
+      img.onerror = () => resolve({ w: 0, h: 0 }); // Manejo de error
+      img.src = dataURL;
+    });
+
+    return { dataURL, ...dimensions };
   } catch {
     return null;
   }
 }
 
+/**
+ * Formatea un número como moneda mexicana.
+ */
 function money(n = 0) {
   return new Intl.NumberFormat("es-MX", {
     minimumFractionDigits: 2,
@@ -30,7 +42,7 @@ export async function buildInvoicePDF(order, opts = {}) {
   const {
     siteName = "Arte Restauración Visuales",
     siteUrl = "",
-    logoUrl = "",               // ✅ ahora usamos logo
+    logoUrl = "",
     currencySymbol = "$",
   } = opts;
 
@@ -38,55 +50,71 @@ export async function buildInvoicePDF(order, opts = {}) {
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
 
-  // Colores y estilos
-  const brand = { primary: [161, 98, 7], text: [33, 37, 41], mute: [108, 117, 125] };
-  const lineGray = [230, 232, 236];
-
-  // Margen
-  const M = 48;
+  // --- ESTILOS Y COLORES ---
+  const brand = {
+    primary: [161, 98, 7],
+    primaryLight: [253, 242, 233], // Un tono más claro para fondos
+    text: [33, 37, 41],
+    mute: [108, 117, 125],
+    white: [255, 255, 255],
+  };
+  const lineGray = [222, 226, 230];
+  const M = 48; // Margen
   let y = M;
 
-  // Logo + Encabezado
-  const logoDataURL = await fetchImageAsDataURL(logoUrl);
-  if (logoDataURL) {
-    // ancho max 120pt, preservando proporción
-    doc.addImage(logoDataURL, "PNG", M, y, 120, 120 * 0.7);
+  // --- ENCABEZADO ---
+  const logo = await fetchImage(logoUrl);
+  const maxLogoW = 120;
+  let logoH = 0;
+  if (logo && logo.w > 0) {
+    const aspectRatio = logo.h / logo.w;
+    logoH = maxLogoW * aspectRatio;
   }
+  const headerHeight = (logoH > 0 ? logoH : 40) + 24;
+  
+  doc.setFillColor(...brand.primaryLight);
+  doc.rect(0, 0, pageW, headerHeight + M, 'F');
+
+  if (logo) {
+    doc.addImage(logo.dataURL, "PNG", M, y, maxLogoW, logoH);
+  }
+
+  const headerCenterY = y + headerHeight / 2 - 12;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(20);
   doc.setTextColor(...brand.text);
-  doc.text(siteName, pageW - M, y + 10, { align: "right" });
+  doc.text(siteName, pageW - M, headerCenterY, { align: "right" });
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.setTextColor(...brand.mute);
-  doc.text(siteUrl, pageW - M, y + 26, { align: "right" });
+  doc.text(siteUrl, pageW - M, headerCenterY + 16, { align: "right" });
+  
+  y += headerHeight + 32;
 
-  // Línea
-  y += 48;
-  doc.setDrawColor(...lineGray);
-  doc.line(M, y, pageW - M, y);
-  y += 24;
-
-  // Datos de la factura
+  // --- TÍTULO Y DATOS DEL RECIBO ---
   const orderId = order.pedido_id || "—";
-  const orderDate =
-    order.order_date ||
-    new Date().toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" });
+  const orderDate = order.order_date || new Date().toLocaleString("es-MX", { dateStyle: "long" });
 
-  doc.setFontSize(12);
-  doc.setTextColor(...brand.text);
+  doc.setFillColor(...brand.primary);
+  doc.roundedRect(M, y - 8, 80, 24, 4, 4, 'F');
   doc.setFont("helvetica", "bold");
-  doc.text("Factura", M, y);
-  doc.setFont("helvetica", "normal");
-  y += 18;
-  doc.text(`Pedido: ${orderId}`, M, y);
-  y += 16;
-  doc.text(`Fecha: ${orderDate}`, M, y);
+  doc.setFontSize(12);
+  doc.setTextColor(...brand.white);
+  doc.text("RECIBO", M + 12, y + 9);
 
-  // Caja de shipping/billing
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(...brand.mute);
+  doc.text(`Pedido No: ${orderId}`, pageW - M, y, { align: "right" });
+  doc.text(`Fecha: ${orderDate}`, pageW - M, y + 14, { align: "right" });
+
+  y += 50;
+
+  // --- DATOS DE ENVÍO ---
   const leftColX = M;
-  const rightColX = pageW / 2;
+  const rightColX = pageW / 2 + 20;
+  const colY = y;
 
   const shipName = order.shipping_name || order.shipping?.name || order.customer_name || "—";
   const shipL1   = order.shipping_line1 || order.shipping?.line1 || "—";
@@ -95,24 +123,29 @@ export async function buildInvoicePDF(order, opts = {}) {
                    `${order.shipping_state || order.shipping?.state || "—"} ` +
                    `${order.shipping_postal_code || order.shipping?.postal_code || "—"}`;
   const shipCountry = order.shipping_country || order.shipping?.country || "MX";
-
   const method = order.shipping_metodo === "retiro" ? "Retiro en taller" :
                  order.shipping_metodo === "express" ? "Envío express" : "Envío estándar";
 
-  y += 26;
-  doc.setFont("helvetica", "bold"); doc.text("Envío a", leftColX, y);
-  doc.setFont("helvetica", "normal"); doc.setTextColor(...brand.text);
-  y += 16; doc.text(shipName, leftColX, y);
-  y += 14; doc.text(shipL1, leftColX, y);
-  if (shipL2) { y += 14; doc.text(shipL2, leftColX, y); }
-  y += 14; doc.text(shipCSZ, leftColX, y);
-  y += 14; doc.text(shipCountry, leftColX, y);
+  doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(...brand.primary);
+  doc.text("ENVIAR A", leftColX, colY);
+  
+  doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(...brand.text);
+  let yAddr = colY + 16;
+  doc.text(shipName, leftColX, yAddr);
+  yAddr += 14; doc.text(shipL1, leftColX, yAddr);
+  if (shipL2) { yAddr += 14; doc.text(shipL2, leftColX, yAddr); }
+  yAddr += 14; doc.text(shipCSZ, leftColX, yAddr);
+  yAddr += 14; doc.text(shipCountry, leftColX, yAddr);
+  
+  doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(...brand.primary);
+  doc.text("MÉTODO DE ENVÍO", rightColX, colY);
+  
+  doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(...brand.text);
+  doc.text(method, rightColX, colY + 16);
+  
+  y = yAddr + 32;
 
-  doc.setFont("helvetica", "bold"); doc.text("Método de envío", rightColX, y - 56);
-  doc.setFont("helvetica", "normal"); doc.text(method, rightColX, y - 40);
-
-  // Tabla de items
-  y += 24;
+  // --- TABLA DE ARTÍCULOS ---
   doc.setDrawColor(...lineGray);
   doc.line(M, y, pageW - M, y);
   y += 18;
@@ -121,72 +154,72 @@ export async function buildInvoicePDF(order, opts = {}) {
     item: M,
     qty: pageW - M - 220,
     price: pageW - M - 140,
-    amount: pageW - M - 40,
+    amount: pageW - M,
   };
 
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...brand.mute);
-  doc.text("Artículo", colX.item, y);
-  doc.text("Cant.", colX.qty, y, { align: "right" });
-  doc.text("Precio", colX.price, y, { align: "right" });
-  doc.text("Importe", colX.amount, y, { align: "right" });
-
-  y += 10;
-  doc.setDrawColor(...lineGray);
+  doc.setFontSize(9);
+  doc.text("ARTÍCULO", colX.item, y);
+  doc.text("CANT.", colX.qty, y, { align: "right" });
+  doc.text("PRECIO UNIT.", colX.price, y, { align: "right" });
+  doc.text("IMPORTE", colX.amount, y, { align: "right" });
+  y += 8;
   doc.line(M, y, pageW - M, y);
 
   const items = Array.isArray(order.line_items) ? order.line_items : [];
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...brand.text);
+  doc.setFontSize(10);
 
-  const rowH = 18;
+  const rowH = 22;
   items.forEach((it, idx) => {
+    y += rowH;
+    // Zebra stripes
+    if (idx % 2 === 0) {
+      doc.setFillColor(248, 249, 250);
+      doc.rect(M, y - rowH + 6, pageW - 2 * M, rowH, "F");
+    }
     const qty = Number(it.quantity || 1);
     const unit = Number(it.unit_amount_mxn || 0);
     const imp = qty * unit;
-
-    y += rowH;
-    // zebra
-    if (idx % 2 === 0) {
-      doc.setFillColor(248, 249, 250);
-      doc.rect(M, y - rowH + 4, pageW - 2 * M, rowH, "F");
-    }
     const name = it.title || "Artículo";
 
-    doc.text(name, colX.item, y);
+    doc.text(name, colX.item + 2, y); // +2 for slight padding
     doc.text(String(qty), colX.qty, y, { align: "right" });
     doc.text(`${currencySymbol}${money(unit)}`, colX.price, y, { align: "right" });
     doc.text(`${currencySymbol}${money(imp)}`, colX.amount, y, { align: "right" });
   });
 
-  // Totales en una cajita
+  // --- TOTALES ---
   const subtotal = Number(order.subtotal_mxn || 0);
-  const envio    = Number(order.envio_mxn || 0);
-  const fee      = Number(order.fee_mxn || 0);
-  const taxPct   = Number(order.tax_pct || 0);
-  const taxAmt   = taxPct > 0 ? (subtotal + envio + fee) * (taxPct / 100) : 0;
-  const total    = Number(order.total_mxn || 0);
+  const envio = Number(order.envio_mxn || 0);
+  const fee = Number(order.fee_mxn || 0);
+  const taxPct = Number(order.tax_pct || 0);
+  const taxAmt = taxPct > 0 ? (subtotal + envio + fee) * (taxPct / 100) : 0;
+  const total = Number(order.total_mxn || 0);
 
   const boxW = 260;
   const boxH = 118 + (taxPct > 0 ? 18 : 0);
   const boxX = pageW - M - boxW;
-  const boxY = Math.min(pageH - M - boxH, y + 28);
-
+  const boxY = Math.min(pageH - M - boxH - 60, y + 28); // Dejar espacio para el footer
+  
   doc.setDrawColor(...lineGray);
   doc.setFillColor(255, 255, 255);
-  doc.roundedRect(boxX, boxY, boxW, boxH, 8, 8, "FD");
+  doc.roundedRect(boxX, boxY, boxW, boxH, 6, 6, "FD");
 
   let yb = boxY + 18;
+  doc.setFontSize(10);
   doc.setFont("helvetica", "bold"); doc.setTextColor(...brand.text);
-  doc.text("Resumen", boxX + 14, yb);
+  doc.text("Resumen de pago", boxX + 14, yb);
+  
   doc.setFont("helvetica", "normal"); doc.setTextColor(...brand.text);
-
-  yb += 18; doc.text("Subtotal", boxX + 14, yb);
+  yb += 20; doc.text("Subtotal", boxX + 14, yb);
   doc.text(`${currencySymbol}${money(subtotal)}`, boxX + boxW - 14, yb, { align: "right" });
 
-  yb += 16; doc.text(`Envío (${method})`, boxX + 14, yb);
+  yb += 16; doc.text(`Envío`, boxX + 14, yb);
   doc.text(`${currencySymbol}${money(envio)}`, boxX + boxW - 14, yb, { align: "right" });
-
+  
   yb += 16; doc.text("Cargo por procesamiento", boxX + 14, yb);
   doc.text(`${currencySymbol}${money(fee)}`, boxX + boxW - 14, yb, { align: "right" });
 
@@ -197,19 +230,28 @@ export async function buildInvoicePDF(order, opts = {}) {
 
   doc.setDrawColor(...lineGray);
   yb += 10; doc.line(boxX + 14, yb, boxX + boxW - 14, yb);
-  yb += 16; doc.setFont("helvetica", "bold");
+  yb += 16; doc.setFont("helvetica", "bold"); doc.setFontSize(12);
   doc.text("Total", boxX + 14, yb);
   doc.text(`${currencySymbol}${money(total)}`, boxX + boxW - 14, yb, { align: "right" });
 
-  // Footer
+  // --- PIE DE PÁGINA ---
+  const footerY = pageH - M;
+  doc.setDrawColor(...lineGray);
+  doc.line(M, footerY - 24, pageW - M, footerY - 24);
+  
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.setTextColor(...brand.primary);
+  doc.text("¡Gracias por tu compra!", pageW / 2, footerY - 5, { align: "center" });
+
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.setTextColor(...brand.mute);
-  doc.text(`${siteName} · ${siteUrl}`, M, pageH - M);
+  doc.text(`${siteName} · ${siteUrl}`, pageW / 2, footerY + 12, { align: "center" });
 
-  const base64 = doc.output("datauristring"); // data:application/pdf;base64,...
+  const base64 = doc.output("datauristring");
   return {
-    filename: `Factura_${orderId}.pdf`,
+    filename: `Recibo_${orderId}.pdf`,
     base64,
   };
 }
