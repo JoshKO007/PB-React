@@ -1,77 +1,210 @@
 // src/pages/MisPedidos.jsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
+  ShoppingBag,
+  User,
+  Mail,
+  KeyRound,
+  UserPlus,
+  LogIn,
+  LogOut,
+  Heart as HeartIcon,
   Home,
   Image as ImageIcon,
   Video,
-  ShoppingBag,
   Brush,
-  User,
-  Mail,
-  LogIn,
-  UserPlus,
-  LogOut,
-  KeyRound,
-  HeartIcon,
-  Truck,
-  Receipt,
-  ExternalLink,
   Loader2,
+  Receipt,
+  Truck,
+  ExternalLink,
   AlertCircle,
 } from "lucide-react";
 
-// ===== Supabase (mismos datos que en App.jsx) =====
+// ===== Supabase =====
 import { createClient } from "@supabase/supabase-js";
-const supabase = createClient(
-  "https://ousgktyljynqzrnafoqd.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im91c2drdHlsanlucXpybmFmb3FkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2MDMxNjYsImV4cCI6MjA2ODE3OTE2Nn0.hG27iuA-iNH3e3PPRck7ELgO89aRTbMiM8I65085TcE"
-);
+const SUPABASE_URL =
+  import.meta.env.VITE_SUPABASE_URL || "https://ousgktyljynqzrnafoqd.supabase.co";
+const SUPABASE_ANON_KEY =
+  import.meta.env.VITE_SUPABASE_ANON_KEY ||
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im91c2drdHlsanlucXpybmFmb3FkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2MDMxNjYsImV4cCI6MjA2ODE3OTE2Nn0.hG27iuA-iNH3e3PPRck7ELgO89aRTbMiM8I65085TcE";
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-/* ======================= Helpers imágenes / UI ======================= */
-function buildImgUrl(pathLike) {
-  if (!pathLike) return "/placeholder.jpg";
-  if (/^https?:\/\//i.test(pathLike)) return pathLike;
-  if (/^\//.test(pathLike)) return pathLike;
-  return `/${String(pathLike).replace(/^public\//, "")}`;
+/* ======================= Helpers varias ======================= */
+function buildImgFromProducto(prod) {
+  // Usa la primera imagen y normaliza contra "public/obras"
+  const raw = (Array.isArray(prod?.imagenes) && prod.imagenes[0]) || "";
+  const cleaned = String(raw).replace(/^public\//, "");
+  const withBase = cleaned.startsWith("obras/") ? cleaned : `obras/${cleaned}`;
+  return `/${withBase}`;
 }
 function money(n, code = "MXN") {
-  const symbol = String(code).toUpperCase() === "MXN" ? "$" : "";
-  return `${symbol}${new Intl.NumberFormat("es-MX", {
+  const sym = String(code).toUpperCase() === "MXN" ? "$" : "";
+  return `${sym}${new Intl.NumberFormat("es-MX", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(Number(n || 0))}`;
 }
-function stackAngle(i) {
-  const angles = [-6, -2, 2, 6];
-  return angles[i % angles.length];
+function fmtDate(d) {
+  try {
+    return new Intl.DateTimeFormat("es-MX", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(new Date(d));
+  } catch {
+    return "—";
+  }
+}
+function getUserFromLocal() {
+  try {
+    const s = JSON.parse(localStorage.getItem("sesionActiva") || "null");
+    if (s && (s.email || s.correo)) return { id: s.id, email: s.email || s.correo, nombre: s.nombre || s.usuario };
+  } catch {}
+  return null;
 }
 
 /* ======================= Página ======================= */
 export default function MisPedidos() {
   const navigate = useNavigate();
 
-  // ======= sesión local: tomamos id y email para filtrar =======
-  const [usuario, setUsuario] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem("sesionActiva") || "null");
-    } catch {
-      return null;
-    }
-  });
-
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState("");
-  const [pedidos, setPedidos] = useState([]); // [{order, items[], shipment?}]
-
-  // ======= Header state (copiado de App.jsx) =======
-  const [hovered, setHovered] = useState(null);
+  // ====== Estado usuario/header ======
+  const [usuarioActivo, setUsuarioActivo] = useState(getUserFromLocal());
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const userMenuTimeout = useRef(null);
-  const [cartCount, setCartCount] = useState(0);
   const [cerrandoSesion, setCerrandoSesion] = useState(false);
+  const userMenuTimeout = useRef(null);
 
+  // ====== Datos de pedidos ======
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [pedidos, setPedidos] = useState([]); // [{id, total, moneda, created_at, receipt_url, tracking_code, items:[{thumb,title}]}]
+
+  // ====== Header helpers ======
+  const [cartCount, setCartCount] = useState(0);
+  function getCartKeyBySession(s) {
+    return s?.id ? `carrito:${s.id}` : null;
+  }
+  function safeCartCount(cartArray) {
+    return (cartArray || []).reduce((sum, it) => sum + Math.max(0, Number(it?.cantidad) || 1), 0);
+  }
+
+  // Sincroniza sesión
+  useEffect(() => {
+    const onFocus = () => setUsuarioActivo(getUserFromLocal());
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, []);
+  // Cart badge
+  useEffect(() => {
+    try {
+      if (!usuarioActivo?.id) {
+        setCartCount(0);
+        return;
+      }
+      const key = getCartKeyBySession(usuarioActivo);
+      const cart = JSON.parse(localStorage.getItem(key) || "[]");
+      setCartCount(safeCartCount(cart));
+    } catch {
+      setCartCount(0);
+    }
+  }, [usuarioActivo]);
+
+  // ====== Cargar pedidos por email ======
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      setError("");
+      setPedidos([]);
+      try {
+        const current = getUserFromLocal();
+        if (!current?.email) {
+          throw new Error("No pudimos identificar tu sesión. Inicia sesión para ver tus pedidos.");
+        }
+
+        // 1) Trae pedidos por email
+        const { data: peds, error: e1 } = await supabase
+          .from("pedidos")
+          .select("id, email, total, moneda, created_at, receipt_url, tracking_code")
+          .eq("email", current.email)
+          .order("created_at", { ascending: false });
+
+        if (e1) throw e1;
+        if (!peds || peds.length === 0) {
+          setPedidos([]);
+          setLoading(false);
+          return;
+        }
+
+        const pedidoIds = peds.map((p) => p.id);
+
+        // 2) Todos los items de esos pedidos
+        const { data: items, error: e2 } = await supabase
+          .from("pedidos_items")
+          .select("pedido_id, producto_id, titulo, cantidad, unit_price")
+          .in("pedido_id", pedidoIds);
+
+        if (e2) throw e2;
+
+        // 3) Productos involucrados (solo los que tienen producto_id)
+        const productIds = Array.from(
+          new Set((items || []).map((it) => it.producto_id).filter(Boolean))
+        );
+        let productosMap = {};
+        if (productIds.length > 0) {
+          const { data: prods, error: e3 } = await supabase
+            .from("productos")
+            .select("id, imagenes, titulo");
+          if (e3) throw e3;
+          productosMap = (prods || []).reduce((acc, r) => {
+            acc[r.id] = r;
+            return acc;
+          }, {});
+        }
+
+        // 4) Compacta items por pedido con miniaturas
+        const itemsByPedido = new Map();
+        (items || []).forEach((it) => {
+          const arr = itemsByPedido.get(it.pedido_id) || [];
+          // ignorar filas de "cargo por procesamiento" que no traen producto_id
+          if (it.producto_id && productosMap[it.producto_id]) {
+            const prod = productosMap[it.producto_id];
+            arr.push({
+              title: it.titulo || prod.titulo || "Producto",
+              thumb: buildImgFromProducto(prod),
+            });
+          } else if (!it.producto_id && it.titulo) {
+            // Dejar un marcador para mostrar al menos algún rótulo (sin imagen)
+            arr.push({
+              title: it.titulo,
+              thumb: "/placeholder.jpg",
+            });
+          }
+          itemsByPedido.set(it.pedido_id, arr);
+        });
+
+        // 5) Resultado final
+        const out = peds.map((p) => ({
+          ...p,
+          items: itemsByPedido.get(p.id) || [],
+        }));
+        setPedidos(out);
+      } catch (err) {
+        setError(String(err.message || err));
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  /* ======================= Header UI ======================= */
+  const [hovered, setHovered] = useState(null);
+  const handleUserMouseEnter = () => {
+    clearTimeout(userMenuTimeout.current);
+    setShowUserMenu(true);
+  };
+  const handleUserMouseLeave = () => {
+    userMenuTimeout.current = setTimeout(() => setShowUserMenu(false), 300);
+  };
   const menu = [
     { label: "Inicio", icon: <Home size={28} />, onClick: () => navigate("/") },
     { label: "Galería", icon: <ImageIcon size={24} />, onClick: () => navigate("/galeria") },
@@ -80,178 +213,22 @@ export default function MisPedidos() {
     { label: "Restauración", icon: <Brush size={24} />, onClick: () => navigate("/restauracion") },
     { label: "Contacto", icon: <Mail size={24} />, onClick: () => navigate("/contacto") },
   ];
-  const handleUserMouseEnter = () => {
-    clearTimeout(userMenuTimeout.current);
-    setShowUserMenu(true);
-  };
-  const handleUserMouseLeave = () => {
-    userMenuTimeout.current = setTimeout(() => setShowUserMenu(false), 300);
-  };
   const cerrarSesion = () => {
     setCerrandoSesion(true);
     setTimeout(() => {
       try {
         localStorage.removeItem("carrito");
-        const prev = JSON.parse(localStorage.getItem("sesionActiva"));
+        const prev = JSON.parse(localStorage.getItem("sesionActiva") || "null");
         if (prev?.id) localStorage.removeItem(`carrito:${prev.id}`);
       } catch {}
       localStorage.removeItem("sesionActiva");
-      setUsuario(null);
-      setCartCount(0);
       setCerrandoSesion(false);
+      setUsuarioActivo(null);
       navigate("/");
-    }, 1500);
-  };
-  function getCartKeyBySession(sesion) {
-    return sesion?.id ? `carrito:${sesion.id}` : null;
-  }
-  function safeCartCount(cartArray) {
-    return (cartArray || []).reduce((sum, it) => {
-      const qty = Number.isFinite(Number(it?.cantidad)) ? Number(it.cantidad) : 1;
-      return sum + Math.max(0, qty);
-    }, 0);
-  }
-  // sincroniza user y carrito
-  useEffect(() => {
-    const onFocus = () => {
-      try {
-        const s = JSON.parse(localStorage.getItem("sesionActiva") || "null");
-        setUsuario(s?.id ? s : null);
-        if (s?.id) {
-          const key = getCartKeyBySession(s);
-          const cart = JSON.parse(localStorage.getItem(key) || "[]");
-          setCartCount(safeCartCount(cart));
-        } else setCartCount(0);
-      } catch {
-        setUsuario(null);
-        setCartCount(0);
-      }
-    };
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
-  }, []);
-
-  /* ================== Carga de pedidos ================== */
-  const loadOrders = async () => {
-    setLoading(true);
-    setErr("");
-
-    // Tomamos uid y email para filtrar
-    const uid = usuario?.id || null;
-    const email = usuario?.email || usuario?.correo || usuario?.mail || null;
-
-    try {
-      // 1) Pedidos por usuario_id OR email
-      let q = supabase
-        .from("pedidos")
-        .select("id, usuario_id, email, total, moneda, created_at", { count: "exact" })
-        .order("created_at", { ascending: false });
-
-      if (uid || email) {
-        const parts = [];
-        if (uid) parts.push(`usuario_id.eq.${uid}`);
-        if (email) parts.push(`email.eq.${email}`);
-        // si hay ambos, los unimos con OR
-        if (parts.length) q = q.or(parts.join(","));
-      } else {
-        // si no tenemos ni uid ni email, no podemos traer nada "del usuario":
-        setPedidos([]);
-        setLoading(false);
-        return;
-      }
-
-      const { data: orders, error } = await q;
-      if (error) throw error;
-
-      if (!orders?.length) {
-        setPedidos([]);
-        setLoading(false);
-        return;
-      }
-
-      const orderIds = orders.map((o) => o.id);
-
-      // 2) Ítems de esos pedidos
-      const { data: items, error: errItems } = await supabase
-        .from("pedidos_items")
-        .select("id,pedido_id,titulo,imagen,imagenes,producto_id,cantidad,unit_price")
-        .in("pedido_id", orderIds);
-
-      if (errItems) throw errItems;
-
-      // 3) Shipments (si existe la tabla)
-      let shipments = [];
-      try {
-        const { data: sh } = await supabase
-          .from("shipments")
-          .select("order_id,tracking_code,carrier,tracking_url,status,updated_at")
-          .in("order_id", orderIds);
-        shipments = sh || [];
-      } catch {
-        shipments = [];
-      }
-
-      // 4) Armar estructura
-      const byOrder = {};
-      orders.forEach((o) => {
-        byOrder[o.id] = { order: o, items: [], shipment: null };
-      });
-
-      (items || []).forEach((it) => {
-        const pid = it.pedido_id;
-        if (byOrder[pid]) byOrder[pid].items.push(it);
-      });
-
-      (shipments || []).forEach((s) => {
-        if (byOrder[s.order_id]) byOrder[s.order_id].shipment = s;
-      });
-
-      setPedidos(Object.values(byOrder));
-    } catch (e) {
-      console.error(e);
-      setErr(String(e?.message || e));
-      setPedidos([]);
-    } finally {
-      setLoading(false);
-    }
+    }, 1200);
   };
 
-  // Cargar al montar y cuando cambie usuario
-  useEffect(() => {
-    loadOrders();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [usuario?.id, usuario?.email]);
-
-  // Realtime: si cambian pedidos / items / shipments del usuario, recargar
-  useEffect(() => {
-    const ch = supabase
-      .channel("mis-pedidos-feed")
-      .on("postgres_changes", { event: "*", schema: "public", table: "pedidos" }, loadOrders)
-      .on("postgres_changes", { event: "*", schema: "public", table: "pedidos_items" }, loadOrders)
-      .on("postgres_changes", { event: "*", schema: "public", table: "shipments" }, loadOrders)
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, []);
-
-  /* ================== UI helpers ================== */
-  function thumbsForCard(items = []) {
-    // intenta usar imagenes[0] o imagen; máximo 4
-    const imgs = [];
-    for (const it of items) {
-      const arr = Array.isArray(it.imagenes) ? it.imagenes : [];
-      const first = arr[0] || it.imagen || null;
-      if (first) imgs.push(buildImgUrl(first));
-      if (imgs.length >= 4) break;
-    }
-    if (!imgs.length) imgs.push("/placeholder.jpg");
-    return imgs;
-  }
-
-  const emptyState = !loading && pedidos.length === 0;
-
-  /* ================== Render ================== */
+  /* ======================= Render ======================= */
   return (
     <div className="min-h-screen bg-[#f9f4ef] text-[#333333] font-sans flex flex-col items-center">
       {cerrandoSesion && (
@@ -261,11 +238,11 @@ export default function MisPedidos() {
         </div>
       )}
 
-      {/* ===== HEADER (igual look & feel) ===== */}
+      {/* Header (copiado del App.jsx) */}
       <motion.header
         initial={{ opacity: 0, y: -30 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
+        transition={{ duration: 0.8 }}
         className="w-full text-center relative z-40 px-4 py-3 sm:px-6 sm:py-4 border-b border-gray-300 bg-[#f0eae2]/80 backdrop-blur-md shadow-xl rounded-b-xl"
       >
         <div className="max-w-7xl mx-auto w-full flex flex-col gap-2 relative z-40">
@@ -273,7 +250,9 @@ export default function MisPedidos() {
             <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4">
               <img src="/logo.png" alt="Logo" className="h-14 sm:h-16" />
               <div className="flex gap-2 sm:gap-6 text-lg sm:text-2xl font-semibold font-serif italic text-[#3b4d63] tracking-wide">
-                <span>ARTE</span><span>RESTAURACIÓN</span><span>VISUALES</span>
+                <span>ARTE</span>
+                <span>RESTAURACIÓN</span>
+                <span>VISUALES</span>
               </div>
             </div>
 
@@ -286,7 +265,6 @@ export default function MisPedidos() {
                 <button className="p-2 rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md hover:shadow-lg flex items-center">
                   <User size={24} className="text-[#333333]" />
                 </button>
-
                 <AnimatePresence>
                   {showUserMenu && (
                     <motion.div
@@ -297,10 +275,10 @@ export default function MisPedidos() {
                       onMouseLeave={handleUserMouseLeave}
                       className="absolute mt-2 w-60 left-1/2 -translate-x-1/2 sm:left-auto sm:right-0 sm:translate-x-0 bg-white border border-gray-200 rounded-lg shadow-xl py-3 text-left z-[9999]"
                     >
-                      {usuario ? (
+                      {usuarioActivo ? (
                         <>
                           <div className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-gray-800">
-                            <User size={16} /> {usuario.nombre || usuario.usuario || usuario.email}
+                            <User size={16} /> {usuarioActivo.nombre || usuarioActivo.email}
                           </div>
                           <button onClick={() => navigate("/usuario")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <User size={16} className="mr-2" /> Información de cuenta
@@ -333,7 +311,7 @@ export default function MisPedidos() {
                 </AnimatePresence>
               </div>
 
-              {usuario && (
+              {usuarioActivo && (
                 <button
                   onClick={() => navigate("/carrito")}
                   className="relative group"
@@ -344,7 +322,7 @@ export default function MisPedidos() {
                     <ShoppingBag size={22} className="text-[#a16207]" />
                   </span>
                   {cartCount > 0 && (
-                    <span className="absolute -right-1 -top-1 rounded-full text-[11px] font-bold bg-rose-600 text-white h-5 min-w-[20px] px-1.5 grid place-items-center ring-2 ring-white shadow">
+                    <span className="absolute -right-1 -top-1 rounded-full text-[11px] font-bold bg-rose-600 text-white h-5 min-w-[20px] px-1.5 grid place-items-center ring-2 ring-white shadow" style={{ lineHeight: 1 }}>
                       {cartCount > 99 ? "99+" : cartCount}
                     </span>
                   )}
@@ -359,14 +337,14 @@ export default function MisPedidos() {
           <div className="text-sm italic text-gray-600 pt-1 text-right pr-1">por: Laura García</div>
 
           <nav className="flex flex-wrap justify-center gap-3 sm:gap-6 text-sm sm:text-lg font-medium pt-2">
-            {menu.map((item, i) => (
+            {menu.map((item, idx) => (
               <motion.span
-                key={i}
-                onMouseEnter={() => setHovered(i)}
+                key={idx}
+                onMouseEnter={() => setHovered(idx)}
                 onMouseLeave={() => setHovered(null)}
                 onClick={item.onClick}
-                className={`flex flex-col items-center gap-1 cursor-pointer px-3 py-1 transition-all ${
-                  hovered === i
+                className={`flex flex-col items-center gap-1 cursor-pointer px-2 sm:px-3 py-1 transition-all duration-300 ease-out ${
+                  hovered === idx
                     ? "bg-white/50 backdrop-blur-sm shadow-inner rounded-md scale-105 underline underline-offset-4"
                     : "hover:bg-white/30 hover:backdrop-blur-sm hover:shadow-sm hover:rounded-md"
                 }`}
@@ -380,123 +358,153 @@ export default function MisPedidos() {
         </div>
       </motion.header>
 
-      {/* ===== Contenido ===== */}
-      <section className="w-full max-w-6xl px-4 sm:px-6 py-10">
-        <h1 className="text-3xl font-bold text-[#a16207] mb-6">Mis pedidos</h1>
+      {/* Contenido */}
+      <div className="w-full max-w-6xl px-4 py-10">
+        <h1 className="text-2xl font-bold mb-4">Mis pedidos</h1>
 
         {loading && (
           <div className="rounded-2xl border bg-white p-6 shadow-sm flex items-center gap-3">
-            <Loader2 className="animate-spin text-gray-700" /> Cargando tus pedidos…
+            <Loader2 className="animate-spin" /> Cargando tus pedidos…
           </div>
         )}
 
-        {err && !loading && (
-          <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 shadow-sm text-rose-700 flex items-center gap-2">
-            <AlertCircle size={18} /> {err}
+        {!loading && error && (
+          <div className="rounded-2xl border bg-rose-50 p-6 shadow-sm text-rose-700 flex items-start gap-2">
+            <AlertCircle size={18} className="mt-0.5" /> {error}
           </div>
         )}
 
-        {emptyState && (
+        {!loading && !error && pedidos.length === 0 && (
           <div className="rounded-2xl border bg-white p-6 shadow-sm">
-            <p className="text-gray-700">No encontramos pedidos para tu cuenta.</p>
-            <button
-              onClick={() => navigate("/tienda")}
-              className="mt-4 rounded-full bg-[#a16207] text-white px-4 py-2 text-sm font-semibold shadow hover:shadow-md"
-            >
-              Ir a la tienda
-            </button>
+            Aún no encontramos pedidos para tu correo.
           </div>
         )}
 
-        <div className="mt-4 space-y-6">
-          {pedidos.map(({ order, items, shipment }) => {
-            const thumbs = thumbsForCard(items);
-            const fecha = new Date(order.created_at);
-            const totalFmt = money(order.total, order.moneda || "MXN");
-            const orderId = order.id;
-
-            return (
-              <div key={orderId} className="rounded-3xl border bg-white p-5 shadow-sm">
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                  {/* Stacked thumbs */}
+        {!loading && !error && pedidos.length > 0 && (
+          <div className="space-y-6">
+            {pedidos.map((p) => (
+              <motion.div
+                key={p.id}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-3xl border bg-white p-5 shadow-sm"
+              >
+                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                  {/* Stack de miniaturas */}
                   <div className="flex items-center gap-4">
-                    <div className="relative w-[140px] h-[100px]">
-                      {thumbs.slice(0, 4).map((src, i) => (
-                        <img
-                          key={i}
-                          src={src}
-                          onError={(e) => (e.currentTarget.src = "/placeholder.jpg")}
-                          alt={`item ${i}`}
-                          className="absolute top-1/2 left-1/2 w-[120px] h-[80px] object-cover rounded-lg shadow-md"
-                          style={{
-                            transform: `translate(-50%, -50%) rotate(${stackAngle(i)}deg)`,
-                            zIndex: 10 - i,
-                          }}
-                        />
-                      ))}
+                    <div className="relative h-24 w-40">
+                      <ThumbStack items={p.items} />
                     </div>
-
                     <div>
-                      <div className="text-sm text-gray-500">
-                        Pedido <span className="font-semibold text-gray-900">{orderId}</span>
+                      <div className="text-sm text-gray-500">Pedido</div>
+                      <div className="text-lg font-semibold">{p.id}</div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {fmtDate(p.created_at)}
                       </div>
-                      <div className="text-sm text-gray-600">
-                        {fecha.toLocaleDateString("es-MX", { dateStyle: "medium" })} · {items.length}{" "}
-                        {items.length === 1 ? "artículo" : "artículos"}
-                      </div>
-                      <div className="text-base font-semibold text-gray-900 mt-1">{totalFmt}</div>
-
-                      {shipment?.tracking_code && (
-                        <div className="mt-1 text-xs text-gray-600 inline-flex items-center gap-2">
-                          <Truck size={14} className="text-gray-500" />
-                          <span className="font-medium">{shipment.carrier || "Paquetería"}</span>
-                          <span className="px-2 py-0.5 rounded-full bg-gray-100 border text-gray-800">
-                            {shipment.tracking_code}
-                          </span>
-                        </div>
-                      )}
                     </div>
                   </div>
 
-                  {/* Actions */}
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={() =>
-                        navigate(`/recibo?order=${encodeURIComponent(orderId)}`)
-                      }
-                      className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold hover:bg-gray-50"
-                    >
-                      Ver comprobante <Receipt size={16} />
-                    </button>
+                  {/* Totales + acciones */}
+                  <div className="flex flex-col items-start md:items-end gap-2">
+                    <div className="text-sm text-gray-600">Total</div>
+                    <div className="text-xl font-bold">{money(p.total, p.moneda)}</div>
 
-                    <button
-                      onClick={() =>
-                        navigate(
-                          `/rastreo?order=${encodeURIComponent(orderId)}${
-                            shipment?.tracking_code
-                              ? `&tracking=${encodeURIComponent(shipment.tracking_code)}`
-                              : ""
-                          }`
-                        )
-                      }
-                      className="inline-flex items-center gap-2 rounded-full bg-gray-900 text-white px-4 py-2 text-sm font-semibold shadow hover:shadow-md"
-                    >
-                      Rastrear pedido <ExternalLink size={16} />
-                    </button>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {/* Comprobante: intenta usar receipt_url primero */}
+                      {p.receipt_url ? (
+                        <a
+                          href={p.receipt_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold hover:bg-gray-50"
+                          title="Ver comprobante externo"
+                        >
+                          Ver comprobante <ExternalLink size={16} />
+                        </a>
+                      ) : (
+                        <button
+                          onClick={() => navigate(`/recibo?order=${encodeURIComponent(p.id)}`)}
+                          className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold hover:bg-gray-50"
+                          title="Abrir recibo"
+                        >
+                          Ver comprobante <Receipt size={16} />
+                        </button>
+                      )}
+
+                      <button
+                        onClick={() =>
+                          navigate(
+                            `/rastreo?order=${encodeURIComponent(p.id)}${
+                              p.tracking_code ? `&tracking=${encodeURIComponent(p.tracking_code)}` : ""
+                            }`
+                          )
+                        }
+                        className="inline-flex items-center gap-2 rounded-full bg-gray-900 text-white px-3 py-1.5 text-sm font-semibold shadow hover:shadow-md"
+                        title="Rastrear envío"
+                      >
+                        Rastrear pedido <Truck size={16} />
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
+              </motion.div>
+            ))}
+          </div>
+        )}
+      </div>
 
-      {/* ===== FOOTER ===== */}
+      {/* Footer */}
       <footer className="w-full py-6 border-t border-gray-300 text-center mt-auto">
         <div className="max-w-6xl mx-auto px-6">
           <p className="text-sm">&copy; 2025 Arte - Restauración - Visuales. Todos los derechos reservados.</p>
         </div>
       </footer>
+    </div>
+  );
+}
+
+/* ======================= Subcomponentes ======================= */
+
+// Muestra hasta 4 thumbs rotadas/escalonadas sin taparse
+function ThumbStack({ items }) {
+  const thumbs = (items || [])
+    .map((it) => it.thumb)
+    .filter(Boolean)
+    .slice(0, 4);
+
+  if (thumbs.length === 0) {
+    return (
+      <div className="absolute inset-0 grid place-items-center rounded-xl border bg-gray-50 text-gray-400 text-xs">
+        Sin imágenes
+      </div>
+    );
+  }
+
+  const positions = [
+    { r: -6, x: 0, y: 0, z: 40 },
+    { r: 4, x: 10, y: 8, z: 30 },
+    { r: -2, x: 20, y: 16, z: 20 },
+    { r: 6, x: 30, y: 24, z: 10 },
+  ];
+
+  return (
+    <div className="absolute inset-0">
+      {thumbs.map((src, i) => {
+        const p = positions[i] || positions[positions.length - 1];
+        return (
+          <img
+            key={i}
+            src={src}
+            onError={(e) => (e.currentTarget.src = "/placeholder.jpg")}
+            alt={`artículo ${i + 1}`}
+            className="absolute h-24 w-24 object-cover rounded-xl border shadow-md"
+            style={{
+              transform: `translate(${p.x}px, ${p.y}px) rotate(${p.r}deg)`,
+              zIndex: p.z,
+            }}
+          />
+        );
+      })}
     </div>
   );
 }
