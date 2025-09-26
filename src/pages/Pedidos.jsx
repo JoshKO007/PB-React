@@ -16,7 +16,6 @@ import {
   Video,
   Brush,
   Loader2,
-  Receipt,
   Truck,
   ExternalLink,
   AlertCircle,
@@ -36,10 +35,47 @@ const SITE_URL =
   import.meta.env.VITE_SITE_URL ||
   (typeof window !== "undefined" ? window.location.origin : "");
 
-/** Comprobante interno usando solo el id del pedido */
-function buildReceiptLinkByOrder(order_id) {
+/** Intenta encontrar el session_id para un order_id usando el localStorage:
+ *  1) `orderSession:<orderId>` (si lo guardas desde Gracias.jsx)
+ *  2) escanea keys `finalized:<sessionId>` y compara `pedido_id` adentro
+ */
+function findSessionIdForOrder(orderId) {
+  if (!orderId) return "";
+  try {
+    // 1) mapeo directo si lo guardaste
+    const direct = localStorage.getItem(`orderSession:${orderId}`);
+    if (direct) return direct;
+
+    // 2) buscar entre caches de finalize-order
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k || !k.startsWith("finalized:")) continue;
+      const cached = localStorage.getItem(k);
+      if (!cached) continue;
+      try {
+        const data = JSON.parse(cached);
+        // la función de finalize suele devolver `pedido_id`
+        if (data && (data.pedido_id === orderId || data.id === orderId)) {
+          // key es finalized:<sessionId>
+          return k.slice("finalized:".length);
+        }
+      } catch {}
+    }
+  } catch {}
+  return "";
+}
+
+/** Comprobante: igual que Gracias.
+ *  - Si encontramos session_id: /recibo?session_id=...&order=...
+ *  - Si no, fallback: /recibo?order=...
+ */
+function buildReceiptLink(order_id) {
   if (!order_id) return "#";
-  const qs = new URLSearchParams({ order: order_id }).toString();
+  const session_id = findSessionIdForOrder(order_id);
+  const qs = new URLSearchParams({
+    ...(session_id ? { session_id } : {}),
+    order: order_id,
+  }).toString();
   return `${SITE_URL}/recibo?${qs}`;
 }
 
@@ -131,7 +167,7 @@ export default function MisPedidos() {
     }
   }, [usuarioActivo]);
 
-  // ====== Cargar pedidos por email (SIN session_id, SIN receipt_url) ======
+  // ====== Cargar pedidos por email ======
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -143,7 +179,7 @@ export default function MisPedidos() {
           throw new Error("No pudimos identificar tu sesión. Inicia sesión para ver tus pedidos.");
         }
 
-        // 1) Pedidos por email (sin session_id, sin receipt_url)
+        // 1) Pedidos por email (NO usamos session_id ni receipt_url de la BD)
         const { data: peds, error: e1 } = await supabase
           .from("pedidos")
           .select("id, email, total, moneda, created_at")
@@ -159,15 +195,15 @@ export default function MisPedidos() {
 
         const pedidoIds = peds.map((p) => p.id);
 
-        // 2) Items de esos pedidos
+        // 2) Items
         const { data: items, error: e2 } = await supabase
           .from("pedidos_items")
-          .select("pedido_id, producto_id, titulo, cantidad, unit_price")
+          .select("pedido_id, producto_id, titulo")
           .in("pedido_id", pedidoIds);
 
         if (e2) throw e2;
 
-        // 3) Productos para miniaturas
+        // 3) Productos (para thumbs)
         const productIds = Array.from(
           new Set((items || []).map((it) => it.producto_id).filter(Boolean))
         );
@@ -184,7 +220,7 @@ export default function MisPedidos() {
           }, {});
         }
 
-        // 4) Shipments (opcional)
+        // 4) Shipments (tracking opcional)
         let shipmentMap = {};
         try {
           const { data: ships, error: e4 } = await supabase
@@ -216,7 +252,7 @@ export default function MisPedidos() {
           itemsByPedido.set(it.pedido_id, arr);
         });
 
-        // 6) Resultado final
+        // 6) Resultado
         const out = peds.map((p) => ({
           id: p.id,
           email: p.email,
@@ -270,7 +306,7 @@ export default function MisPedidos() {
 
   /* ======================= Render ======================= */
   return (
-    <div className="min-h-screen bg-[#f9f4ef] text-[#333333] font-sans flex flex-col items-center">
+    <div className="min-h-screen bg-[#f9f4ef] text-[#333333] font-sans flex flex-col itemscenter">
       {cerrandoSesion && (
         <div className="fixed inset-0 bg-white/80 z-50 flex flex-col items-center justify-center">
           <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-[#a16207]" />
@@ -302,7 +338,7 @@ export default function MisPedidos() {
                 onMouseLeave={handleUserMouseLeave}
                 className="relative"
               >
-                <button className="p-2 rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md hover:shadow-lg flex items-center">
+                <button className="p-2 rounded-full bgwhite/90 backdrop-blur-md border border-gray-200 shadow-md hover:shadow-lg flex items-center">
                   <User size={24} className="text-[#333333]" />
                 </button>
                 <AnimatePresence>
@@ -423,7 +459,7 @@ export default function MisPedidos() {
         {!loading && !error && pedidos.length > 0 && (
           <div className="space-y-6">
             {pedidos.map((p) => {
-              const receiptHref = buildReceiptLinkByOrder(p.id); // siempre interno por id
+              const receiptHref = buildReceiptLink(p.id);
               const trackingHref = buildTrackingLink({
                 carrier_tracking_url: p.shipment?.tracking_url,
                 order_id: p.id,
@@ -458,7 +494,7 @@ export default function MisPedidos() {
                       <div className="text-xl font-bold">{money(p.total, p.moneda)}</div>
 
                       <div className="mt-2 flex flex-wrap gap-2">
-                        {/* Comprobante interno por id */}
+                        {/* Comprobante igual que en Gracias (si hay session_id en cache, lo usa) */}
                         <a
                           href={receiptHref}
                           target="_blank"
@@ -469,7 +505,7 @@ export default function MisPedidos() {
                           Ver comprobante <ExternalLink size={16} />
                         </a>
 
-                        {/* Rastreo: carrier si existe; si no, interno con order (+ tracking_code si lo hay) */}
+                        {/* Rastreo */}
                         <a
                           href={trackingHref}
                           target="_blank"
