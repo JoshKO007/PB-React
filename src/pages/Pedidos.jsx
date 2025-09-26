@@ -31,6 +31,35 @@ const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im91c2drdHlsanlucXpybmFmb3FkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2MDMxNjYsImV4cCI6MjA2ODE3OTE2Nn0.hG27iuA-iNH3e3PPRck7ELgO89aRTbMiM8I65085TcE";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+/* ======================= Helpers: links ======================= */
+const SITE_URL =
+  import.meta.env.VITE_SITE_URL ||
+  (typeof window !== "undefined" ? window.location.origin : "");
+
+/** /recibo interno (requiere session_id). Si tienes recibo externo, se prioriza. */
+function buildReceiptLink({ session_id, order_id }) {
+  if (!session_id) return null;
+  const qs = new URLSearchParams({
+    session_id,
+    ...(order_id ? { order: order_id } : {}),
+  }).toString();
+  return `${SITE_URL}/recibo?${qs}`;
+}
+function buildReceiptSmartLink({ external_receipt_url, session_id, order_id }) {
+  if (external_receipt_url) return external_receipt_url;
+  return buildReceiptLink({ session_id, order_id });
+}
+
+/** /rastreo interno o URL del carrier si existe */
+function buildTrackingLink({ carrier_tracking_url, order_id, tracking_code }) {
+  if (carrier_tracking_url) return carrier_tracking_url;
+  const qs = new URLSearchParams({
+    ...(order_id ? { order: order_id } : {}),
+    ...(tracking_code ? { tracking: tracking_code } : {}),
+  }).toString();
+  return `${SITE_URL}/rastreo?${qs}`;
+}
+
 /* ======================= Helpers varias ======================= */
 function buildImgFromProducto(prod) {
   // Usa la primera imagen y normaliza contra "public/obras"
@@ -77,7 +106,14 @@ export default function MisPedidos() {
   // ====== Datos de pedidos ======
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [pedidos, setPedidos] = useState([]); // [{id, total, moneda, created_at, receipt_url, tracking_code, items:[{thumb,title}]}]
+  const [pedidos, setPedidos] = useState([]);
+  // Cada elemento final de "pedidos" quedará con:
+  // {
+  //   id, email, total, moneda, created_at, session_id,
+  //   items: [{title, thumb}, ...],
+  //   shipment: { tracking_code, tracking_url }  // opcional
+  //   external_receipt_url // opcional, si la columna existe
+  // }
 
   // ====== Header helpers ======
   const [cartCount, setCartCount] = useState(0);
@@ -122,9 +158,11 @@ export default function MisPedidos() {
         }
 
         // 1) Trae pedidos por email
+        //   Incluimos session_id para poder armar /recibo interno.
+        //   Si tu tabla tiene receipt_url (externo) se usa como preferencia; si no, se ignora.
         const { data: peds, error: e1 } = await supabase
           .from("pedidos")
-          .select("id, email, total, moneda, created_at, receipt_url, tracking_code")
+          .select("id, email, total, moneda, created_at, session_id, receipt_url") // receipt_url es opcional
           .eq("email", current.email)
           .order("created_at", { ascending: false });
 
@@ -137,7 +175,7 @@ export default function MisPedidos() {
 
         const pedidoIds = peds.map((p) => p.id);
 
-        // 2) Todos los items de esos pedidos
+        // 2) Items de esos pedidos
         const { data: items, error: e2 } = await supabase
           .from("pedidos_items")
           .select("pedido_id, producto_id, titulo, cantidad, unit_price")
@@ -145,7 +183,7 @@ export default function MisPedidos() {
 
         if (e2) throw e2;
 
-        // 3) Productos involucrados (solo los que tienen producto_id)
+        // 3) Productos involucrados (para miniaturas)
         const productIds = Array.from(
           new Set((items || []).map((it) => it.producto_id).filter(Boolean))
         );
@@ -153,7 +191,8 @@ export default function MisPedidos() {
         if (productIds.length > 0) {
           const { data: prods, error: e3 } = await supabase
             .from("productos")
-            .select("id, imagenes, titulo");
+            .select("id, imagenes, titulo")
+            .in("id", productIds);
           if (e3) throw e3;
           productosMap = (prods || []).reduce((acc, r) => {
             acc[r.id] = r;
@@ -161,11 +200,28 @@ export default function MisPedidos() {
           }, {});
         }
 
-        // 4) Compacta items por pedido con miniaturas
+        // 4) Shipments (opcional). No guardamos links, solo datos crudos.
+        let shipmentMap = {};
+        try {
+          const { data: ships, error: e4 } = await supabase
+            .from("shipments")
+            .select("order_id, tracking_code, tracking_url")
+            .in("order_id", pedidoIds);
+
+          if (e4) throw e4;
+          shipmentMap = (ships || []).reduce((acc, s) => {
+            acc[s.order_id] = { tracking_code: s.tracking_code || "", tracking_url: s.tracking_url || "" };
+            return acc;
+          }, {});
+        } catch {
+          // Si no existe la tabla o RLS bloquea, simplemente no habrá tracking_code/url
+          shipmentMap = {};
+        }
+
+        // 5) Compacta items por pedido con miniaturas
         const itemsByPedido = new Map();
         (items || []).forEach((it) => {
           const arr = itemsByPedido.get(it.pedido_id) || [];
-          // ignorar filas de "cargo por procesamiento" que no traen producto_id
           if (it.producto_id && productosMap[it.producto_id]) {
             const prod = productosMap[it.producto_id];
             arr.push({
@@ -173,7 +229,6 @@ export default function MisPedidos() {
               thumb: buildImgFromProducto(prod),
             });
           } else if (!it.producto_id && it.titulo) {
-            // Dejar un marcador para mostrar al menos algún rótulo (sin imagen)
             arr.push({
               title: it.titulo,
               thumb: "/placeholder.jpg",
@@ -182,11 +237,19 @@ export default function MisPedidos() {
           itemsByPedido.set(it.pedido_id, arr);
         });
 
-        // 5) Resultado final
+        // 6) Resultado final (sin crear links aún)
         const out = peds.map((p) => ({
-          ...p,
+          id: p.id,
+          email: p.email,
+          total: p.total,
+          moneda: p.moneda,
+          created_at: p.created_at,
+          session_id: p.session_id || null,
           items: itemsByPedido.get(p.id) || [],
+          shipment: shipmentMap[p.id] || null,   // { tracking_code, tracking_url } | null
+          external_receipt_url: p.receipt_url || null, // opcional
         }));
+
         setPedidos(out);
       } catch (err) {
         setError(String(err.message || err));
@@ -382,73 +445,86 @@ export default function MisPedidos() {
 
         {!loading && !error && pedidos.length > 0 && (
           <div className="space-y-6">
-            {pedidos.map((p) => (
-              <motion.div
-                key={p.id}
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="rounded-3xl border bg-white p-5 shadow-sm"
-              >
-                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-                  {/* Stack de miniaturas */}
-                  <div className="flex items-center gap-4">
-                    <div className="relative h-24 w-40">
-                      <ThumbStack items={p.items} />
+            {pedidos.map((p) => {
+              // Construimos links al vuelo (sin almacenar en DB)
+              const receiptHref = buildReceiptSmartLink({
+                external_receipt_url: p.external_receipt_url, // si existe, se usa
+                session_id: p.session_id,                      // si no hay externo, requiere esto
+                order_id: p.id,
+              });
+
+              const trackingHref = buildTrackingLink({
+                carrier_tracking_url: p.shipment?.tracking_url,
+                order_id: p.id,
+                tracking_code: p.shipment?.tracking_code,
+              });
+
+              return (
+                <motion.div
+                  key={p.id}
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="rounded-3xl border bg-white p-5 shadow-sm"
+                >
+                  <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                    {/* Stack de miniaturas */}
+                    <div className="flex items-center gap-4">
+                      <div className="relative h-24 w-40">
+                        <ThumbStack items={p.items} />
+                      </div>
+                      <div>
+                        <div className="text-sm text-gray-500">Pedido</div>
+                        <div className="text-lg font-semibold">{p.id}</div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          {fmtDate(p.created_at)}
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <div className="text-sm text-gray-500">Pedido</div>
-                      <div className="text-lg font-semibold">{p.id}</div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        {fmtDate(p.created_at)}
+
+                    {/* Totales + acciones */}
+                    <div className="flex flex-col items-start md:items-end gap-2">
+                      <div className="text-sm text-gray-600">Total</div>
+                      <div className="text-xl font-bold">{money(p.total, p.moneda)}</div>
+
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {/* Comprobante: externo o interno por session_id */}
+                        {receiptHref ? (
+                          <a
+                            href={receiptHref}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold hover:bg-gray-50"
+                            title="Ver comprobante"
+                          >
+                            Ver comprobante <ExternalLink size={16} />
+                          </a>
+                        ) : (
+                          // Si no hay externo ni session_id, ocultar; aquí dejamos botón deshabilitado
+                          <button
+                            disabled
+                            className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold opacity-50 cursor-not-allowed"
+                            title="Comprobante no disponible"
+                          >
+                            Ver comprobante <Receipt size={16} />
+                          </button>
+                        )}
+
+                        {/* Rastreo: carrier si existe; si no, interno con order (+ tracking_code si lo hay) */}
+                        <a
+                          href={trackingHref}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-2 rounded-full bg-gray-900 text-white px-3 py-1.5 text-sm font-semibold shadow hover:shadow-md"
+                          title="Rastrear envío"
+                        >
+                          Rastrear pedido <Truck size={16} />
+                        </a>
                       </div>
                     </div>
                   </div>
-
-                  {/* Totales + acciones */}
-                  <div className="flex flex-col items-start md:items-end gap-2">
-                    <div className="text-sm text-gray-600">Total</div>
-                    <div className="text-xl font-bold">{money(p.total, p.moneda)}</div>
-
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {/* Comprobante: intenta usar receipt_url primero */}
-                      {p.receipt_url ? (
-                        <a
-                          href={p.receipt_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold hover:bg-gray-50"
-                          title="Ver comprobante externo"
-                        >
-                          Ver comprobante <ExternalLink size={16} />
-                        </a>
-                      ) : (
-                        <button
-                          onClick={() => navigate(`/recibo?order=${encodeURIComponent(p.id)}`)}
-                          className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold hover:bg-gray-50"
-                          title="Abrir recibo"
-                        >
-                          Ver comprobante <Receipt size={16} />
-                        </button>
-                      )}
-
-                      <button
-                        onClick={() =>
-                          navigate(
-                            `/rastreo?order=${encodeURIComponent(p.id)}${
-                              p.tracking_code ? `&tracking=${encodeURIComponent(p.tracking_code)}` : ""
-                            }`
-                          )
-                        }
-                        className="inline-flex items-center gap-2 rounded-full bg-gray-900 text-white px-3 py-1.5 text-sm font-semibold shadow hover:shadow-md"
-                        title="Rastrear envío"
-                      >
-                        Rastrear pedido <Truck size={16} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
+                </motion.div>
+              );
+            })}
           </div>
         )}
       </div>
