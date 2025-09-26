@@ -30,7 +30,8 @@ import {
   ChevronLeft,
   ChevronDown,
   ShieldAlert,
-  HeartIcon
+  HeartIcon,
+  Layers
 } from "lucide-react";
 
 // ===== Supabase =====
@@ -53,7 +54,7 @@ const categorias = [
   { id: "todas", label: "Todas" },
   { id: "destacadas", label: "Obras destacadas" },
   { id: "bajo_pedido", label: "Obras bajo pedido" },
-  { id: "generales", label: "Obras en general" },
+  { id: "generales", label: "Obras en general" }, // (serie NULL)
 ];
 
 /* ======================= Utiles de precio/etiquetas ======================= */
@@ -100,6 +101,7 @@ function rowToProductUI(r) {
     bajoPedido: !!r.bajo_pedido,
     disponible: !!r.disponible,
     tiempoEntrega: r.tiempo_entrega || "",
+    serie: r.serie || null,
   };
 }
 
@@ -256,6 +258,7 @@ function CardProducto({ p, onOpen, onAddCartAnim, onFav, favs }) {
 
   const tieneDescuento = (p.descuento || 0) > 0;
   const precioFinal = getPrecioFinal(p.precio, p.descuento);
+  const enSerie = !!p.serie;
 
   return (
     <motion.div
@@ -292,6 +295,11 @@ function CardProducto({ p, onOpen, onAddCartAnim, onFav, favs }) {
           {tieneDescuento && (
             <span className="inline-flex items-center gap-1 rounded-full bg-rose-600/90 text-white text-[11px] px-2.5 py-1 shadow">
               −{p.descuento}% OFF
+            </span>
+          )}
+          {enSerie && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-[11px] px-2.5 py-1 shadow">
+              <Layers size={14} /> Serie: {p.serie}
             </span>
           )}
         </div>
@@ -368,13 +376,11 @@ function CardProducto({ p, onOpen, onAddCartAnim, onFav, favs }) {
           </div>
         </div>
 
-        {p.etiquetas?.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {p.etiquetas.map((e) => (
-              <Etiqueta key={e}>{e}</Etiqueta>
-            ))}
-          </div>
-        )}
+        <div className="mt-3 flex flex-wrap gap-2">
+          {[...(p.etiquetas || []), ...(p.serie ? [`Serie: ${p.serie}`] : [])].map((e) => (
+            <Etiqueta key={e}>{e}</Etiqueta>
+          ))}
+        </div>
       </div>
     </motion.div>
   );
@@ -577,13 +583,11 @@ function QuickView({ open, onClose, producto, onAddCartAnim }) {
                   <Clock size={14} /> {producto.tiempoEntrega}
                 </div>
 
-                {producto.etiquetas?.length > 0 && (
-                  <div className="mt-3 md:mt-4 mb-5 md:mb-6 flex flex-wrap gap-2">
-                    {producto.etiquetas.map((e) => (
-                      <Etiqueta key={e}>{e}</Etiqueta>
-                    ))}
-                  </div>
-                )}
+                <div className="mt-3 md:mt-4 mb-5 md:mb-6 flex flex-wrap gap-2">
+                  {[...(producto.etiquetas || []), ...(producto.serie ? [`Serie: ${producto.serie}`] : [])].map((e) => (
+                    <Etiqueta key={e}>{e}</Etiqueta>
+                  ))}
+                </div>
               </div>
 
               <div className="sticky bottom-0 w-full px-4 md:px-6 pb-4 md:pb-6 pt-3 md:pt-4 bg-white/95 backdrop-blur border-t">
@@ -731,7 +735,7 @@ export default function Tienda() {
       try {
         const { data, error } = await supabase
           .from("productos")
-          .select("id,titulo,descripcion,descripcion_detallada,precio,moneda,descuento,etiquetas,imagenes,destacado,bajo_pedido,disponible,tiempo_entrega")
+          .select("id,titulo,descripcion,descripcion_detallada,precio,moneda,descuento,etiquetas,imagenes,destacado,bajo_pedido,disponible,tiempo_entrega,serie")
           .is("disponible", true)
           .order("destacado", { ascending: false });
         if (error) throw error;
@@ -957,12 +961,25 @@ export default function Tienda() {
     if (anchor) anchor.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  const aplicarFiltroSerie = (nombreSerie) => {
+    setBusqueda(nombreSerie);
+    setOrden("relevancia");
+    setCategoria("todas");
+    setPrecioMax(3000);
+    setDraftBusqueda(nombreSerie);
+    setDraftOrden("relevancia");
+    setDraftCategoria("todas");
+    setDraftPrecioMax(3000);
+    const anchor = document.getElementById("lista-general");
+    if (anchor) anchor.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   const productosFiltrados = useMemo(() => {
     let list = [...productos];
 
     if (categoria === "destacadas") list = list.filter((p) => p.destacado);
     if (categoria === "bajo_pedido") list = list.filter((p) => p.bajoPedido);
-    if (categoria === "generales") list = list.filter((p) => !p.destacado && !p.bajoPedido);
+    if (categoria === "generales") list = list.filter((p) => !p.destacado && !p.bajoPedido && !p.serie);
 
     if (busqueda.trim()) {
       const q = busqueda.toLowerCase();
@@ -970,7 +987,8 @@ export default function Tienda() {
         (p) =>
           p.titulo.toLowerCase().includes(q) ||
           p.descripcion.toLowerCase().includes(q) ||
-          p.etiquetas?.some((e) => e.toLowerCase().includes(q))
+          (p.serie ? String(p.serie).toLowerCase().includes(q) : false) ||
+          p.etiquetas?.some((e) => String(e).toLowerCase().includes(q))
       );
     }
 
@@ -1055,6 +1073,18 @@ export default function Tienda() {
   // Datos para secciones
   const destacados = productos.filter((p) => p.destacado);
   const bajoPedido = productos.filter((p) => p.bajoPedido);
+
+  const seriesDict = useMemo(() => {
+    const m = {};
+    for (const p of productos) {
+      if (p.serie) {
+        const key = String(p.serie);
+        if (!m[key]) m[key] = [];
+        m[key].push(p);
+      }
+    }
+    return m;
+  }, [productos]);
 
   return (
     <div className="min-h-screen bg-[#f9f4ef] text-[#333] font-sans flex flex-col">
@@ -1149,6 +1179,7 @@ export default function Tienda() {
                   className="relative group"
                   title="Carrito"
                   aria-label={`Carrito con ${cartCount} ${cartCount === 1 ? "artículo" : "artículos"}`}
+                  ref={cartBtnRef}
                 >
                   <span
                     className="grid place-items-center rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md transition
@@ -1167,6 +1198,8 @@ export default function Tienda() {
                       {cartCount > 99 ? "99+" : cartCount}
                     </span>
                   )}
+
+                  <CartBurst fire={cartBurstId} />
                 </button>
               )}
             </div>
@@ -1250,7 +1283,7 @@ export default function Tienda() {
                   <input
                     value={draftBusqueda}
                     onChange={(e) => setDraftBusqueda(e.target.value)}
-                    placeholder="Título, técnica, etiqueta..."
+                    placeholder="Título, técnica, etiqueta, serie..."
                     className="w-full bg-transparent outline-none text-sm"
                   />
                 </div>
@@ -1341,6 +1374,22 @@ export default function Tienda() {
             favs={favoritos}
           />
         )}
+
+        {/* Series dinámicas */}
+        {!cargando && !filtrosAplicados && Object.entries(seriesDict).map(([nombre, items]) => (
+          <SeccionGridLimitada
+            key={nombre}
+            titulo={`Serie: ${nombre}`}
+            icon={<Layers className="text-indigo-600" />}
+            descripcion="Obras que pertenecen a esta serie."
+            productos={items}
+            onVerTodo={() => aplicarFiltroSerie(nombre)}
+            onOpen={(p) => { setQuickProducto(p); setQuickOpen(true); }}
+            onAddCartAnim={addCartWithAnim}
+            onFav={(p) => toggleFav(p)}
+            favs={favoritos}
+          />
+        ))}
 
         {/* Resultados / General */}
         {!cargando && (
