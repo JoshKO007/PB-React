@@ -38,14 +38,9 @@ const SITE_URL =
 
 /** Comprobante interno usando solo el id del pedido */
 function buildReceiptLinkByOrder(order_id) {
-  if (!order_id) return null;
+  if (!order_id) return "#";
   const qs = new URLSearchParams({ order: order_id }).toString();
   return `${SITE_URL}/recibo?${qs}`;
-}
-/** Usa recibo externo si existe; si no, el recibo interno por id */
-function buildReceiptSmartLink({ external_receipt_url, order_id }) {
-  if (external_receipt_url) return external_receipt_url;
-  return buildReceiptLinkByOrder(order_id);
 }
 
 /** /rastreo interno o URL del carrier si existe */
@@ -104,9 +99,7 @@ export default function MisPedidos() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [pedidos, setPedidos] = useState([]);
-  // Estructura final:
-  // { id, email, total, moneda, created_at, items:[{title,thumb}],
-  //   shipment:{tracking_code,tracking_url} | null, external_receipt_url?:string }
+  // { id, email, total, moneda, created_at, items:[{title,thumb}], shipment?:{tracking_code,tracking_url} }
 
   // ====== Header helpers ======
   const [cartCount, setCartCount] = useState(0);
@@ -138,7 +131,7 @@ export default function MisPedidos() {
     }
   }, [usuarioActivo]);
 
-  // ====== Cargar pedidos por email (SIN session_id) ======
+  // ====== Cargar pedidos por email (SIN session_id, SIN receipt_url) ======
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -150,10 +143,10 @@ export default function MisPedidos() {
           throw new Error("No pudimos identificar tu sesión. Inicia sesión para ver tus pedidos.");
         }
 
-        // 1) Pedidos por email (sin session_id)
+        // 1) Pedidos por email (sin session_id, sin receipt_url)
         const { data: peds, error: e1 } = await supabase
           .from("pedidos")
-          .select("id, email, total, moneda, created_at, receipt_url") // receipt_url opcional
+          .select("id, email, total, moneda, created_at")
           .eq("email", current.email)
           .order("created_at", { ascending: false });
 
@@ -232,7 +225,6 @@ export default function MisPedidos() {
           created_at: p.created_at,
           items: itemsByPedido.get(p.id) || [],
           shipment: shipmentMap[p.id] || null,
-          external_receipt_url: p.receipt_url || null,
         }));
 
         setPedidos(out);
@@ -431,11 +423,7 @@ export default function MisPedidos() {
         {!loading && !error && pedidos.length > 0 && (
           <div className="space-y-6">
             {pedidos.map((p) => {
-              // Links al vuelo (sin session_id)
-              const receiptHref = buildReceiptSmartLink({
-                external_receipt_url: p.external_receipt_url,
-                order_id: p.id,
-              });
+              const receiptHref = buildReceiptLinkByOrder(p.id); // siempre interno por id
               const trackingHref = buildTrackingLink({
                 carrier_tracking_url: p.shipment?.tracking_url,
                 order_id: p.id,
@@ -470,26 +458,16 @@ export default function MisPedidos() {
                       <div className="text-xl font-bold">{money(p.total, p.moneda)}</div>
 
                       <div className="mt-2 flex flex-wrap gap-2">
-                        {/* Comprobante: externo o interno por id */}
-                        {receiptHref ? (
-                          <a
-                            href={receiptHref}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold hover:bg-gray-50"
-                            title="Ver comprobante"
-                          >
-                            Ver comprobante <ExternalLink size={16} />
-                          </a>
-                        ) : (
-                          <button
-                            disabled
-                            className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold opacity-50 cursor-not-allowed"
-                            title="Comprobante no disponible"
-                          >
-                            Ver comprobante <Receipt size={16} />
-                          </button>
-                        )}
+                        {/* Comprobante interno por id */}
+                        <a
+                          href={receiptHref}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold hover:bg-gray-50"
+                          title="Ver comprobante"
+                        >
+                          Ver comprobante <ExternalLink size={16} />
+                        </a>
 
                         {/* Rastreo: carrier si existe; si no, interno con order (+ tracking_code si lo hay) */}
                         <a
