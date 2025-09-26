@@ -185,16 +185,22 @@ export default function Gracias() {
         const shipping_method_label = shippingLabel(d.shipping_metodo);
         const payment_method_label  = d.payment_method_label || "Tarjeta";
 
-        // ✅ Enlaces: enviamos al recibo/verificación en tu sitio
+        // ✅ Enlaces principales
         const receipt_url     = `${SITE_URL}/recibo?session_id=${encodeURIComponent(sessionId)}&order=${encodeURIComponent(orderId)}`;
         const admin_order_url = d.admin_order_url || `${SITE_URL}/admin/pedidos/${orderId}`;
-        // Si quieres conservar el botón “Ver pedido” en la UI de Gracias, que vaya al mismo recibo:
         const order_url       = receipt_url;
+
+        // ✅ Rastreo (interno y/o transportista)
+        const trackingCode         = d.tracking_code || d.tracking?.code || "";
+        const trackingUrlInternal  = `${SITE_URL}/rastreo?order=${encodeURIComponent(orderId)}${trackingCode ? `&tracking=${encodeURIComponent(trackingCode)}` : ""}`;
+        const trackingUrlCarrier   = d.tracking_url || d.tracking?.url || "";
+        // preferimos URL del transportista si existe, si no, usamos tu página interna:
+        const tracking_url         = trackingUrlCarrier || trackingUrlInternal;
 
         // 3) Inicializa EmailJS
         emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
 
-        // 4) Email al CLIENTE (sin adjuntos; solo link al recibo)
+        // 4) Email al CLIENTE
         if (d.customer_email && EMAILJS_SERVICE_ID && EMAILJS_TEMPLATE_CLIENT) {
           const varsCliente = {
             email: d.customer_email,           // destino
@@ -222,8 +228,12 @@ export default function Gracias() {
             shipping_state,
             shipping_postal_code,
             shipping_country,
-            order_url,   // -> /recibo?... (igual que receipt_url)
-            receipt_url, // -> /recibo?...
+            // Links
+            order_url,                 // -> /recibo
+            receipt_url,               // -> /recibo
+            tracking_url,              // -> preferente carrier, fallback interno /rastreo
+            tracking_code: trackingCode || "",
+
             support_email: OWNER_EMAIL || "contacto@tu-dominio.com",
           };
 
@@ -234,7 +244,7 @@ export default function Gracias() {
           }
         }
 
-        // 5) Email al DUEÑO (sin adjuntos; incluye enlace interno/recibo)
+        // 5) Email al DUEÑO
         const ownerEmail = d.owner_email || OWNER_EMAIL;
         if (ownerEmail && EMAILJS_SERVICE_ID && EMAILJS_TEMPLATE_OWNER) {
           const varsDueno = {
@@ -265,8 +275,12 @@ export default function Gracias() {
             shipping_state,
             shipping_postal_code,
             shipping_country,
+            // Links
             admin_order_url,
-            receipt_url, // para abrir la página de recibo
+            receipt_url,
+            tracking_url,              // también en el correo interno
+            tracking_code: trackingCode || "",
+
             internal_notes: d.internal_notes || "",
           };
 
@@ -371,6 +385,14 @@ export default function Gracias() {
       : "";
   const total = toMoneyNoSymbol(d.total_mxn || 0);
 
+  // Enlaces para UI (mismos criterios que en correo)
+  const sessionIdUI = params.get("session_id") || "";
+  const orderIdUI   = d.pedido_id || (sessionIdUI ? sessionIdUI.slice(-10).toUpperCase() : "");
+  const trackingCodeUI = d.tracking_code || d.tracking?.code || "";
+  const trackingUrlInternalUI = `${SITE_URL}/rastreo?order=${encodeURIComponent(orderIdUI)}${trackingCodeUI ? `&tracking=${encodeURIComponent(trackingCodeUI)}` : ""}`;
+  const trackingUrlCarrierUI  = d.tracking_url || d.tracking?.url || "";
+  const trackingUrlUI         = trackingUrlCarrierUI || trackingUrlInternalUI;
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-10">
       {/* Encabezado de confirmación */}
@@ -427,6 +449,17 @@ export default function Gracias() {
                 Ver recibo <Receipt size={16} />
               </a>
             )}
+
+            {/* NUEVO: Rastrear pedido (usa carrier si existe, si no, tu /rastreo) */}
+            <a
+              href={trackingUrlUI}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold hover:bg-gray-50"
+              title="Rastrear tu pedido"
+            >
+              Rastrear pedido <ExternalLink size={16} />
+            </a>
           </div>
         </div>
       </div>

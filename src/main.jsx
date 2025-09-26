@@ -21,6 +21,7 @@ import Favoritos from "./pages/Favoritos";
 import PagoStripe from "./pages/PagoStripe";
 import Gracias from "./pages/Gracias";
 import Recibo from "./pages/Recibo";
+import Rastreo from "./pages/Rastreo";
 
 
 ReactDOM.createRoot(document.getElementById("root")).render(
@@ -45,6 +46,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         <Route path="/pago/stripe" element={<PagoStripe />} />
         <Route path="/gracias" element={<Gracias />} />
         <Route path="/recibo" element={<Recibo />} />
+        <Route path="/rastreo" element={<Rastreo />} />
         <Route path="*" element={<h1>404 - Página no encontrada</h1>} />
       </Routes>
     </BrowserRouter>
