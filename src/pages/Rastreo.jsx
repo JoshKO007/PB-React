@@ -144,8 +144,7 @@ export default function Rastreo() {
   const onCopy = async (text) => {
     try {
       await navigator.clipboard.writeText(text || "");
-      // micro-alertita
-      setError(""); // limpiar si había error
+      setError("");
     } catch {
       alert("No se pudo copiar");
     }
@@ -287,7 +286,7 @@ export default function Rastreo() {
         <motion.button
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
-          onClick={() => navigate(-1)}
+          onClick={() => navigate("/")}   // <<<<<<<< LLEVA A HOME
           className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold hover:bg-gray-50"
         >
           <ArrowLeft size={16} /> Volver
