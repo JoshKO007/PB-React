@@ -20,10 +20,11 @@ import {
 
 const TRACK_URL =
   import.meta.env.VITE_TRACKING_STATUS_URL ||
-  // Cambia este fallback por tu Edge Function real:
   "https://ousgktyljynqzrnafoqd.supabase.co/functions/v1/track-shipment";
 
 const SITE_NAME = import.meta.env.VITE_SITE_NAME || "Arte Restauración Visuales";
+// Si tu función valida JWT y NO usaste --no-verify-jwt, pon tu anon key:
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 
 /* =========================
    Utilidades
@@ -131,6 +132,7 @@ export default function Rastreo() {
     }
   };
 
+  // --- Llamada con fallback: POST -> GET ---
   const runQuery = async () => {
     if (!canQuery) {
       setError("Ingresa al menos el código de rastreo o el ID de pedido");
@@ -138,69 +140,41 @@ export default function Rastreo() {
     }
     setLoading(true);
     setError("");
-    try {
-      const res = await fetch(TRACK_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        // === Payload flexible: ajusta según tu función ===
-        body: JSON.stringify({
-          order_id: orderId || undefined,
-          tracking_code: trackingCode || undefined,
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json?.error || "No se pudo obtener el rastreo");
-      }
+    setData(null);
 
-      // ========== MAPEOS ==========
-      // Normaliza la respuesta a una forma consistente con la UI.
+    const baseHeaders = {
+      "Content-Type": "application/json",
+      ...(SUPABASE_ANON_KEY ? { Authorization: `Bearer ${SUPABASE_ANON_KEY}` } : {}),
+      "x-client-info": "pb-react-rastreo",
+    };
+
+    const parseAndSet = (json) => {
+      if (!json) throw new Error("Respuesta vacía del servidor");
+
       const d = json?.data || json || {};
       const carrier =
-        d.carrier ||
-        d.paqueteria ||
-        d.provider ||
-        d?.tracking?.carrier ||
-        "";
+        d.carrier || d.paqueteria || d.provider || d?.tracking?.carrier || "";
       const code =
-        d.tracking_code ||
-        d.code ||
-        d.numero ||
-        d?.tracking?.code ||
-        trackingCode ||
-        "";
+        d.tracking_code || d.code || d.numero || d?.tracking?.code || trackingCode || "";
       const status =
-        d.status ||
-        d.estado ||
-        d.stage ||
-        d?.tracking?.status ||
-        "in_transit";
+        d.status || d.estado || d.stage || d?.tracking?.status || "in_transit";
       const tracking_url =
         d.tracking_url || d.url || d.link || d?.tracking?.url || "";
 
       const eta = d.eta || d.estimated_delivery || d.fecha_estimada || "";
       const last_update = d.last_update || d.updated_at || d.fecha || Date.now();
 
-      const origin =
-        placeToString(d.origin || d.origen || d?.route?.origin || "");
-      const destination =
-        placeToString(d.destination || d.destino || d?.route?.destination || "");
+      const origin = placeToString(d.origin || d.origen || d?.route?.origin || "");
+      const destination = placeToString(d.destination || d.destino || d?.route?.destination || "");
 
       const rawCheckpoints =
         d.checkpoints || d.events || d.historial || d?.tracking?.events || [];
 
       const checkpoints = (rawCheckpoints || []).map((ev) => ({
         time: ev.time || ev.fecha || ev.occurred_at || ev.created_at || "",
-        location:
-          ev.location || ev.lugar || ev.city || ev.ciudad || ev.office || "",
-        status:
-          ev.status ||
-          ev.estado ||
-          ev.type ||
-          ev.descripcion_corta ||
-          "Evento",
-        description:
-          ev.description || ev.descripcion || ev.message || ev.detalle || "",
+        location: ev.location || ev.lugar || ev.city || ev.ciudad || ev.office || "",
+        status: ev.status || ev.estado || ev.type || ev.descripcion_corta || "Evento",
+        description: ev.description || ev.descripcion || ev.message || ev.detalle || "",
       }));
 
       setData({
@@ -215,6 +189,49 @@ export default function Rastreo() {
         destination,
         checkpoints,
       });
+    };
+
+    try {
+      // 1) Intento POST
+      const res = await fetch(TRACK_URL, {
+        method: "POST",
+        headers: baseHeaders,
+        body: JSON.stringify({
+          order_id: orderId || undefined,
+          tracking_code: trackingCode || undefined,
+        }),
+      });
+
+      let json = null;
+      try { json = await res.json(); } catch {}
+
+      if (!res.ok) {
+        // 2) Fallback GET
+        const url =
+          `${TRACK_URL}?` +
+          new URLSearchParams({
+            ...(orderId ? { order_id: orderId } : {}),
+            ...(trackingCode ? { tracking_code: trackingCode } : {}),
+          }).toString();
+
+        const resGet = await fetch(url, {
+          method: "GET",
+          headers: {
+            ...(SUPABASE_ANON_KEY ? { Authorization: `Bearer ${SUPABASE_ANON_KEY}` } : {}),
+            "x-client-info": "pb-react-rastreo",
+          },
+        });
+
+        let jsonGet = null;
+        try { jsonGet = await resGet.json(); } catch {}
+
+        if (!resGet.ok) {
+          throw new Error(jsonGet?.error || `No se pudo obtener el rastreo (GET ${resGet.status})`);
+        }
+        parseAndSet(jsonGet);
+      } else {
+        parseAndSet(json);
+      }
     } catch (e) {
       setError(String(e?.message || e));
       setData(null);
@@ -223,13 +240,13 @@ export default function Rastreo() {
     }
   };
 
-  // Consulta automática si venimos con params en URL (montaje)
+  // Consulta automática si venimos con params en URL
   useEffect(() => {
     if (orderId || trackingCode) runQuery();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Re-consulta si los query params cambian después
+  // Re-consulta si los query params cambian
   useEffect(() => {
     const o = params.get("order") || "";
     const t = params.get("tracking") || "";
