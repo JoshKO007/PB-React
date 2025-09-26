@@ -35,7 +35,6 @@ const SITE_URL =
   import.meta.env.VITE_SITE_URL ||
   (typeof window !== "undefined" ? window.location.origin : "");
 
-/** Busca session_id para un pedido en el storage local */
 function findSessionIdForOrder(orderId) {
   if (!orderId) return "";
   try {
@@ -56,9 +55,7 @@ function findSessionIdForOrder(orderId) {
   } catch {}
   return "";
 }
-
 function buildReceiptLink(order_id) {
-  if (!order_id) return "#";
   const session_id = findSessionIdForOrder(order_id);
   const qs = new URLSearchParams({
     ...(session_id ? { session_id } : {}),
@@ -66,7 +63,6 @@ function buildReceiptLink(order_id) {
   }).toString();
   return `${SITE_URL}/recibo?${qs}`;
 }
-
 function buildTrackingLink({ carrier_tracking_url, order_id, tracking_code }) {
   if (carrier_tracking_url) return carrier_tracking_url;
   const qs = new URLSearchParams({
@@ -126,7 +122,7 @@ export default function MisPedidos() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [pedidos, setPedidos] = useState([]);
-  // { id, email, total, moneda, created_at, items:[{title,thumb}], shipment?:{tracking_code,tracking_url} }
+  // pedido: { id, email, total, moneda, created_at, items:[{title, thumb, qty, unitPrice}], shipment? }
 
   // ====== Header helpers ======
   const [cartCount, setCartCount] = useState(0);
@@ -186,10 +182,10 @@ export default function MisPedidos() {
 
         const pedidoIds = peds.map((p) => p.id);
 
-        // 2) Items (solo necesitamos pedido_id y titulo)
+        // 2) Items (necesitamos titulo, cantidad y unit_price)
         const { data: items, error: e2 } = await supabase
           .from("pedidos_items")
-          .select("pedido_id, titulo")
+          .select("pedido_id, titulo, cantidad, unit_price")
           .in("pedido_id", pedidoIds);
 
         if (e2) throw e2;
@@ -209,37 +205,36 @@ export default function MisPedidos() {
           )
         );
 
-        // 4) Productos por TÍTULO (no por id)
+        // 4) Productos por TÍTULO
         let productosByTitle = {};
         if (titles.length > 0) {
           const { data: prods, error: e3 } = await supabase
             .from("productos")
             .select("id, titulo, imagenes");
-          // (nota) si tu catálogo es grande, se puede hacer .in("titulo", titles)
-          // aquí traemos y armamos un mapa por simplicidad/estabilidad.
           if (e3) throw e3;
           for (const pr of prods || []) {
             const key = (pr.titulo || "").trim().toLowerCase();
-            if (!key) continue;
-            // si hay duplicados de título, nos quedamos con el primero
-            if (!productosByTitle[key]) productosByTitle[key] = pr;
+            if (key && !productosByTitle[key]) productosByTitle[key] = pr;
           }
         }
 
-        // 5) Agrupa thumbs por pedido usando título -> producto.imagenes[0]
+        // 5) Agrupa por pedido con thumbs + datos para la lista (nombre y precio)
         const itemsByPedido = new Map();
         (items || []).forEach((it) => {
-          const arr = itemsByPedido.get(it.pedido_id) || [];
-          const t = (it?.titulo || "").trim();
-          if (t && !TITLES_TO_IGNORE.has(t.toLowerCase())) {
-            const prod = productosByTitle[t.toLowerCase()];
-            if (prod) {
-              arr.push({ title: t, thumb: buildImgFromProducto(prod) });
-            } else {
-              arr.push({ title: t, thumb: "/placeholder.jpg" });
-            }
+          const list = itemsByPedido.get(it.pedido_id) || [];
+          const title = (it?.titulo || "").trim();
+          if (!title || TITLES_TO_IGNORE.has(title.toLowerCase())) {
+            itemsByPedido.set(it.pedido_id, list);
+            return;
           }
-          itemsByPedido.set(it.pedido_id, arr);
+          const prod = productosByTitle[title.toLowerCase()];
+          list.push({
+            title,
+            thumb: prod ? buildImgFromProducto(prod) : "/placeholder.jpg",
+            qty: Number(it?.cantidad || 1),
+            unitPrice: Number(it?.unit_price || 0),
+          });
+          itemsByPedido.set(it.pedido_id, list);
         });
 
         // 6) Shipments (tracking opcional)
@@ -472,6 +467,9 @@ export default function MisPedidos() {
                 tracking_code: p.shipment?.tracking_code,
               });
 
+              const itemsToShow = p.items.slice(0, 4);
+              const remaining = p.items.length - itemsToShow.length;
+
               return (
                 <motion.div
                   key={p.id}
@@ -481,15 +479,30 @@ export default function MisPedidos() {
                 >
                   <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
                     {/* Stack de miniaturas */}
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-start gap-4">
                       <div className="relative h-24 w-40">
                         <ThumbStack items={p.items} />
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <div className="text-sm text-gray-500">Pedido</div>
-                        <div className="text-lg font-semibold">{p.id}</div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          {fmtDate(p.created_at)}
+                        <div className="text-lg font-semibold truncate">{p.id}</div>
+                        <div className="text-xs text-gray-500 mt-1">{fmtDate(p.created_at)}</div>
+
+                        {/* LISTA DE ARTÍCULOS: nombre y precio */}
+                        <div className="mt-2 text-sm text-gray-800 space-y-1">
+                          {itemsToShow.map((it, idx) => (
+                            <div key={idx} className="flex flex-wrap items-center gap-x-2">
+                              <span className="truncate max-w-[230px]">{it.title}</span>
+                              <span className="text-gray-500">•</span>
+                              <span className="font-medium">
+                                {money(it.unitPrice, p.moneda)}
+                                {it.qty > 1 ? ` × ${it.qty}` : ""}
+                              </span>
+                            </div>
+                          ))}
+                          {remaining > 0 && (
+                            <div className="text-xs text-gray-500">+ {remaining} artículo(s) más</div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -500,7 +513,7 @@ export default function MisPedidos() {
                       <div className="text-xl font-bold">{money(p.total, p.moneda)}</div>
 
                       <div className="mt-2 flex flex-wrap gap-2">
-                        {/* Comprobante igual que en Gracias (si hay session_id en cache, lo usa) */}
+                        {/* Comprobante como en Gracias */}
                         <a
                           href={receiptHref}
                           target="_blank"
