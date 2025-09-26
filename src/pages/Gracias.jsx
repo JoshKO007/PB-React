@@ -12,6 +12,7 @@ import {
   Loader2,
   ShoppingBag,
 } from "lucide-react";
+import { createClient } from "@supabase/supabase-js";
 
 /* =========================
    Configuración y constantes
@@ -22,6 +23,17 @@ const FN_URL =
   import.meta.env.VITE_FINALIZE_ORDER_URL ||
   "https://ousgktyljynqzrnafoqd.supabase.co/functions/v1/finalize-order";
 
+// Edge Function para upsert del envío (recomendado)
+const SHIPMENT_FN_URL =
+  import.meta.env.VITE_UPSERT_SHIPMENT_URL ||
+  "https://ousgktyljynqzrnafoqd.supabase.co/functions/v1/upsert-shipment";
+
+// Supabase directo (fallback solo si tu RLS lo permite para usuarios no autenticados)
+// ⚠️ Idealmente, usa la Edge Function anterior.
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://ousgktyljynqzrnafoqd.supabase.co";
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "public-anon-key";
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
 // EmailJS (para pruebas puedes dejar hardcode, en prod usa VITE_*)
 const EMAILJS_PUBLIC_KEY      = "XfzYWVNrvPQL2coPj";
 const EMAILJS_SERVICE_ID      = "service_pfqtahh";
@@ -30,8 +42,7 @@ const EMAILJS_TEMPLATE_OWNER  = "template_44872gn";
 
 // Branding / Sitio
 const SITE_NAME     = import.meta.env.VITE_SITE_NAME     || "Arte Restauración Visuales";
-// Fijamos el dominio que me diste para que los enlaces del correo apunten siempre ahí
-const SITE_URL      = "https://www.arterestauracionvisuales.com";
+const SITE_URL      = "https://www.arterestauracionvisuales.com"; // fija el dominio
 const OWNER_EMAIL   = import.meta.env.VITE_OWNER_EMAIL   || import.meta.env.VITE_FROM_EMAIL || "contacto@tu-dominio.com";
 
 /* ===========
@@ -62,7 +73,6 @@ function clearCart() {
       "checkout_items", "checkout:cart"
     ];
     keys.forEach((k) => localStorage.removeItem(k));
-    // Señal simple para que otros componentes reaccionen
     localStorage.setItem("cart:clearedAt", String(Date.now()));
     window.dispatchEvent(new Event("storage"));
   } catch {}
@@ -77,6 +87,69 @@ function ensureCartClearedOnce(sessionId) {
   }
 }
 
+/* ===========
+   Tracking provisional
+   =========== */
+
+// Código interno: ARV-<base36(fecha última 6)>-<6 rand sin I/O/0/1>
+const _abc = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+function _rand(n = 6) {
+  return Array.from({ length: n }, () => _abc[Math.floor(Math.random() * _abc.length)]).join("");
+}
+function _base36(n) { return n.toString(36).toUpperCase(); }
+function buildInternalTracking() {
+  const now36 = _base36(Date.now()).slice(-6);
+  return `ARV-${now36}-${_rand(6)}`;
+}
+
+/** Upsert vía Edge Function (recomendado) */
+async function upsertShipmentViaFn({ order_id, tracking_code, carrier = "INTERNAL", tracking_url = "", status = "paid", destination = null }) {
+  const res = await fetch(SHIPMENT_FN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      order_id,
+      tracking_code,
+      carrier,
+      tracking_url,
+      status,
+      destination, // opcional: { city, state, country, postal_code }
+    }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json?.error || "No se pudo guardar el envío");
+  return json?.data || json;
+}
+
+/** Fallback directo a Supabase (solo si RLS lo permite; de lo contrario usa la función) */
+async function upsertShipmentDirect({ order_id, tracking_code, carrier = "INTERNAL", tracking_url = "", status = "paid", destination = null }) {
+  // intenta leer si existe por order_id
+  const { data: existing, error: selErr } = await supabase
+    .from("shipments")
+    .select("*")
+    .eq("order_id", order_id)
+    .maybeSingle();
+  if (selErr) throw selErr;
+
+  const payload = {
+    order_id,
+    carrier: existing?.carrier ?? carrier,
+    tracking_code: existing?.tracking_code ?? tracking_code,
+    tracking_url: tracking_url || existing?.tracking_url || null,
+    status: existing?.status ?? status,
+    destination: destination ?? existing?.destination ?? null,
+  };
+
+  const { data, error } = await supabase
+    .from("shipments")
+    .upsert(payload, { onConflict: "order_id" })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
 /* =========================
    Componente principal
    ========================= */
@@ -86,7 +159,6 @@ export default function Gracias() {
   const navigate = useNavigate();
   const [state, setState] = useState({ loading: true, error: "", data: null });
 
-  // Dirección fallback desde la app (por si el backend no manda cada campo)
   const shippingAddressHTML = useMemo(() => {
     try {
       const ses = JSON.parse(localStorage.getItem("sesionActiva") || "null");
@@ -117,12 +189,10 @@ export default function Gracias() {
       return;
     }
 
-    // Evitar re-envíos si recargan
     const idemKey = `finalized:${sessionId}`;
     const cached = localStorage.getItem(idemKey);
     if (cached) {
       const data = JSON.parse(cached);
-      // Limpia el carrito aunque venga de caché
       ensureCartClearedOnce(sessionId);
       setState({ loading: false, error: "", data });
       return;
@@ -130,7 +200,7 @@ export default function Gracias() {
 
     (async () => {
       try {
-        // 1) Finaliza pedido (guarda en BD, calcula totales, etc.) y trae todos los datos listos
+        // 1) Finaliza pedido en backend
         const res = await fetch(FN_URL, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -143,11 +213,10 @@ export default function Gracias() {
         const moneda = (d.moneda || "MXN").toUpperCase();
         const C$ = currencySymbol(moneda);
 
-        // 2) Variables base
+        // 2) IDs base / Totales
         const orderId   = d.pedido_id || sessionId.slice(-10).toUpperCase();
         const orderDate = new Date().toLocaleString("es-MX");
 
-        // Totales / costos
         const subMXN = safeNumber(d.subtotal_mxn);
         const envMXN = safeNumber(d.envio_mxn);
         const feeMXN = safeNumber(d.fee_mxn);
@@ -157,7 +226,7 @@ export default function Gracias() {
         const taxLabel  = taxPct > 0 ? `Impuestos (${taxPct}%)` : "";
         const taxAmount = taxPct > 0 ? (subMXN + envMXN + feeMXN) * (taxPct / 100) : 0;
 
-        // Items -> HTML rows (lo que espera la plantilla)
+        // 3) Items -> HTML rows (para email templates)
         const items = Array.isArray(d.line_items) ? d.line_items : [];
         const items_rows = items.map((it) => {
           const qty  = safeNumber(it.quantity, 1);
@@ -171,7 +240,7 @@ export default function Gracias() {
           </tr>`;
         }).join("");
 
-        // Dirección (intenta mapear desde distintos orígenes)
+        // 4) Dirección (map flexible)
         const ship = d.shipping || d.shipping_address || d.direccion || {};
         const shipping_name        = ship.name || ship.nombre || d.customer_name || "";
         const shipping_line1       = ship.line1 || ship.calle || "";
@@ -185,25 +254,62 @@ export default function Gracias() {
         const shipping_method_label = shippingLabel(d.shipping_metodo);
         const payment_method_label  = d.payment_method_label || "Tarjeta";
 
-        // ✅ Enlaces principales
+        // 5) Enlaces de recibo/orden
         const receipt_url     = `${SITE_URL}/recibo?session_id=${encodeURIComponent(sessionId)}&order=${encodeURIComponent(orderId)}`;
         const admin_order_url = d.admin_order_url || `${SITE_URL}/admin/pedidos/${orderId}`;
         const order_url       = receipt_url;
 
-        // ✅ Rastreo (interno y/o transportista)
-        const trackingCode         = d.tracking_code || d.tracking?.code || "";
+        // 6) RASTREO: si backend NO lo mandó, generamos y GUARDAMOS
+        // Preferimos el real si vino; si no, provisional interno y upsert a BD
+        let trackingCode = d.tracking_code || d.tracking?.code || "";
+        let trackingUrlCarrier = d.tracking_url || d.tracking?.url || "";
+
+        if (!trackingCode) {
+          trackingCode = buildInternalTracking();
+          const destination = {
+            city: shipping_city,
+            state: shipping_state,
+            country: shipping_country,
+            postal_code: shipping_postal_code,
+          };
+
+          // Guarda el envío (pref Edge Function; fallback directo si procede)
+          try {
+            await upsertShipmentViaFn({
+              order_id: orderId,
+              tracking_code: trackingCode,
+              carrier: "INTERNAL",
+              tracking_url: "",       // aún no hay transportista real
+              status: "paid",         // o "packed" si ya empacas aquí
+              destination,
+            });
+          } catch (e) {
+            // Fallback a supabase-js directo SOLO si tu RLS lo permite
+            try {
+              await upsertShipmentDirect({
+                order_id: orderId,
+                tracking_code: trackingCode,
+                carrier: "INTERNAL",
+                tracking_url: "",
+                status: "paid",
+                destination,
+              });
+            } catch (e2) {
+              console.warn("No se pudo guardar el envío (ni FN ni directo):", e2);
+            }
+          }
+        }
+
         const trackingUrlInternal  = `${SITE_URL}/rastreo?order=${encodeURIComponent(orderId)}${trackingCode ? `&tracking=${encodeURIComponent(trackingCode)}` : ""}`;
-        const trackingUrlCarrier   = d.tracking_url || d.tracking?.url || "";
-        // preferimos URL del transportista si existe, si no, usamos tu página interna:
         const tracking_url         = trackingUrlCarrier || trackingUrlInternal;
 
-        // 3) Inicializa EmailJS
+        // 7) EmailJS init
         emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
 
-        // 4) Email al CLIENTE
+        // 8) Email al CLIENTE
         if (d.customer_email && EMAILJS_SERVICE_ID && EMAILJS_TEMPLATE_CLIENT) {
           const varsCliente = {
-            email: d.customer_email,           // destino
+            email: d.customer_email,
             site_name: SITE_NAME,
             site_url: SITE_URL,
             year: String(new Date().getFullYear()),
@@ -223,28 +329,25 @@ export default function Gracias() {
             shipping_name,
             shipping_line1,
             shipping_line2,
-            shipping_line2_block,   // para la plantilla
+            shipping_line2_block,
             shipping_city,
             shipping_state,
             shipping_postal_code,
             shipping_country,
             // Links
-            order_url,                 // -> /recibo
-            receipt_url,               // -> /recibo
-            tracking_url,              // -> preferente carrier, fallback interno /rastreo
+            order_url,
+            receipt_url,
+            tracking_url,
             tracking_code: trackingCode || "",
 
             support_email: OWNER_EMAIL || "contacto@tu-dominio.com",
           };
 
-          try {
-            await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_CLIENT, varsCliente);
-          } catch (e) {
-            console.warn("EmailJS (cliente) falló:", e);
-          }
+          try { await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_CLIENT, varsCliente); }
+          catch (e) { console.warn("EmailJS (cliente) falló:", e); }
         }
 
-        // 5) Email al DUEÑO
+        // 9) Email al DUEÑO
         const ownerEmail = d.owner_email || OWNER_EMAIL;
         if (ownerEmail && EMAILJS_SERVICE_ID && EMAILJS_TEMPLATE_OWNER) {
           const varsDueno = {
@@ -270,7 +373,7 @@ export default function Gracias() {
             shipping_name,
             shipping_line1,
             shipping_line2,
-            shipping_line2_block,   // para la plantilla
+            shipping_line2_block,
             shipping_city,
             shipping_state,
             shipping_postal_code,
@@ -278,24 +381,28 @@ export default function Gracias() {
             // Links
             admin_order_url,
             receipt_url,
-            tracking_url,              // también en el correo interno
+            tracking_url,
             tracking_code: trackingCode || "",
 
             internal_notes: d.internal_notes || "",
           };
 
-          try {
-            await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_OWNER, varsDueno);
-          } catch (e) {
-            console.warn("EmailJS (dueño) falló:", e);
-          }
+          try { await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_OWNER, varsDueno); }
+          catch (e) { console.warn("EmailJS (dueño) falló:", e); }
         }
 
-        // 6) Limpia carrito y cachea datos
+        // 10) Limpia carrito y cachea datos del pedido
         ensureCartClearedOnce(sessionId);
         localStorage.setItem(idemKey, JSON.stringify(d));
 
-        setState({ loading: false, error: "", data: d });
+        // Inyecta en estado los campos de tracking para UI
+        const merged = {
+          ...d,
+          tracking_code: trackingCode || d.tracking_code,
+          tracking_url: trackingUrlCarrier || d.tracking_url,
+        };
+
+        setState({ loading: false, error: "", data: merged });
       } catch (err) {
         console.error("Gracias.jsx error:", err);
         setState({ loading: false, error: String(err?.message || err), data: null });
@@ -385,7 +492,7 @@ export default function Gracias() {
       : "";
   const total = toMoneyNoSymbol(d.total_mxn || 0);
 
-  // Enlaces para UI (mismos criterios que en correo)
+  // Enlaces UI
   const sessionIdUI = params.get("session_id") || "";
   const orderIdUI   = d.pedido_id || (sessionIdUI ? sessionIdUI.slice(-10).toUpperCase() : "");
   const trackingCodeUI = d.tracking_code || d.tracking?.code || "";
@@ -419,7 +526,7 @@ export default function Gracias() {
             </div>
           </div>
 
-          {/* Botones PRINCIPALES arriba para mayor visibilidad */}
+          {/* Botones PRINCIPALES */}
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => navigate("/tienda")}
@@ -449,8 +556,7 @@ export default function Gracias() {
                 Ver recibo <Receipt size={16} />
               </a>
             )}
-
-            {/* NUEVO: Rastrear pedido (usa carrier si existe, si no, tu /rastreo) */}
+            {/* Rastrear: carrier si existe; si no, página interna con el provisional */}
             <a
               href={trackingUrlUI}
               target="_blank"
@@ -526,7 +632,6 @@ export default function Gracias() {
                 <div>
                   <div className="font-medium">{shippingLabel(d.shipping_metodo)}</div>
                   <div className="mt-2 leading-relaxed">
-                    {/* Si backend no manda cada campo, mostramos el HTML de fallback */}
                     {d.shipping?.name || d.shipping_name ? (
                       <>
                         {(d.shipping_name || d.shipping?.name) || "—"} <br />

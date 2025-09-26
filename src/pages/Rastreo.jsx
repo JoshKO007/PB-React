@@ -41,6 +41,18 @@ const fmt = (d) => {
   }
 };
 
+function placeToString(v) {
+  if (!v) return "";
+  if (typeof v === "string") return v;
+  if (typeof v === "object") {
+    const { city, state, country, postal_code, cp } = v;
+    const line1 = [city, state].filter(Boolean).join(", ");
+    const line2 = [country, postal_code || cp].filter(Boolean).join(" · ");
+    return [line1, line2].filter(Boolean).join(" — ");
+  }
+  return String(v);
+}
+
 const statusLabels = {
   created: "Creado",
   paid: "Pagado",
@@ -170,15 +182,9 @@ export default function Rastreo() {
       const last_update = d.last_update || d.updated_at || d.fecha || Date.now();
 
       const origin =
-        d.origin ||
-        d.origen ||
-        d?.route?.origin ||
-        "";
+        placeToString(d.origin || d.origen || d?.route?.origin || "");
       const destination =
-        d.destination ||
-        d.destino ||
-        d?.route?.destination ||
-        "";
+        placeToString(d.destination || d.destino || d?.route?.destination || "");
 
       const rawCheckpoints =
         d.checkpoints || d.events || d.historial || d?.tracking?.events || [];
@@ -217,11 +223,21 @@ export default function Rastreo() {
     }
   };
 
+  // Consulta automática si venimos con params en URL (montaje)
   useEffect(() => {
-    // Consulta automática si venimos con params en URL
     if (orderId || trackingCode) runQuery();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Re-consulta si los query params cambian después
+  useEffect(() => {
+    const o = params.get("order") || "";
+    const t = params.get("tracking") || "";
+    setOrderId(o);
+    setTrackingCode(t);
+    if (o || t) runQuery();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params]);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
@@ -266,7 +282,7 @@ export default function Rastreo() {
             <label className="text-xs text-gray-600">ID de pedido (opcional)</label>
             <input
               value={orderId}
-              onChange={(e) => setOrderId(e.target.value)}
+              onChange={(e) => { setOrderId(e.target.value); if (error) setError(""); }}
               placeholder="Ej. AB12C3D4E5"
               className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
             />
@@ -275,7 +291,7 @@ export default function Rastreo() {
             <label className="text-xs text-gray-600">Código de rastreo</label>
             <input
               value={trackingCode}
-              onChange={(e) => setTrackingCode(e.target.value)}
+              onChange={(e) => { setTrackingCode(e.target.value); if (error) setError(""); }}
               placeholder="Ej. 1Z999AA10123456784"
               className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
             />
