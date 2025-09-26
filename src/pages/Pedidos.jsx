@@ -1,5 +1,5 @@
 // src/pages/MisPedidos.jsx
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -36,18 +36,16 @@ const SITE_URL =
   import.meta.env.VITE_SITE_URL ||
   (typeof window !== "undefined" ? window.location.origin : "");
 
-/** /recibo interno (requiere session_id). Si tienes recibo externo, se prioriza. */
-function buildReceiptLink({ session_id, order_id }) {
-  if (!session_id) return null;
-  const qs = new URLSearchParams({
-    session_id,
-    ...(order_id ? { order: order_id } : {}),
-  }).toString();
+/** Comprobante interno usando solo el id del pedido */
+function buildReceiptLinkByOrder(order_id) {
+  if (!order_id) return null;
+  const qs = new URLSearchParams({ order: order_id }).toString();
   return `${SITE_URL}/recibo?${qs}`;
 }
-function buildReceiptSmartLink({ external_receipt_url, session_id, order_id }) {
+/** Usa recibo externo si existe; si no, el recibo interno por id */
+function buildReceiptSmartLink({ external_receipt_url, order_id }) {
   if (external_receipt_url) return external_receipt_url;
-  return buildReceiptLink({ session_id, order_id });
+  return buildReceiptLinkByOrder(order_id);
 }
 
 /** /rastreo interno o URL del carrier si existe */
@@ -62,7 +60,6 @@ function buildTrackingLink({ carrier_tracking_url, order_id, tracking_code }) {
 
 /* ======================= Helpers varias ======================= */
 function buildImgFromProducto(prod) {
-  // Usa la primera imagen y normaliza contra "public/obras"
   const raw = (Array.isArray(prod?.imagenes) && prod.imagenes[0]) || "";
   const cleaned = String(raw).replace(/^public\//, "");
   const withBase = cleaned.startsWith("obras/") ? cleaned : `obras/${cleaned}`;
@@ -107,13 +104,9 @@ export default function MisPedidos() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [pedidos, setPedidos] = useState([]);
-  // Cada elemento final de "pedidos" quedará con:
-  // {
-  //   id, email, total, moneda, created_at, session_id,
-  //   items: [{title, thumb}, ...],
-  //   shipment: { tracking_code, tracking_url }  // opcional
-  //   external_receipt_url // opcional, si la columna existe
-  // }
+  // Estructura final:
+  // { id, email, total, moneda, created_at, items:[{title,thumb}],
+  //   shipment:{tracking_code,tracking_url} | null, external_receipt_url?:string }
 
   // ====== Header helpers ======
   const [cartCount, setCartCount] = useState(0);
@@ -145,7 +138,7 @@ export default function MisPedidos() {
     }
   }, [usuarioActivo]);
 
-  // ====== Cargar pedidos por email ======
+  // ====== Cargar pedidos por email (SIN session_id) ======
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -157,12 +150,10 @@ export default function MisPedidos() {
           throw new Error("No pudimos identificar tu sesión. Inicia sesión para ver tus pedidos.");
         }
 
-        // 1) Trae pedidos por email
-        //   Incluimos session_id para poder armar /recibo interno.
-        //   Si tu tabla tiene receipt_url (externo) se usa como preferencia; si no, se ignora.
+        // 1) Pedidos por email (sin session_id)
         const { data: peds, error: e1 } = await supabase
           .from("pedidos")
-          .select("id, email, total, moneda, created_at, session_id, receipt_url") // receipt_url es opcional
+          .select("id, email, total, moneda, created_at, receipt_url") // receipt_url opcional
           .eq("email", current.email)
           .order("created_at", { ascending: false });
 
@@ -183,7 +174,7 @@ export default function MisPedidos() {
 
         if (e2) throw e2;
 
-        // 3) Productos involucrados (para miniaturas)
+        // 3) Productos para miniaturas
         const productIds = Array.from(
           new Set((items || []).map((it) => it.producto_id).filter(Boolean))
         );
@@ -200,21 +191,19 @@ export default function MisPedidos() {
           }, {});
         }
 
-        // 4) Shipments (opcional). No guardamos links, solo datos crudos.
+        // 4) Shipments (opcional)
         let shipmentMap = {};
         try {
           const { data: ships, error: e4 } = await supabase
             .from("shipments")
             .select("order_id, tracking_code, tracking_url")
             .in("order_id", pedidoIds);
-
           if (e4) throw e4;
           shipmentMap = (ships || []).reduce((acc, s) => {
             acc[s.order_id] = { tracking_code: s.tracking_code || "", tracking_url: s.tracking_url || "" };
             return acc;
           }, {});
         } catch {
-          // Si no existe la tabla o RLS bloquea, simplemente no habrá tracking_code/url
           shipmentMap = {};
         }
 
@@ -229,25 +218,21 @@ export default function MisPedidos() {
               thumb: buildImgFromProducto(prod),
             });
           } else if (!it.producto_id && it.titulo) {
-            arr.push({
-              title: it.titulo,
-              thumb: "/placeholder.jpg",
-            });
+            arr.push({ title: it.titulo, thumb: "/placeholder.jpg" });
           }
           itemsByPedido.set(it.pedido_id, arr);
         });
 
-        // 6) Resultado final (sin crear links aún)
+        // 6) Resultado final
         const out = peds.map((p) => ({
           id: p.id,
           email: p.email,
           total: p.total,
           moneda: p.moneda,
           created_at: p.created_at,
-          session_id: p.session_id || null,
           items: itemsByPedido.get(p.id) || [],
-          shipment: shipmentMap[p.id] || null,   // { tracking_code, tracking_url } | null
-          external_receipt_url: p.receipt_url || null, // opcional
+          shipment: shipmentMap[p.id] || null,
+          external_receipt_url: p.receipt_url || null,
         }));
 
         setPedidos(out);
@@ -446,13 +431,11 @@ export default function MisPedidos() {
         {!loading && !error && pedidos.length > 0 && (
           <div className="space-y-6">
             {pedidos.map((p) => {
-              // Construimos links al vuelo (sin almacenar en DB)
+              // Links al vuelo (sin session_id)
               const receiptHref = buildReceiptSmartLink({
-                external_receipt_url: p.external_receipt_url, // si existe, se usa
-                session_id: p.session_id,                      // si no hay externo, requiere esto
+                external_receipt_url: p.external_receipt_url,
                 order_id: p.id,
               });
-
               const trackingHref = buildTrackingLink({
                 carrier_tracking_url: p.shipment?.tracking_url,
                 order_id: p.id,
@@ -487,7 +470,7 @@ export default function MisPedidos() {
                       <div className="text-xl font-bold">{money(p.total, p.moneda)}</div>
 
                       <div className="mt-2 flex flex-wrap gap-2">
-                        {/* Comprobante: externo o interno por session_id */}
+                        {/* Comprobante: externo o interno por id */}
                         {receiptHref ? (
                           <a
                             href={receiptHref}
@@ -499,7 +482,6 @@ export default function MisPedidos() {
                             Ver comprobante <ExternalLink size={16} />
                           </a>
                         ) : (
-                          // Si no hay externo ni session_id, ocultar; aquí dejamos botón deshabilitado
                           <button
                             disabled
                             className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold opacity-50 cursor-not-allowed"
