@@ -35,18 +35,12 @@ const SITE_URL =
   import.meta.env.VITE_SITE_URL ||
   (typeof window !== "undefined" ? window.location.origin : "");
 
-/** Intenta encontrar el session_id para un order_id usando el localStorage:
- *  1) `orderSession:<orderId>` (si lo guardas desde Gracias.jsx)
- *  2) escanea keys `finalized:<sessionId>` y compara `pedido_id` adentro
- */
+/** Busca session_id para un pedido en el storage local */
 function findSessionIdForOrder(orderId) {
   if (!orderId) return "";
   try {
-    // 1) mapeo directo si lo guardaste
     const direct = localStorage.getItem(`orderSession:${orderId}`);
     if (direct) return direct;
-
-    // 2) buscar entre caches de finalize-order
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (!k || !k.startsWith("finalized:")) continue;
@@ -54,9 +48,7 @@ function findSessionIdForOrder(orderId) {
       if (!cached) continue;
       try {
         const data = JSON.parse(cached);
-        // la función de finalize suele devolver `pedido_id`
         if (data && (data.pedido_id === orderId || data.id === orderId)) {
-          // key es finalized:<sessionId>
           return k.slice("finalized:".length);
         }
       } catch {}
@@ -65,10 +57,6 @@ function findSessionIdForOrder(orderId) {
   return "";
 }
 
-/** Comprobante: igual que Gracias.
- *  - Si encontramos session_id: /recibo?session_id=...&order=...
- *  - Si no, fallback: /recibo?order=...
- */
 function buildReceiptLink(order_id) {
   if (!order_id) return "#";
   const session_id = findSessionIdForOrder(order_id);
@@ -79,7 +67,6 @@ function buildReceiptLink(order_id) {
   return `${SITE_URL}/recibo?${qs}`;
 }
 
-/** /rastreo interno o URL del carrier si existe */
 function buildTrackingLink({ carrier_tracking_url, order_id, tracking_code }) {
   if (carrier_tracking_url) return carrier_tracking_url;
   const qs = new URLSearchParams({
@@ -90,11 +77,15 @@ function buildTrackingLink({ carrier_tracking_url, order_id, tracking_code }) {
 }
 
 /* ======================= Helpers varias ======================= */
+function normalizeImgPath(p) {
+  if (!p) return "/placeholder.jpg";
+  let cleaned = String(p).replace(/^public\//, "");
+  if (!/^obras\//.test(cleaned)) cleaned = `obras/${cleaned}`;
+  return `/${cleaned}`;
+}
 function buildImgFromProducto(prod) {
   const raw = (Array.isArray(prod?.imagenes) && prod.imagenes[0]) || "";
-  const cleaned = String(raw).replace(/^public\//, "");
-  const withBase = cleaned.startsWith("obras/") ? cleaned : `obras/${cleaned}`;
-  return `/${withBase}`;
+  return normalizeImgPath(raw);
 }
 function money(n, code = "MXN") {
   const sym = String(code).toUpperCase() === "MXN" ? "$" : "";
@@ -179,7 +170,7 @@ export default function MisPedidos() {
           throw new Error("No pudimos identificar tu sesión. Inicia sesión para ver tus pedidos.");
         }
 
-        // 1) Pedidos por email (NO usamos session_id ni receipt_url de la BD)
+        // 1) Pedidos por email
         const { data: peds, error: e1 } = await supabase
           .from("pedidos")
           .select("id, email, total, moneda, created_at")
@@ -195,32 +186,63 @@ export default function MisPedidos() {
 
         const pedidoIds = peds.map((p) => p.id);
 
-        // 2) Items
+        // 2) Items (solo necesitamos pedido_id y titulo)
         const { data: items, error: e2 } = await supabase
           .from("pedidos_items")
-          .select("pedido_id, producto_id, titulo")
+          .select("pedido_id, titulo")
           .in("pedido_id", pedidoIds);
 
         if (e2) throw e2;
 
-        // 3) Productos (para thumbs)
-        const productIds = Array.from(
-          new Set((items || []).map((it) => it.producto_id).filter(Boolean))
+        // 3) Títulos únicos válidos (ignoramos cargos de procesamiento u otros sin imagen)
+        const TITLES_TO_IGNORE = new Set([
+          "Cargo por procesamiento (tarjeta)",
+          "Cargo por procesamiento",
+          "Procesamiento",
+        ].map((s) => s.toLowerCase()));
+
+        const titles = Array.from(
+          new Set(
+            (items || [])
+              .map((it) => (it?.titulo || "").trim())
+              .filter((t) => t && !TITLES_TO_IGNORE.has(t.toLowerCase()))
+          )
         );
-        let productosMap = {};
-        if (productIds.length > 0) {
+
+        // 4) Productos por TÍTULO (no por id)
+        let productosByTitle = {};
+        if (titles.length > 0) {
           const { data: prods, error: e3 } = await supabase
             .from("productos")
-            .select("id, imagenes, titulo")
-            .in("id", productIds);
+            .select("id, titulo, imagenes");
+          // (nota) si tu catálogo es grande, se puede hacer .in("titulo", titles)
+          // aquí traemos y armamos un mapa por simplicidad/estabilidad.
           if (e3) throw e3;
-          productosMap = (prods || []).reduce((acc, r) => {
-            acc[r.id] = r;
-            return acc;
-          }, {});
+          for (const pr of prods || []) {
+            const key = (pr.titulo || "").trim().toLowerCase();
+            if (!key) continue;
+            // si hay duplicados de título, nos quedamos con el primero
+            if (!productosByTitle[key]) productosByTitle[key] = pr;
+          }
         }
 
-        // 4) Shipments (tracking opcional)
+        // 5) Agrupa thumbs por pedido usando título -> producto.imagenes[0]
+        const itemsByPedido = new Map();
+        (items || []).forEach((it) => {
+          const arr = itemsByPedido.get(it.pedido_id) || [];
+          const t = (it?.titulo || "").trim();
+          if (t && !TITLES_TO_IGNORE.has(t.toLowerCase())) {
+            const prod = productosByTitle[t.toLowerCase()];
+            if (prod) {
+              arr.push({ title: t, thumb: buildImgFromProducto(prod) });
+            } else {
+              arr.push({ title: t, thumb: "/placeholder.jpg" });
+            }
+          }
+          itemsByPedido.set(it.pedido_id, arr);
+        });
+
+        // 6) Shipments (tracking opcional)
         let shipmentMap = {};
         try {
           const { data: ships, error: e4 } = await supabase
@@ -236,23 +258,7 @@ export default function MisPedidos() {
           shipmentMap = {};
         }
 
-        // 5) Compacta items por pedido con miniaturas
-        const itemsByPedido = new Map();
-        (items || []).forEach((it) => {
-          const arr = itemsByPedido.get(it.pedido_id) || [];
-          if (it.producto_id && productosMap[it.producto_id]) {
-            const prod = productosMap[it.producto_id];
-            arr.push({
-              title: it.titulo || prod.titulo || "Producto",
-              thumb: buildImgFromProducto(prod),
-            });
-          } else if (!it.producto_id && it.titulo) {
-            arr.push({ title: it.titulo, thumb: "/placeholder.jpg" });
-          }
-          itemsByPedido.set(it.pedido_id, arr);
-        });
-
-        // 6) Resultado
+        // 7) Resultado final
         const out = peds.map((p) => ({
           id: p.id,
           email: p.email,
@@ -306,7 +312,7 @@ export default function MisPedidos() {
 
   /* ======================= Render ======================= */
   return (
-    <div className="min-h-screen bg-[#f9f4ef] text-[#333333] font-sans flex flex-col itemscenter">
+    <div className="min-h-screen bg-[#f9f4ef] text-[#333333] font-sans flex flex-col items-center">
       {cerrandoSesion && (
         <div className="fixed inset-0 bg-white/80 z-50 flex flex-col items-center justify-center">
           <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-[#a16207]" />
@@ -338,7 +344,7 @@ export default function MisPedidos() {
                 onMouseLeave={handleUserMouseLeave}
                 className="relative"
               >
-                <button className="p-2 rounded-full bgwhite/90 backdrop-blur-md border border-gray-200 shadow-md hover:shadow-lg flex items-center">
+                <button className="p-2 rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md hover:shadow-lg flex items-center">
                   <User size={24} className="text-[#333333]" />
                 </button>
                 <AnimatePresence>
