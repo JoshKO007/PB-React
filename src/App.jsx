@@ -14,7 +14,8 @@ import {
   UserPlus,
   LogOut,
   KeyRound,
-  HeartIcon
+  HeartIcon,
+  ShoppingBasket
 } from "lucide-react";
 
 // ===== Supabase =====
@@ -283,6 +284,9 @@ export default function App() {
                           </button>
                           <button onClick={() => navigate("/direccion")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <Mail size={16} className="mr-2" /> Direcciones
+                          </button>
+                          <button onClick={() => navigate("/mis-pedidos")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                            <ShoppingBasket size={16} className="mr-2" /> Mis pedidos
                           </button>
                           <button onClick={() => navigate("/favoritos")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <HeartIcon size={16} className="mr-2" /> Favoritos

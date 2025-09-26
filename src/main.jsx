@@ -22,7 +22,7 @@ import PagoStripe from "./pages/PagoStripe";
 import Gracias from "./pages/Gracias";
 import Recibo from "./pages/Recibo";
 import Rastreo from "./pages/Rastreo";
-
+import MisPedidos from "./pages/Pedidos";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
@@ -47,6 +47,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         <Route path="/gracias" element={<Gracias />} />
         <Route path="/recibo" element={<Recibo />} />
         <Route path="/rastreo" element={<Rastreo />} />
+        <Route path="/mis-pedidos" element={<MisPedidos />} />
         <Route path="*" element={<h1>404 - Página no encontrada</h1>} />
       </Routes>
     </BrowserRouter>
