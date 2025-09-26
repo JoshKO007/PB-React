@@ -556,14 +556,18 @@ export default function MisPedidos() {
 
 /* ======================= Subcomponentes ======================= */
 
-// Muestra hasta 4 thumbs rotadas/escalonadas sin taparse
+/* ANIMACIÓN actualizada: al hacer click, la carta superior pasa al fondo */
 function ThumbStack({ items }) {
   const thumbs = (items || [])
     .map((it) => it.thumb)
     .filter(Boolean)
     .slice(0, 4);
 
-  if (thumbs.length === 0) {
+  // Mantener un “mazo” local para animar el reordenamiento
+  const [deck, setDeck] = useState(thumbs);
+  useEffect(() => setDeck(thumbs), [thumbs.join("|")]);
+
+  if (deck.length === 0) {
     return (
       <div className="absolute inset-0 grid place-items-center rounded-xl border bg-gray-50 text-gray-400 text-xs">
         Sin imágenes
@@ -572,30 +576,40 @@ function ThumbStack({ items }) {
   }
 
   const positions = [
-    { r: -6, x: 0, y: 0, z: 40 },
-    { r: 4, x: 10, y: 8, z: 30 },
-    { r: -2, x: 20, y: 16, z: 20 },
-    { r: 6, x: 30, y: 24, z: 10 },
+    { r: -6, x: 0, y: 0 },
+    { r: 4, x: 10, y: 8 },
+    { r: -2, x: 20, y: 16 },
+    { r: 6, x: 30, y: 24 },
   ];
 
+  const sendTopToBack = () => {
+    setDeck((arr) => (arr.length <= 1 ? arr : [...arr.slice(1), arr[0]]));
+  };
+
   return (
-    <div className="absolute inset-0">
-      {thumbs.map((src, i) => {
-        const p = positions[i] || positions[positions.length - 1];
-        return (
-          <img
-            key={i}
-            src={src}
-            onError={(e) => (e.currentTarget.src = "/placeholder.jpg")}
-            alt={`artículo ${i + 1}`}
-            className="absolute h-24 w-24 object-cover rounded-xl border shadow-md"
-            style={{
-              transform: `translate(${p.x}px, ${p.y}px) rotate(${p.r}deg)`,
-              zIndex: p.z,
-            }}
-          />
-        );
-      })}
+    <div className="absolute inset-0 cursor-pointer" onClick={sendTopToBack}>
+      <AnimatePresence initial={false}>
+        {deck.map((src, i) => {
+          const p = positions[i] || positions[positions.length - 1];
+          const z = 100 - i; // el primero arriba
+          return (
+            <motion.img
+              key={src}
+              src={src}
+              onError={(e) => (e.currentTarget.src = "/placeholder.jpg")}
+              alt={`artículo ${i + 1}`}
+              className="absolute h-24 w-24 object-cover rounded-xl border shadow-md select-none"
+              style={{ zIndex: z }}
+              layout
+              initial={{ opacity: 0, scale: 0.95, rotate: p.r - 6 }}
+              animate={{ opacity: 1, scale: 1, x: p.x, y: p.y, rotate: p.r }}
+              exit={{ opacity: 0, scale: 0.95, rotate: p.r + 10 }}
+              transition={{ type: "spring", stiffness: 260, damping: 18 }}
+              whileTap={{ scale: 0.98 }}
+            />
+          );
+        })}
+      </AnimatePresence>
     </div>
   );
 }
