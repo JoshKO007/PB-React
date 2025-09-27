@@ -31,7 +31,7 @@ const emptyProduct = () => ({
   id: "", // text
   titulo: "",
   descripcion: "",
-  descripcion_det: "",
+  descripcion_detallada: "",
   serie: "",
   precio: "",
   moneda: "MXN",
@@ -450,8 +450,8 @@ function ProductForm({ value, onChange, seriesOptions, onCreateSeries, onSave, s
             <textarea
               rows={4}
               className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
-              value={v.descripcion_det}
-              onChange={(e) => set("descripcion_det", e.target.value)}
+              value={v.descripcion_detallada}
+              onChange={(e) => set("descripcion_detallada", e.target.value)}
             />
           </div>
 
@@ -536,7 +536,7 @@ export default function AdminProductos() {
       const { data, error } = await supabase
         .from("productos")
         .select(
-          "id,titulo,descripcion,descripcion_det,serie,precio,moneda,descuento,etiquetas,imagenes,destacado,bajo_pedido,disponible,tiempo_entreg,stock,stripe_price_id,payment_link,created_at,updated_at"
+          "id,titulo,descripcion,descripcion_detallada,serie,precio,moneda,descuento,etiquetas,imagenes,destacado,bajo_pedido,disponible,tiempo_entreg,stock,stripe_price_id,payment_link,created_at,updated_at"
         )
         .order("created_at", { ascending: false });
       if (error) throw error;
