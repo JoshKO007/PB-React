@@ -13,6 +13,8 @@ import {
   Loader2,
   CheckCircle2,
   AlertCircle,
+  Pencil,
+  ArrowLeft,
 } from "lucide-react";
 
 /* ====== Config ====== */
@@ -30,10 +32,8 @@ const moneyFmt = (n) =>
   );
 
 function validTag(s) {
-  // Sin espacios ni comas. Permitimos letras con acentos, números, guión y guión bajo.
   return /^[\p{L}\p{N}_-]+$/u.test(s);
 }
-
 async function uploadToImgBB(file) {
   const fd = new FormData();
   fd.append("image", file);
@@ -45,15 +45,11 @@ async function uploadToImgBB(file) {
   if (!res.ok || !json?.data?.url) {
     throw new Error(json?.error?.message || "Error subiendo imagen");
   }
-  // Puedes usar display_url, url o image.url. La pública suele ser display_url:
   return json.data.display_url || json.data.url;
 }
 
-/* ====== Component ====== */
+/* ====== Gate ====== */
 export default function AdminProductos() {
-  const navigate = useNavigate();
-
-  // Gate muy simple por contraseña
   const [inputPass, setInputPass] = useState("");
   const [showPass, setShowPass]   = useState(false);
   const [authed, setAuthed]       = useState(false);
@@ -127,17 +123,25 @@ export default function AdminProductos() {
     );
   }
 
-  return <ProductosForm />;
+  return <ProductosAdminUI />;
 }
 
-/* ====== Productos Form ====== */
-function ProductosForm() {
+/* ====== Página ====== */
+function ProductosAdminUI() {
+  const navigate = useNavigate();
+
+  // listado
+  const [list, setList] = useState([]);
+  const [listLoading, setListLoading] = useState(true);
+
+  // form state (crear/editar)
+  const [editingId, setEditingId] = useState(null); // id (text) de BD cuando se edita
   const [loading, setLoading] = useState(false);
   const [okMsg, setOkMsg]     = useState("");
   const [errMsg, setErrMsg]   = useState("");
 
-  // Series (lista seleccionable + crear nuevas)
-  const [series, setSeries]           = useState([]); // ["Serie 1", "Serie 2", ...]
+  // Series (distinct)
+  const [series, setSeries]           = useState([]);
   const [serieSel, setSerieSel]       = useState("");
   const [serieNueva, setSerieNueva]   = useState("");
 
@@ -156,27 +160,109 @@ function ProductosForm() {
   const [tagInput, setTagInput] = useState("");
   const [etiquetas, setEtiquetas] = useState([]);
 
-  // Imágenes: guardamos File[] local y previews. Se suben a ImgBB al crear.
-  const [files, setFiles] = useState([]);
+  // Imágenes: urls existentes (cuando editas) + nuevos files (se suben al guardar)
+  const [imgUrls, setImgUrls] = useState([]); // string[]
+  const [filesNew, setFilesNew] = useState([]); // File[]
   const fileInputRef = useRef(null);
 
+  /* ==== Load list & series ==== */
+  const fetchList = async () => {
+    setListLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("productos")
+        .select("id,titulo,precio,moneda,stock,serie,imagenes,created_at")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      setList(data || []);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setListLoading(false);
+    }
+  };
+  const fetchSeries = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("productos")
+        .select("serie")
+        .not("serie", "is", null);
+      if (error) throw error;
+      const uniq = Array.from(new Set((data || []).map((r) => (r.serie || "").trim()).filter(Boolean)));
+      setSeries(uniq);
+    } catch (e) {
+      console.warn("No se pudieron cargar series:", e);
+    }
+  };
   useEffect(() => {
-    (async () => {
-      try {
-        // Trae series existentes (distinct)
-        const { data, error } = await supabase
-          .from("productos")
-          .select("serie")
-          .not("serie", "is", null);
-        if (error) throw error;
-        const uniq = Array.from(new Set((data || []).map((r) => (r.serie || "").trim()).filter(Boolean)));
-        setSeries(uniq);
-      } catch (e) {
-        console.warn("No se pudieron cargar series:", e);
-      }
-    })();
+    fetchList();
+    fetchSeries();
   }, []);
 
+  /* ==== Helpers UI ==== */
+  const resetForm = () => {
+    setEditingId(null);
+    setTitulo("");
+    setDescripcion("");
+    setDescripcionDetallada("");
+    setPrecio("");
+    setMoneda("MXN");
+    setDescuento(0);
+    setBajoPedido(false);
+    setTiempoEntrega("Listo para envío");
+    setStock(1);
+    setEtiquetas([]);
+    setImgUrls([]);
+    setFilesNew([]);
+    setSerieSel("");
+    setSerieNueva("");
+  };
+
+  const loadForEdit = async (id) => {
+    setLoading(true);
+    setOkMsg("");
+    setErrMsg("");
+    try {
+      const { data, error } = await supabase
+        .from("productos")
+        .select("*")
+        .eq("id", id)
+        .single();
+      if (error) throw error;
+      setEditingId(data.id);
+      setTitulo(data.titulo || "");
+      setDescripcion(data.descripcion || "");
+      setDescripcionDetallada(data.descripcion_detallada || "");
+      setPrecio(String(data.precio ?? ""));
+      setMoneda((data.moneda || "MXN").toUpperCase());
+      setDescuento(Number(data.descuento || 0));
+      setBajoPedido(!!data.bajo_pedido);
+      setTiempoEntrega(data.tiempo_entrega || "Listo para envío");
+      setStock(Math.max(0, Number(data.stock || 0)));
+      setEtiquetas(Array.isArray(data.etiquetas) ? data.etiquetas : []);
+      setImgUrls(Array.isArray(data.imagenes) ? data.imagenes : []);
+      setFilesNew([]);
+      setSerieSel(data.serie || "");
+    } catch (e) {
+      setErrMsg(e.message || String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const confirmDelete = async (id) => {
+    if (!confirm("¿Eliminar este producto? Esta acción no se puede deshacer.")) return;
+    try {
+      const { error } = await supabase.from("productos").delete().eq("id", id);
+      if (error) throw error;
+      if (editingId === id) resetForm();
+      fetchList();
+    } catch (e) {
+      alert(e.message || String(e));
+    }
+  };
+
+  /* ==== Series ==== */
   const addSerie = () => {
     const s = (serieNueva || "").trim();
     if (!s) return;
@@ -185,7 +271,7 @@ function ProductosForm() {
     setSerieNueva("");
   };
 
-  // Etiquetas
+  /* ==== Tags ==== */
   const onAddTag = () => {
     const raw = (tagInput || "").trim();
     if (!raw) return;
@@ -205,94 +291,77 @@ function ProductosForm() {
   };
   const removeTag = (t) => setEtiquetas((prev) => prev.filter((x) => x !== t));
 
-  // Imágenes
+  /* ==== Imágenes ==== */
   const onPickFiles = (e) => {
     const incoming = Array.from(e.target.files || []);
     if (incoming.length === 0) return;
-    setFiles((prev) => {
-      const maxSlots = Math.max(0, 5 - prev.length);
-      return [...prev, ...incoming.slice(0, maxSlots)];
-    });
-    // Re-armar el input para poder volver a cargar el mismo archivo si quiere
+    // límite total 5
+    const remaining = Math.max(0, 5 - (imgUrls.length + filesNew.length));
+    setFilesNew((prev) => [...prev, ...incoming.slice(0, remaining)]);
     e.target.value = "";
   };
-
-  const onDrop = (e) => {
-    e.preventDefault();
-    const incoming = Array.from(e.dataTransfer.files || []);
-    if (incoming.length === 0) return;
-    setFiles((prev) => {
-      const maxSlots = Math.max(0, 5 - prev.length);
-      return [...prev, ...incoming.slice(0, maxSlots)];
-    });
+  const removeExistingUrl = (idx) => {
+    setImgUrls((prev) => prev.filter((_, i) => i !== idx));
+  };
+  const removeNewFile = (idx) => {
+    setFilesNew((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  const removeFileAt = (idx) => {
-    setFiles((prev) => prev.filter((_, i) => i !== idx));
-  };
+  const canAddMore = imgUrls.length + filesNew.length < 5;
 
-  const clearImages = () => setFiles([]);
-
-  const totalImgs = files.length;
-  const canAddMore = totalImgs < 5;
-
-  // Submit
-  const onCreate = async () => {
+  /* ==== Crear/Actualizar ==== */
+  const saveProduct = async () => {
     setLoading(true);
     setOkMsg("");
     setErrMsg("");
-
     try {
       if (!titulo.trim()) throw new Error("Falta título.");
       if (!precio || Number(precio) <= 0) throw new Error("Precio inválido.");
       if (stock < 0) throw new Error("Stock inválido.");
-      if (!IMGBB_API_KEY) throw new Error("Falta VITE_IMGBB_API_KEY.");
+      if (!IMGBB_API_KEY && filesNew.length > 0) throw new Error("Falta VITE_IMGBB_API_KEY.");
 
-      // 1) Sube imágenes a ImgBB
-      let urls = [];
-      for (const f of files) {
+      // 1) Sube nuevas imágenes si hay
+      let newUrls = [];
+      for (const f of filesNew) {
         const u = await uploadToImgBB(f);
-        urls.push(u);
+        newUrls.push(u);
       }
+      const imagenesFinal = [...imgUrls, ...newUrls].slice(0, 5);
 
-      // 2) Construye payload con nombres de columnas reales
+      // 2) Payload
       const payload = {
-        // id: (lo generará tu proceso/server si aplica; aquí no mandamos id)
         titulo: titulo.trim(),
         descripcion: descripcion.trim() || null,
         descripcion_detallada: descripcionDetallada.trim() || null,
         precio: Number(precio),
         moneda: (moneda || "MXN").toUpperCase(),
         descuento: Number.isFinite(Number(descuento)) ? Number(descuento) : 0,
-        etiquetas: etiquetas,              // text[]
-        imagenes: urls,                    // text[] (urls imgbb)
-        destacado: false,                  // lo puedes editar más tarde
+        etiquetas,
+        imagenes: imagenesFinal,
+        destacado: false,
         bajo_pedido: !!bajoPedido,
-        // disponible se calcula por stock, pero la columna existe: lo mandamos para mantener consistencia
         disponible: Number(stock) > 0,
         tiempo_entrega: tiempoEntrega || null,
         stock: Math.max(0, Number(stock) || 0),
         serie: (serieSel || "").trim() || null,
-        // stripe_price_id y payment_link_url no se usan (UI removido)
+        updated_at: new Date().toISOString(),
       };
 
-      // 3) Inserta
-      const { data, error } = await supabase.from("productos").insert([payload]).select().single();
-      if (error) throw error;
+      if (editingId) {
+        // update
+        const { error } = await supabase.from("productos").update(payload).eq("id", editingId);
+        if (error) throw error;
+        setOkMsg("Producto actualizado.");
+      } else {
+        // insert
+        const { error } = await supabase.from("productos").insert([payload]);
+        if (error) throw error;
+        setOkMsg("Producto creado.");
+      }
 
-      setOkMsg(`Producto creado (${data?.id || "sin id visible"})`);
-      // Limpia form
-      setTitulo("");
-      setDescripcion("");
-      setDescripcionDetallada("");
-      setPrecio("");
-      setDescuento(0);
-      setEtiquetas([]);
-      setFiles([]);
-      setBajoPedido(false);
-      setTiempoEntrega("Listo para envío");
-      setStock(1);
-      // mantener serieSel/moneda como están
+      resetForm();
+      fetchList();
+      fetchSeries();
     } catch (e) {
       setErrMsg(e.message || String(e));
     } finally {
@@ -301,19 +370,61 @@ function ProductosForm() {
     }
   };
 
+  /* ==== UI ==== */
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold">Administrador — Productos</h1>
-        <p className="text-sm text-gray-600">Crea productos y sube hasta 5 imágenes (ImgBB) al guardar.</p>
+    <div className="mx-auto max-w-6xl px-4 py-8">
+      {/* Header bonito */}
+      <div className="rounded-3xl border bg-white p-5 shadow-sm flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 grid place-items-center rounded-full bg-amber-100 text-amber-700">
+            <ImageIcon size={18} />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold">Panel de productos</h1>
+            <p className="text-xs text-gray-600">Crea, edita o elimina productos.</p>
+          </div>
+        </div>
+
+        <button
+          onClick={() => (window.location.href = "/admin")}
+          className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold hover:bg-gray-50"
+          title="Volver"
+        >
+          <ArrowLeft size={16} /> Volver al admin
+        </button>
       </div>
 
       {/* Mensajes */}
-      <AnimatePresenceMsg ok={okMsg} err={errMsg} />
+      <div className="mt-4 space-y-2">
+        {okMsg ? (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 inline-flex items-center gap-2">
+            <CheckCircle2 size={16} /> {okMsg}
+          </div>
+        ) : null}
+        {errMsg ? (
+          <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 inline-flex items-center gap-2">
+            <AlertCircle size={16} /> {errMsg}
+          </div>
+        ) : null}
+      </div>
 
-      <div className="rounded-3xl border bg-white p-6 shadow-sm space-y-6">
-        {/* Básicos */}
-        <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Formulario (bonito) */}
+      <div className="mt-6 rounded-3xl border bg-white p-6 shadow-sm">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">
+            {editingId ? "Editar producto" : "Nuevo producto"}
+          </h2>
+          {editingId && (
+            <button
+              onClick={resetForm}
+              className="text-sm underline decoration-gray-300 hover:decoration-gray-700"
+            >
+              Cancelar edición
+            </button>
+          )}
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="Título">
             <input
               className="w-full rounded-xl border px-3 py-2 text-sm outline-none"
@@ -426,10 +537,9 @@ function ProductosForm() {
               placeholder="Listo para envío / Hecho bajo pedido (3 semanas)"
             />
           </Field>
-        </section>
+        </div>
 
-        {/* Descripciones */}
-        <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="Descripción breve">
             <textarea
               className="w-full rounded-xl border px-3 py-2 text-sm outline-none min-h-[80px]"
@@ -447,10 +557,10 @@ function ProductosForm() {
               placeholder="Obra que explora la relación entre..."
             />
           </Field>
-        </section>
+        </div>
 
         {/* Etiquetas */}
-        <section>
+        <section className="mt-4">
           <div className="text-sm text-gray-700 font-medium mb-1">Etiquetas (máx 3)</div>
           <div className="flex gap-2">
             <input
@@ -485,53 +595,18 @@ function ProductosForm() {
           </div>
         </section>
 
-        {/* Imágenes */}
-        <section>
-          <div className="text-sm text-gray-700 font-medium mb-1">Imágenes (hasta 5)</div>
-
-          <div
-            className="rounded-2xl border border-dashed p-4 text-center text-sm text-gray-600 bg-gray-50"
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={onDrop}
-          >
-            Arrastra y suelta aquí o usa “+ Agregar imágenes”.
-          </div>
-
-          {/* Grid de previews */}
-          <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-            {files.map((f, idx) => {
-              const url = URL.createObjectURL(f);
-              return (
-                <div key={idx} className="relative rounded-xl overflow-hidden border">
-                  <img
-                    src={url}
-                    alt={`img-${idx}`}
-                    className="h-32 w-full object-cover"
-                    onLoad={() => URL.revokeObjectURL(url)}
-                  />
-                  <button
-                    onClick={() => removeFileAt(idx)}
-                    className="absolute top-1 right-1 rounded-full bg-white/90 p-1 shadow hover:bg-white"
-                    title="Quitar"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              );
-            })}
-
-            {/* Botón + siempre visible mientras haya espacio */}
-            {canAddMore && (
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="h-32 w-full rounded-xl border border-dashed flex flex-col items-center justify-center text-sm hover:bg-gray-50"
-                title="Agregar imágenes"
-              >
-                <Plus />
-                Agregar imágenes
-              </button>
-            )}
+        {/* Imágenes: un solo botón + un solo contenedor */}
+        <section className="mt-4">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-gray-700 font-medium">Imágenes (hasta 5)</div>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold hover:bg-gray-50"
+              title="Seleccionar imágenes"
+            >
+              <ImageIcon size={16} /> Seleccionar imágenes
+            </button>
           </div>
 
           <input
@@ -543,36 +618,121 @@ function ProductosForm() {
             onChange={onPickFiles}
           />
 
-          <div className="mt-2 flex gap-2">
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="rounded-xl border px-3 py-2 text-sm font-semibold hover:bg-gray-50"
-            >
-              + Agregar imágenes
-            </button>
-            {files.length > 0 && (
-              <button
-                onClick={clearImages}
-                className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold hover:bg-gray-50"
-                title="Borrar imágenes seleccionadas"
-              >
-                <Trash2 size={16} /> Borrar imágenes
-              </button>
-            )}
+          <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+            {/* existentes */}
+            {imgUrls.map((u, idx) => (
+              <div key={`u-${idx}`} className="relative rounded-xl overflow-hidden border">
+                <img src={u} alt={`img-${idx}`} className="h-32 w-full object-cover" />
+                <button
+                  onClick={() => removeExistingUrl(idx)}
+                  className="absolute top-1 right-1 rounded-full bg-white/90 p-1 shadow hover:bg-white"
+                  title="Quitar"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+            {/* nuevos */}
+            {filesNew.map((f, idx) => {
+              const url = URL.createObjectURL(f);
+              return (
+                <div key={`n-${idx}`} className="relative rounded-xl overflow-hidden border">
+                  <img
+                    src={url}
+                    alt={`new-${idx}`}
+                    className="h-32 w-full object-cover"
+                    onLoad={() => URL.revokeObjectURL(url)}
+                  />
+                  <button
+                    onClick={() => removeNewFile(idx)}
+                    className="absolute top-1 right-1 rounded-full bg-white/90 p-1 shadow hover:bg-white"
+                    title="Quitar"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+          <div className="text-xs text-gray-500 mt-2">
+            {imgUrls.length + filesNew.length}/5 seleccionadas.
           </div>
         </section>
 
         {/* Acciones */}
-        <div className="pt-2 flex flex-wrap gap-2">
+        <div className="pt-4 flex flex-wrap gap-2">
           <button
-            onClick={onCreate}
+            onClick={saveProduct}
             disabled={loading}
             className="inline-flex items-center gap-2 rounded-xl bg-gray-900 text-white px-4 py-2 text-sm font-semibold disabled:opacity-60"
           >
             {loading ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />}
-            Crear
+            {editingId ? "Guardar cambios" : "Crear"}
           </button>
+          {editingId && (
+            <button
+              onClick={resetForm}
+              className="inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-gray-50"
+            >
+              Cancelar
+            </button>
+          )}
         </div>
+      </div>
+
+      {/* Listado de productos existentes */}
+      <div className="mt-8">
+        <h3 className="text-lg font-semibold mb-3">Productos existentes</h3>
+
+        {listLoading ? (
+          <div className="rounded-2xl border bg-white p-6 shadow-sm flex items-center gap-3">
+            <Loader2 className="animate-spin" /> Cargando productos…
+          </div>
+        ) : list.length === 0 ? (
+          <div className="rounded-2xl border bg-white p-6 shadow-sm">No hay productos aún.</div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {list.map((p) => (
+              <div key={p.id} className="rounded-2xl border bg-white p-4 shadow-sm flex gap-4">
+                <div className="h-24 w-24 rounded-xl overflow-hidden border bg-gray-50 shrink-0">
+                  {Array.isArray(p.imagenes) && p.imagenes[0] ? (
+                    <img src={p.imagenes[0]} alt={p.titulo} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="h-full w-full grid place-items-center text-gray-400">
+                      <ImageIcon />
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="font-semibold truncate">{p.titulo}</div>
+                    <div className="text-xs text-gray-500">{new Date(p.created_at).toLocaleDateString("es-MX")}</div>
+                  </div>
+                  <div className="mt-0.5 text-sm text-gray-600">
+                    {p.serie ? <span className="mr-2 italic">{p.serie}</span> : null}
+                    · {p.moneda === "MXN" ? "$" : ""}{moneyFmt(p.precio)} · Stock:{" "}
+                    <span className={p.stock > 0 ? "text-emerald-700" : "text-rose-700"}>{p.stock}</span>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      onClick={() => loadForEdit(p.id)}
+                      className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold hover:bg-gray-50"
+                    >
+                      <Pencil size={16} /> Editar
+                    </button>
+                    <button
+                      onClick={() => confirmDelete(p.id)}
+                      className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold hover:bg-gray-50 text-rose-700"
+                    >
+                      <Trash2 size={16} /> Eliminar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -585,22 +745,5 @@ function Field({ label, children }) {
       <div className="text-sm text-gray-700 font-medium mb-1">{label}</div>
       {children}
     </label>
-  );
-}
-
-function AnimatePresenceMsg({ ok, err }) {
-  return (
-    <div className="space-y-2">
-      {ok ? (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 inline-flex items-center gap-2">
-          <CheckCircle2 size={16} /> {ok}
-        </div>
-      ) : null}
-      {err ? (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 inline-flex items-center gap-2">
-          <AlertCircle size={16} /> {err}
-        </div>
-      ) : null}
-    </div>
   );
 }
