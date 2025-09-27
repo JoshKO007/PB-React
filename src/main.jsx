@@ -24,6 +24,8 @@ import Recibo from "./pages/Recibo";
 import Rastreo from "./pages/Rastreo";
 import MisPedidos from "./pages/Pedidos";
 import AdminProductos from "./pages/AdminProductos";
+import AdminHome from "./pages/AdminHome";
+
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
@@ -49,6 +51,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         <Route path="/recibo" element={<Recibo />} />
         <Route path="/rastreo" element={<Rastreo />} />
         <Route path="/mis-pedidos" element={<MisPedidos />} />
+        <Route path="/admin" element={<AdminHome />} />
         <Route path="/admin/productos" element={<AdminProductos />} />
         <Route path="*" element={<h1>404 - Página no encontrada</h1>} />
       </Routes>
