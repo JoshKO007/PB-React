@@ -1,765 +1,606 @@
 // src/pages/AdminProductos.jsx
-import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { useNavigate } from "react-router-dom";
 import {
-  Lock,
-  LogOut,
+  LockKeyhole,
+  Eye,
+  EyeOff,
   Plus,
-  Trash2,
-  Save,
-  X,
   Image as ImageIcon,
-  UploadCloud,
-  Pencil,
-  RefreshCw,
-  ArrowLeft,
-  ArrowRight,
+  Trash2,
+  Tag,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 
-/* =========================
-   ENV / Clients
-   ========================= */
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "";
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+/* ====== Config ====== */
+const SUPABASE_URL  = import.meta.env.VITE_SUPABASE_URL  || "";
+const SUPABASE_KEY  = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+const IMGBB_API_KEY = import.meta.env.VITE_IMGBB_API_KEY || "";
+const ADMIN_PASS    = import.meta.env.VITE_ADMIN_PASSWORD || import.meta.env.VITE_ADMIN_PASS || "";
 
-const ADMIN_PASS =
-  import.meta.env.VITE_ADMIN_PASS ||
-  import.meta.env.VITE_ADMIN_PASSWORD ||
-  "";
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const IMGBB_KEY = import.meta.env.VITE_IMGBB_API_KEY || "";
+/* ====== Helpers ====== */
+const moneyFmt = (n) =>
+  new Intl.NumberFormat("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
+    Number(n || 0)
+  );
 
-/* =========================
-   Helpers
-   ========================= */
-const money = (n) =>
-  new Intl.NumberFormat("es-MX", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(Number(n || 0));
-
-function parseTags(v) {
-  if (Array.isArray(v)) return v;
-  return String(v || "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+function validTag(s) {
+  // Sin espacios ni comas. Permitimos letras con acentos, números, guión y guión bajo.
+  return /^[\p{L}\p{N}_-]+$/u.test(s);
 }
 
-function tagsToInput(v) {
-  if (!Array.isArray(v)) return "";
-  return v.join(", ");
-}
-
-function isHttp(url) {
-  return /^https?:\/\//i.test(url || "");
-}
-
-/* Normaliza para mostrar en frontend (soporta URLs completas o rutas locales) */
-function previewSrc(raw) {
-  if (!raw) return "/placeholder.jpg";
-  if (isHttp(raw)) return raw;
-  let cleaned = String(raw).replace(/^public\//, "");
-  if (!/^obras\//.test(cleaned)) cleaned = `obras/${cleaned}`;
-  return `/${cleaned}`;
-}
-
-/* Lee archivo como base64 (requerido por ImgBB) */
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const fr = new FileReader();
-    fr.onload = () => resolve(String(fr.result).split(",")[1] || "");
-    fr.onerror = reject;
-    fr.readAsDataURL(file);
-  });
-}
-
-/* Sube un archivo a ImgBB y devuelve la URL pública */
 async function uploadToImgBB(file) {
-  if (!IMGBB_KEY) throw new Error("Falta VITE_IMGBB_API_KEY");
-  const base64 = await fileToBase64(file);
-
-  const form = new FormData();
-  form.append("key", IMGBB_KEY);
-  form.append("image", base64);
-
-  const res = await fetch("https://api.imgbb.com/1/upload", {
+  const fd = new FormData();
+  fd.append("image", file);
+  const res = await fetch(`https://api.imgbb.com/1/upload?key=${encodeURIComponent(IMGBB_API_KEY)}`, {
     method: "POST",
-    body: form,
+    body: fd,
   });
   const json = await res.json();
   if (!res.ok || !json?.data?.url) {
-    throw new Error(json?.error?.message || "Fallo al subir a ImgBB");
+    throw new Error(json?.error?.message || "Error subiendo imagen");
   }
-  return json.data.url; // URL pública
+  // Puedes usar display_url, url o image.url. La pública suele ser display_url:
+  return json.data.display_url || json.data.url;
 }
 
-/* =========================
-   Página
-   ========================= */
+/* ====== Component ====== */
 export default function AdminProductos() {
   const navigate = useNavigate();
 
-  const [authed, setAuthed] = useState(false);
-  const [pass, setPass] = useState("");
-  const [passError, setPassError] = useState("");
+  // Gate muy simple por contraseña
+  const [inputPass, setInputPass] = useState("");
+  const [showPass, setShowPass]   = useState(false);
+  const [authed, setAuthed]       = useState(false);
 
-  const [loading, setLoading] = useState(true);
-  const [list, setList] = useState([]);
-  const [error, setError] = useState("");
-
-  const [editingId, setEditingId] = useState(null);
-
-  // Form ligado a tu tabla 'productos'
-  const [form, setForm] = useState({
-    id: "",
-    titulo: "",
-    descripcion: "",
-    descripcion_detallada: "",
-    serie: "",
-    precio: "",
-    moneda: "MXN",
-    descuento: 0,
-    etiquetas: [],
-    imagenes: [],
-    destacado: false,
-    bajo_pedido: false,
-    disponible: true,
-    tiempo_entrega: "",
-    stock: 0,
-    stripe_price_id: "",
-    payment_link_url: "",
-  });
-
-  const canSave =
-    form.id &&
-    form.titulo &&
-    String(form.moneda).length > 0 &&
-    !Number.isNaN(Number(form.precio));
-
-  /* ---------- Auth simple por contraseña ---------- */
   useEffect(() => {
-    try {
-      const ok = localStorage.getItem("admin_ok") === "1";
-      setAuthed(ok);
-    } catch {}
+    const ok = sessionStorage.getItem("admin:ok") === "1";
+    setAuthed(ok);
   }, []);
 
-  const onLogin = () => {
+  const tryLogin = (e) => {
+    e?.preventDefault?.();
     if (!ADMIN_PASS) {
-      setPassError("Falta configurar VITE_ADMIN_PASS en Vercel.");
+      alert("Falta configurar VITE_ADMIN_PASSWORD en Vercel.");
       return;
     }
-    if (pass === ADMIN_PASS) {
+    if (inputPass === ADMIN_PASS) {
+      sessionStorage.setItem("admin:ok", "1");
       setAuthed(true);
-      setPassError("");
-      try {
-        localStorage.setItem("admin_ok", "1");
-      } catch {}
     } else {
-      setPassError("Contraseña incorrecta.");
+      alert("Contraseña incorrecta.");
     }
-  };
-
-  const onLogout = () => {
-    setAuthed(false);
-    try {
-      localStorage.removeItem("admin_ok");
-    } catch {}
-  };
-
-  /* ---------- Cargar listado ---------- */
-  const load = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const { data, error: e } = await supabase
-        .from("productos")
-        .select(
-          "id,titulo,precio,moneda,descuento,imagenes,destacado,bajo_pedido,disponible,serie,stock,tiempo_entrega,updated_at"
-        )
-        .order("updated_at", { ascending: false });
-      if (e) throw e;
-      setList(data || []);
-    } catch (e) {
-      setError(String(e.message || e));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (authed) load();
-  }, [authed]);
-
-  /* ---------- Editar / Nuevo ---------- */
-  const resetForm = () =>
-    setForm({
-      id: "",
-      titulo: "",
-      descripcion: "",
-      descripcion_detallada: "",
-      serie: "",
-      precio: "",
-      moneda: "MXN",
-      descuento: 0,
-      etiquetas: [],
-      imagenes: [],
-      destacado: false,
-      bajo_pedido: false,
-      disponible: true,
-      tiempo_entrega: "",
-      stock: 0,
-      stripe_price_id: "",
-      payment_link_url: "",
-    });
-
-  const onEdit = async (row) => {
-    setEditingId(row.id);
-    try {
-      const { data, error: e } = await supabase
-        .from("productos")
-        .select("*")
-        .eq("id", row.id)
-        .single();
-      if (e) throw e;
-
-      setForm({
-        id: data.id || "",
-        titulo: data.titulo || "",
-        descripcion: data.descripcion || "",
-        descripcion_detallada: data.descripcion_detallada || "",
-        serie: data.serie || "",
-        precio: data.precio ?? "",
-        moneda: data.moneda || "MXN",
-        descuento: data.descuento ?? 0,
-        etiquetas: Array.isArray(data.etiquetas) ? data.etiquetas : [],
-        imagenes: Array.isArray(data.imagenes) ? data.imagenes : [],
-        destacado: !!data.destacado,
-        bajo_pedido: !!data.bajo_pedido,
-        disponible: !!data.disponible,
-        tiempo_entrega: data.tiempo_entrega || "",
-        stock: data.stock ?? 0,
-        stripe_price_id: data.stripe_price_id || "",
-        payment_link_url: data.payment_link_url || "",
-      });
-    } catch (e) {
-      setError(String(e.message || e));
-    }
-  };
-
-  const onNew = () => {
-    setEditingId(null);
-    resetForm();
-  };
-
-  /* ---------- Guardar (upsert) ---------- */
-  const onSave = async () => {
-    if (!canSave) return;
-
-    const payload = {
-      id: String(form.id).trim(),
-      titulo: form.titulo,
-      descripcion: form.descripcion || null,
-      descripcion_detallada: form.descripcion_detallada || null,
-      serie: form.serie || null,
-      precio: Number(form.precio),
-      moneda: form.moneda || "MXN",
-      descuento: Number(form.descuento || 0),
-      etiquetas: form.etiquetas || [],
-      imagenes: form.imagenes || [],
-      destacado: !!form.destacado,
-      bajo_pedido: !!form.bajo_pedido,
-      disponible: !!form.disponible,
-      tiempo_entrega: form.tiempo_entrega || null,
-      stock: Number(form.stock || 0),
-      stripe_price_id: form.stripe_price_id || null,
-      payment_link_url: form.payment_link_url || null,
-      updated_at: new Date().toISOString(),
-    };
-
-    try {
-      const { error: e } = await supabase.from("productos").upsert(payload, {
-        onConflict: "id",
-      });
-      if (e) throw e;
-      await load();
-      onNew();
-    } catch (e) {
-      setError(String(e.message || e));
-    }
-  };
-
-  /* ---------- Borrar ---------- */
-  const onDelete = async (id) => {
-    if (!confirm("¿Eliminar este producto?")) return;
-    try {
-      const { error: e } = await supabase.from("productos").delete().eq("id", id);
-      if (e) throw e;
-      if (editingId === id) onNew();
-      await load();
-    } catch (e) {
-      setError(String(e.message || e));
-    }
-  };
-
-  /* ---------- Imagenes (máx 5) ---------- */
-  const onPickImages = async (e) => {
-    const files = Array.from(e.target.files || []);
-    if (!files.length) return;
-    try {
-      // Límite de 5 total
-      const remaining = Math.max(0, 5 - (form.imagenes?.length || 0));
-      const toUpload = files.slice(0, remaining);
-
-      const urls = [];
-      for (const f of toUpload) {
-        const url = await uploadToImgBB(f);
-        urls.push(url);
-      }
-      setForm((s) => ({ ...s, imagenes: [...(s.imagenes || []), ...urls] }));
-    } catch (e2) {
-      setError(String(e2.message || e2));
-    } finally {
-      e.target.value = "";
-    }
-  };
-
-  const removeImageAt = (idx) => {
-    setForm((s) => ({
-      ...s,
-      imagenes: (s.imagenes || []).filter((_, i) => i !== idx),
-    }));
-  };
-
-  const moveImage = (from, to) => {
-    setForm((s) => {
-      const arr = [...(s.imagenes || [])];
-      if (to < 0 || to >= arr.length) return s;
-      const [el] = arr.splice(from, 1);
-      arr.splice(to, 0, el);
-      return { ...s, imagenes: arr };
-    });
   };
 
   if (!authed) {
     return (
-      <div className="min-h-[80vh] grid place-items-center bg-[#f9f4ef] px-4">
-        <div className="w-full max-w-md rounded-2xl border bg-white p-6 shadow-sm">
+      <div className="min-h-[70vh] grid place-items-center bg-[#f9f4ef] px-4">
+        <form
+          onSubmit={tryLogin}
+          className="w-full max-w-md rounded-3xl border bg-white p-6 shadow-sm"
+        >
           <div className="flex items-center gap-2 text-lg font-semibold">
-            <span className="h-9 w-9 grid place-items-center rounded-full bg-amber-100 text-amber-700">
-              <Lock size={18} />
-            </span>
+            <div className="h-10 w-10 grid place-items-center rounded-full bg-amber-100 text-amber-700">
+              <LockKeyhole size={18} />
+            </div>
             Acceso administrativo
           </div>
 
-          <label className="block text-sm mt-4 text-gray-600">Contraseña</label>
-          <input
-            type="password"
-            value={pass}
-            onChange={(e) => {
-              setPass(e.target.value);
-              setPassError("");
-            }}
-            className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
-            placeholder="••••••••"
-          />
-          {passError && (
-            <div className="mt-2 text-xs text-rose-600">{passError}</div>
+          <label className="block text-sm text-gray-600 mt-4">Contraseña</label>
+          <div className="mt-1 flex items-center rounded-xl border px-3">
+            <input
+              type={showPass ? "text" : "password"}
+              value={inputPass}
+              onChange={(e) => setInputPass(e.target.value)}
+              className="w-full py-2 text-sm outline-none"
+              placeholder="••••••••"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPass((s) => !s)}
+              className="text-gray-500 hover:text-gray-700"
+              title={showPass ? "Ocultar" : "Mostrar"}
+            >
+              {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          </div>
+
+          {!ADMIN_PASS && (
+            <p className="text-xs text-rose-600 mt-2">
+              Falta configurar <strong>VITE_ADMIN_PASSWORD</strong> en Vercel.
+            </p>
           )}
 
           <button
-            onClick={onLogin}
-            className="mt-4 inline-flex items-center gap-2 rounded-xl bg-gray-900 text-white px-4 py-2 text-sm font-semibold shadow hover:shadow-md"
+            type="submit"
+            className="mt-4 w-full rounded-xl bg-gray-900 text-white py-2 text-sm font-semibold"
           >
             Entrar
           </button>
-        </div>
+        </form>
       </div>
     );
   }
 
+  return <ProductosForm />;
+}
+
+/* ====== Productos Form ====== */
+function ProductosForm() {
+  const [loading, setLoading] = useState(false);
+  const [okMsg, setOkMsg]     = useState("");
+  const [errMsg, setErrMsg]   = useState("");
+
+  // Series (lista seleccionable + crear nuevas)
+  const [series, setSeries]           = useState([]); // ["Serie 1", "Serie 2", ...]
+  const [serieSel, setSerieSel]       = useState("");
+  const [serieNueva, setSerieNueva]   = useState("");
+
+  // Campos
+  const [titulo, setTitulo]                         = useState("");
+  const [descripcion, setDescripcion]               = useState("");
+  const [descripcionDetallada, setDescripcionDetallada] = useState("");
+  const [precio, setPrecio]                         = useState("");
+  const [moneda, setMoneda]                         = useState("MXN");
+  const [descuento, setDescuento]                   = useState(0);
+  const [bajoPedido, setBajoPedido]                 = useState(false);
+  const [tiempoEntrega, setTiempoEntrega]           = useState("Listo para envío");
+  const [stock, setStock]                           = useState(1);
+
+  // Etiquetas
+  const [tagInput, setTagInput] = useState("");
+  const [etiquetas, setEtiquetas] = useState([]);
+
+  // Imágenes: guardamos File[] local y previews. Se suben a ImgBB al crear.
+  const [files, setFiles] = useState([]);
+  const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        // Trae series existentes (distinct)
+        const { data, error } = await supabase
+          .from("productos")
+          .select("serie")
+          .not("serie", "is", null);
+        if (error) throw error;
+        const uniq = Array.from(new Set((data || []).map((r) => (r.serie || "").trim()).filter(Boolean)));
+        setSeries(uniq);
+      } catch (e) {
+        console.warn("No se pudieron cargar series:", e);
+      }
+    })();
+  }, []);
+
+  const addSerie = () => {
+    const s = (serieNueva || "").trim();
+    if (!s) return;
+    if (!series.includes(s)) setSeries((prev) => [...prev, s]);
+    setSerieSel(s);
+    setSerieNueva("");
+  };
+
+  // Etiquetas
+  const onAddTag = () => {
+    const raw = (tagInput || "").trim();
+    if (!raw) return;
+    if (!validTag(raw)) {
+      setErrMsg("La etiqueta no puede tener espacios ni comas (usa letras/números/guiones).");
+      setTimeout(() => setErrMsg(""), 2500);
+      return;
+    }
+    if (etiquetas.includes(raw)) return;
+    if (etiquetas.length >= 3) {
+      setErrMsg("Máximo 3 etiquetas.");
+      setTimeout(() => setErrMsg(""), 1800);
+      return;
+    }
+    setEtiquetas((prev) => [...prev, raw]);
+    setTagInput("");
+  };
+  const removeTag = (t) => setEtiquetas((prev) => prev.filter((x) => x !== t));
+
+  // Imágenes
+  const onPickFiles = (e) => {
+    const incoming = Array.from(e.target.files || []);
+    if (incoming.length === 0) return;
+    setFiles((prev) => {
+      const maxSlots = Math.max(0, 5 - prev.length);
+      return [...prev, ...incoming.slice(0, maxSlots)];
+    });
+    // Re-armar el input para poder volver a cargar el mismo archivo si quiere
+    e.target.value = "";
+  };
+
+  const onDrop = (e) => {
+    e.preventDefault();
+    const incoming = Array.from(e.dataTransfer.files || []);
+    if (incoming.length === 0) return;
+    setFiles((prev) => {
+      const maxSlots = Math.max(0, 5 - prev.length);
+      return [...prev, ...incoming.slice(0, maxSlots)];
+    });
+  };
+
+  const removeFileAt = (idx) => {
+    setFiles((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const clearImages = () => setFiles([]);
+
+  const totalImgs = files.length;
+  const canAddMore = totalImgs < 5;
+
+  // Submit
+  const onCreate = async () => {
+    setLoading(true);
+    setOkMsg("");
+    setErrMsg("");
+
+    try {
+      if (!titulo.trim()) throw new Error("Falta título.");
+      if (!precio || Number(precio) <= 0) throw new Error("Precio inválido.");
+      if (stock < 0) throw new Error("Stock inválido.");
+      if (!IMGBB_API_KEY) throw new Error("Falta VITE_IMGBB_API_KEY.");
+
+      // 1) Sube imágenes a ImgBB
+      let urls = [];
+      for (const f of files) {
+        const u = await uploadToImgBB(f);
+        urls.push(u);
+      }
+
+      // 2) Construye payload con nombres de columnas reales
+      const payload = {
+        // id: (lo generará tu proceso/server si aplica; aquí no mandamos id)
+        titulo: titulo.trim(),
+        descripcion: descripcion.trim() || null,
+        descripcion_detallada: descripcionDetallada.trim() || null,
+        precio: Number(precio),
+        moneda: (moneda || "MXN").toUpperCase(),
+        descuento: Number.isFinite(Number(descuento)) ? Number(descuento) : 0,
+        etiquetas: etiquetas,              // text[]
+        imagenes: urls,                    // text[] (urls imgbb)
+        destacado: false,                  // lo puedes editar más tarde
+        bajo_pedido: !!bajoPedido,
+        // disponible se calcula por stock, pero la columna existe: lo mandamos para mantener consistencia
+        disponible: Number(stock) > 0,
+        tiempo_entrega: tiempoEntrega || null,
+        stock: Math.max(0, Number(stock) || 0),
+        serie: (serieSel || "").trim() || null,
+        // stripe_price_id y payment_link_url no se usan (UI removido)
+      };
+
+      // 3) Inserta
+      const { data, error } = await supabase.from("productos").insert([payload]).select().single();
+      if (error) throw error;
+
+      setOkMsg(`Producto creado (${data?.id || "sin id visible"})`);
+      // Limpia form
+      setTitulo("");
+      setDescripcion("");
+      setDescripcionDetallada("");
+      setPrecio("");
+      setDescuento(0);
+      setEtiquetas([]);
+      setFiles([]);
+      setBajoPedido(false);
+      setTiempoEntrega("Listo para envío");
+      setStock(1);
+      // mantener serieSel/moneda como están
+    } catch (e) {
+      setErrMsg(e.message || String(e));
+    } finally {
+      setLoading(false);
+      setTimeout(() => setOkMsg(""), 3000);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-[#f9f4ef]">
-      {/* Header */}
-      <div className="sticky top-0 z-10 bg-[#f9f4ef]/80 backdrop-blur border-b">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img src="/logo.png" className="h-10" alt="logo" />
-            <div className="text-lg font-semibold text-[#3b4d63]">
-              Panel de administración
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => navigate("/admin")}
-              className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold hover:bg-white"
-              title="Menú admin"
-            >
-              <ArrowLeft size={16} /> Admin
-            </button>
-            <button
-              onClick={onLogout}
-              className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold hover:bg-white"
-            >
-              <LogOut size={16} /> Salir
-            </button>
-          </div>
-        </div>
+    <div className="mx-auto max-w-5xl px-4 py-8">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold">Administrador — Productos</h1>
+        <p className="text-sm text-gray-600">Crea productos y sube hasta 5 imágenes (ImgBB) al guardar.</p>
       </div>
 
-      <div className="max-w-6xl mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Listado */}
-        <div className="lg:col-span-2 rounded-3xl border bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Productos</h2>
+      {/* Mensajes */}
+      <AnimatePresenceMsg ok={okMsg} err={errMsg} />
+
+      <div className="rounded-3xl border bg-white p-6 shadow-sm space-y-6">
+        {/* Básicos */}
+        <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Field label="Título">
+            <input
+              className="w-full rounded-xl border px-3 py-2 text-sm outline-none"
+              value={titulo}
+              onChange={(e) => setTitulo(e.target.value)}
+              placeholder="Ej. Raíz onírica"
+            />
+          </Field>
+
+          <Field label="Serie">
             <div className="flex gap-2">
-              <button
-                onClick={load}
-                className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold hover:bg-gray-50"
-                title="Refrescar"
+              <select
+                className="w-full rounded-xl border px-3 py-2 text-sm outline-none"
+                value={serieSel}
+                onChange={(e) => setSerieSel(e.target.value)}
               >
-                <RefreshCw size={16} /> Actualizar
-              </button>
+                <option value="">— Sin serie —</option>
+                {series.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
+            <div className="mt-2 flex gap-2">
+              <input
+                className="flex-1 rounded-xl border px-3 py-2 text-sm outline-none"
+                value={serieNueva}
+                onChange={(e) => setSerieNueva(e.target.value)}
+                placeholder="Nueva serie (ej. Serie 4)"
+              />
               <button
-                onClick={onNew}
-                className="inline-flex items-center gap-2 rounded-full bg-gray-900 text-white px-3 py-1.5 text-sm font-semibold shadow hover:shadow-md"
+                onClick={addSerie}
+                className="rounded-xl border px-3 py-2 text-sm font-semibold hover:bg-gray-50"
               >
-                <Plus size={16} /> Nuevo
+                Agregar serie
               </button>
             </div>
-          </div>
+          </Field>
 
-          {loading ? (
-            <div className="mt-4 text-sm text-gray-600">Cargando…</div>
-          ) : error ? (
-            <div className="mt-4 text-sm text-rose-700">{error}</div>
-          ) : list.length === 0 ? (
-            <div className="mt-4 text-sm">Sin productos.</div>
-          ) : (
-            <div className="mt-4 divide-y">
-              {list.map((p) => {
-                const first = (p.imagenes || [])[0];
-                return (
-                  <div key={p.id} className="py-3 flex items-center gap-3">
-                    <img
-                      src={previewSrc(first)}
-                      alt={p.titulo}
-                      className="h-12 w-12 rounded object-cover border"
-                      onError={(e) => (e.currentTarget.src = "/placeholder.jpg")}
-                    />
-                    <div className="min-w-0">
-                      <div className="font-medium truncate">{p.titulo}</div>
-                      <div className="text-xs text-gray-500">
-                        {p.id} • {p.serie || "—"} • {p.moneda} ${money(p.precio)}
-                        {p.descuento ? ` (−${p.descuento}%)` : ""} •{" "}
-                        {p.disponible ? "Disponible" : "No disponible"}
-                      </div>
-                    </div>
-                    <div className="ml-auto flex items-center gap-2">
-                      <button
-                        onClick={() => onEdit(p)}
-                        className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold hover:bg-gray-50"
-                      >
-                        <Pencil size={14} /> Editar
-                      </button>
-                      <button
-                        onClick={() => onDelete(p.id)}
-                        className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-50"
-                      >
-                        <Trash2 size={14} /> Borrar
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Formulario */}
-        <div className="rounded-3xl border bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-semibold">
-            {editingId ? `Editar (${editingId})` : "Nuevo producto"}
-          </h2>
-
-          {/* id */}
-          <label className="block text-sm mt-3 text-gray-600">
-            ID (ej. p9)
-          </label>
-          <input
-            value={form.id}
-            onChange={(e) => setForm({ ...form, id: e.target.value })}
-            className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
-            placeholder="p9"
-          />
-
-          {/* titulo */}
-          <label className="block text-sm mt-3 text-gray-600">Título</label>
-          <input
-            value={form.titulo}
-            onChange={(e) => setForm({ ...form, titulo: e.target.value })}
-            className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
-            placeholder="Nombre de la obra"
-          />
-
-          {/* descripcion */}
-          <label className="block text-sm mt-3 text-gray-600">Descripción</label>
-          <textarea
-            value={form.descripcion}
-            onChange={(e) =>
-              setForm({ ...form, descripcion: e.target.value })
-            }
-            rows={2}
-            className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
-            placeholder="Descripción corta"
-          />
-
-          {/* descripcion_detallada */}
-          <label className="block text-sm mt-3 text-gray-600">
-            Descripción detallada
-          </label>
-          <textarea
-            value={form.descripcion_detallada}
-            onChange={(e) =>
-              setForm({ ...form, descripcion_detallada: e.target.value })
-            }
-            rows={3}
-            className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
-            placeholder="Ficha técnica, técnica, etc."
-          />
-
-          {/* serie */}
-          <label className="block text-sm mt-3 text-gray-600">Serie</label>
-          <input
-            value={form.serie}
-            onChange={(e) => setForm({ ...form, serie: e.target.value })}
-            className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
-            placeholder="Serie 1 / Serie 2 / Serie 3"
-          />
-
-          <div className="grid grid-cols-2 gap-3 mt-3">
-            {/* precio */}
-            <div>
-              <label className="block text-sm text-gray-600">Precio</label>
+          <Field label="Precio">
+            <div className="flex gap-2">
               <input
                 type="number"
+                min="0"
                 step="0.01"
-                value={form.precio}
-                onChange={(e) => setForm({ ...form, precio: e.target.value })}
-                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
+                className="w-full rounded-xl border px-3 py-2 text-sm outline-none"
+                value={precio}
+                onChange={(e) => setPrecio(e.target.value)}
                 placeholder="0.00"
               />
+              <select
+                className="rounded-xl border px-3 py-2 text-sm outline-none"
+                value={moneda}
+                onChange={(e) => setMoneda(e.target.value)}
+              >
+                <option>MXN</option>
+                <option>USD</option>
+              </select>
             </div>
-
-            {/* moneda */}
-            <div>
-              <label className="block text-sm text-gray-600">Moneda</label>
-              <input
-                value={form.moneda}
-                onChange={(e) => setForm({ ...form, moneda: e.target.value })}
-                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
-                placeholder="MXN"
-              />
-            </div>
-          </div>
-
-          {/* descuento */}
-          <label className="block text-sm mt-3 text-gray-600">
-            Descuento (%)
-          </label>
-          <input
-            type="number"
-            value={form.descuento}
-            onChange={(e) =>
-              setForm({ ...form, descuento: Number(e.target.value || 0) })
-            }
-            className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
-            placeholder="0"
-          />
-
-          {/* etiquetas */}
-          <label className="block text-sm mt-3 text-gray-600">
-            Etiquetas (separadas por coma)
-          </label>
-          <input
-            value={tagsToInput(form.etiquetas)}
-            onChange={(e) =>
-              setForm({ ...form, etiquetas: parseTags(e.target.value) })
-            }
-            className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
-            placeholder="acrílico, paisaje"
-          />
-
-          {/* switches */}
-          <div className="grid grid-cols-3 gap-3 mt-3">
-            <label className="inline-flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={form.destacado}
-                onChange={(e) =>
-                  setForm({ ...form, destacado: e.target.checked })
-                }
-              />
-              Destacado
-            </label>
-            <label className="inline-flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={form.bajo_pedido}
-                onChange={(e) =>
-                  setForm({ ...form, bajo_pedido: e.target.checked })
-                }
-              />
-              Bajo pedido
-            </label>
-            <label className="inline-flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={form.disponible}
-                onChange={(e) =>
-                  setForm({ ...form, disponible: e.target.checked })
-                }
-              />
-              Disponible
-            </label>
-          </div>
-
-          {/* tiempo_entrega */}
-          <label className="block text-sm mt-3 text-gray-600">
-            Tiempo de entrega
-          </label>
-          <input
-            value={form.tiempo_entrega}
-            onChange={(e) =>
-              setForm({ ...form, tiempo_entrega: e.target.value })
-            }
-            className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
-            placeholder="Listo para envío / Hecho bajo pedido (3 semanas)"
-          />
-
-          {/* stock */}
-          <label className="block text-sm mt-3 text-gray-600">Stock</label>
-          <input
-            type="number"
-            value={form.stock}
-            onChange={(e) =>
-              setForm({ ...form, stock: Number(e.target.value || 0) })
-            }
-            className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
-            placeholder="0"
-          />
-
-          {/* stripe_price_id / payment_link_url (opcional) */}
-          <label className="block text-sm mt-3 text-gray-600">
-            Stripe price ID (opcional)
-          </label>
-          <input
-            value={form.stripe_price_id}
-            onChange={(e) =>
-              setForm({ ...form, stripe_price_id: e.target.value })
-            }
-            className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
-            placeholder="price_123"
-          />
-
-          <label className="block text-sm mt-3 text-gray-600">
-            Payment link URL (opcional)
-          </label>
-          <input
-            value={form.payment_link_url}
-            onChange={(e) =>
-              setForm({ ...form, payment_link_url: e.target.value })
-            }
-            className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
-            placeholder="https://buy.stripe.com/..."
-          />
-
-          {/* Imágenes */}
-          <div className="mt-4">
-            <div className="flex items-center justify-between">
-              <label className="text-sm text-gray-600">Imágenes (máx. 5)</label>
-              <label className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold hover:bg-gray-50 cursor-pointer">
-                <UploadCloud size={14} />
-                Subir a ImgBB
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={onPickImages}
-                />
-              </label>
-            </div>
-
-            {(!form.imagenes || form.imagenes.length === 0) ? (
-              <div className="mt-2 h-28 grid place-items-center rounded-xl border text-gray-500 text-sm">
-                <ImageIcon size={16} /> Sin imágenes
-              </div>
-            ) : (
-              <div className="mt-2 grid grid-cols-3 gap-3">
-                {form.imagenes.map((src, idx) => (
-                  <div key={idx} className="relative group">
-                    <img
-                      src={previewSrc(src)}
-                      alt={`img-${idx}`}
-                      className="h-28 w-full object-cover rounded-xl border"
-                      onError={(e) =>
-                        (e.currentTarget.src = "/placeholder.jpg")
-                      }
-                    />
-                    <div className="absolute inset-x-0 -bottom-2 flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition">
-                      <button
-                        onClick={() => moveImage(idx, idx - 1)}
-                        className="h-7 w-7 grid place-items-center rounded-full bg-white border shadow"
-                        title="Mover izq"
-                      >
-                        <ArrowLeft size={14} />
-                      </button>
-                      <button
-                        onClick={() => moveImage(idx, idx + 1)}
-                        className="h-7 w-7 grid place-items-center rounded-full bg-white border shadow"
-                        title="Mover der"
-                      >
-                        <ArrowRight size={14} />
-                      </button>
-                      <button
-                        onClick={() => removeImageAt(idx)}
-                        className="h-7 w-7 grid place-items-center rounded-full bg-white border text-rose-600 shadow"
-                        title="Quitar"
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+            {precio && (
+              <div className="text-xs text-gray-500 mt-1">
+                Previsualización: {moneda === "MXN" ? "$" : ""}{moneyFmt(precio)}
               </div>
             )}
+          </Field>
+
+          <Field label="Descuento (%)">
+            <input
+              type="number"
+              min="0"
+              max="99"
+              className="w-full rounded-xl border px-3 py-2 text-sm outline-none"
+              value={descuento}
+              onChange={(e) => setDescuento(Math.max(0, Math.min(99, Number(e.target.value || 0))))}
+              placeholder="0"
+            />
+          </Field>
+
+          <Field label="Stock">
+            <input
+              type="number"
+              min="0"
+              className="w-full rounded-xl border px-3 py-2 text-sm outline-none"
+              value={stock}
+              onChange={(e) => {
+                const v = Math.max(0, Number(e.target.value || 0));
+                setStock(v);
+              }}
+            />
             <div className="text-xs text-gray-500 mt-1">
-              Se guardan las URLs públicas devueltas por ImgBB.
+              {stock > 0 ? "Disponible" : "Sin stock"}
             </div>
+          </Field>
+
+          <Field label="Bajo pedido">
+            <label className="inline-flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={bajoPedido}
+                onChange={(e) => setBajoPedido(e.target.checked)}
+              />
+              ¿Se fabrica a pedido?
+            </label>
+          </Field>
+
+          <Field label="Tiempo de entrega">
+            <input
+              className="w-full rounded-xl border px-3 py-2 text-sm outline-none"
+              value={tiempoEntrega}
+              onChange={(e) => setTiempoEntrega(e.target.value)}
+              placeholder="Listo para envío / Hecho bajo pedido (3 semanas)"
+            />
+          </Field>
+        </section>
+
+        {/* Descripciones */}
+        <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Field label="Descripción breve">
+            <textarea
+              className="w-full rounded-xl border px-3 py-2 text-sm outline-none min-h-[80px]"
+              value={descripcion}
+              onChange={(e) => setDescripcion(e.target.value)}
+              placeholder="Mixta sobre papel, 50x70 cm."
+            />
+          </Field>
+
+          <Field label="Descripción detallada">
+            <textarea
+              className="w-full rounded-xl border px-3 py-2 text-sm outline-none min-h-[80px]"
+              value={descripcionDetallada}
+              onChange={(e) => setDescripcionDetallada(e.target.value)}
+              placeholder="Obra que explora la relación entre..."
+            />
+          </Field>
+        </section>
+
+        {/* Etiquetas */}
+        <section>
+          <div className="text-sm text-gray-700 font-medium mb-1">Etiquetas (máx 3)</div>
+          <div className="flex gap-2">
+            <input
+              className="flex-1 rounded-xl border px-3 py-2 text-sm outline-none"
+              value={tagInput}
+              onChange={(e) => setTagInput(e.target.value)}
+              placeholder="ej. acrílico"
+            />
+            <button
+              onClick={onAddTag}
+              className="rounded-xl border px-3 py-2 text-sm font-semibold hover:bg-gray-50"
+            >
+              Agregar
+            </button>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {etiquetas.map((t) => (
+              <span
+                key={t}
+                className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700"
+              >
+                <Tag size={12} /> {t}
+                <button
+                  onClick={() => removeTag(t)}
+                  className="ml-1 text-gray-500 hover:text-gray-700"
+                  title="Quitar"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        </section>
+
+        {/* Imágenes */}
+        <section>
+          <div className="text-sm text-gray-700 font-medium mb-1">Imágenes (hasta 5)</div>
+
+          <div
+            className="rounded-2xl border border-dashed p-4 text-center text-sm text-gray-600 bg-gray-50"
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={onDrop}
+          >
+            Arrastra y suelta aquí o usa “+ Agregar imágenes”.
           </div>
 
-          {/* Acciones */}
-          <div className="mt-5 flex flex-wrap gap-2">
-            <button
-              disabled={!canSave}
-              onClick={onSave}
-              className="inline-flex items-center gap-2 rounded-full bg-gray-900 text-white px-4 py-2 text-sm font-semibold shadow hover:shadow-md disabled:opacity-50"
-            >
-              <Save size={16} /> {editingId ? "Guardar cambios" : "Crear"}
-            </button>
-            <button
-              onClick={onNew}
-              className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold hover:bg-gray-50"
-            >
-              <Plus size={16} /> Nuevo
-            </button>
+          {/* Grid de previews */}
+          <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+            {files.map((f, idx) => {
+              const url = URL.createObjectURL(f);
+              return (
+                <div key={idx} className="relative rounded-xl overflow-hidden border">
+                  <img
+                    src={url}
+                    alt={`img-${idx}`}
+                    className="h-32 w-full object-cover"
+                    onLoad={() => URL.revokeObjectURL(url)}
+                  />
+                  <button
+                    onClick={() => removeFileAt(idx)}
+                    className="absolute top-1 right-1 rounded-full bg-white/90 p-1 shadow hover:bg-white"
+                    title="Quitar"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              );
+            })}
+
+            {/* Botón + siempre visible mientras haya espacio */}
+            {canAddMore && (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="h-32 w-full rounded-xl border border-dashed flex flex-col items-center justify-center text-sm hover:bg-gray-50"
+                title="Agregar imágenes"
+              >
+                <Plus />
+                Agregar imágenes
+              </button>
+            )}
           </div>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={onPickFiles}
+          />
+
+          <div className="mt-2 flex gap-2">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="rounded-xl border px-3 py-2 text-sm font-semibold hover:bg-gray-50"
+            >
+              + Agregar imágenes
+            </button>
+            {files.length > 0 && (
+              <button
+                onClick={clearImages}
+                className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold hover:bg-gray-50"
+                title="Borrar imágenes seleccionadas"
+              >
+                <Trash2 size={16} /> Borrar imágenes
+              </button>
+            )}
+          </div>
+        </section>
+
+        {/* Acciones */}
+        <div className="pt-2 flex flex-wrap gap-2">
+          <button
+            onClick={onCreate}
+            disabled={loading}
+            className="inline-flex items-center gap-2 rounded-xl bg-gray-900 text-white px-4 py-2 text-sm font-semibold disabled:opacity-60"
+          >
+            {loading ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />}
+            Crear
+          </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ====== UI helpers ====== */
+function Field({ label, children }) {
+  return (
+    <label className="block">
+      <div className="text-sm text-gray-700 font-medium mb-1">{label}</div>
+      {children}
+    </label>
+  );
+}
+
+function AnimatePresenceMsg({ ok, err }) {
+  return (
+    <div className="space-y-2">
+      {ok ? (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 inline-flex items-center gap-2">
+          <CheckCircle2 size={16} /> {ok}
+        </div>
+      ) : null}
+      {err ? (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 inline-flex items-center gap-2">
+          <AlertCircle size={16} /> {err}
+        </div>
+      ) : null}
     </div>
   );
 }
