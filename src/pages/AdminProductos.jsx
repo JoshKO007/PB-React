@@ -55,6 +55,18 @@ async function uploadToImgBB(file) {
   return json.data.display_url || json.data.url;
 }
 
+// ⚙️ Genera el ID en el cliente (UUID v4). Si no hay crypto, hace fallback.
+function genClientId() {
+  try {
+    if (typeof crypto !== "undefined" && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+  } catch {}
+  // Fallback simple a pseudo-uuid
+  const s4 = () => Math.floor((1 + Math.random()) * 0x10000).toString(16).slice(-4);
+  return `${s4()}${s4()}-${s4()}-${s4()}-${s4()}-${s4()}${s4()}${s4()}`;
+}
+
 /* =========================
    Gate de acceso
    ========================= */
@@ -358,14 +370,16 @@ function ProductosAdminUI() {
         updated_at: new Date().toISOString(),
       };
 
+      // 3) Crear/actualizar
       if (editingId) {
         const { error } = await supabase.from("productos").update(payload).eq("id", editingId);
         if (error) throw error;
         setOkMsg("Producto actualizado.");
       } else {
-        const { error } = await supabase.from("productos").insert([payload]);
+        const newId = genClientId(); // <<<<<< ID generado en el cliente
+        const { error } = await supabase.from("productos").insert([{ id: newId, ...payload }]);
         if (error) throw error;
-        setOkMsg("Producto creado.");
+        setOkMsg(`Producto creado (ID: ${newId.slice(0, 8)}…)`);
       }
 
       resetForm();
