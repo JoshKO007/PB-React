@@ -1,743 +1,765 @@
 // src/pages/AdminProductos.jsx
-import { useEffect, useMemo, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { createClient } from "@supabase/supabase-js";
 import {
-  LockKeyhole,
+  Lock,
   LogOut,
   Plus,
-  Save,
-  ImagePlus,
   Trash2,
-  Tag,
-  Package,
+  Save,
+  X,
+  Image as ImageIcon,
+  UploadCloud,
+  Pencil,
   RefreshCw,
+  ArrowLeft,
+  ArrowRight,
 } from "lucide-react";
-import { createClient } from "@supabase/supabase-js";
 
 /* =========================
-   Configuración
+   ENV / Clients
    ========================= */
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "";
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-const ADMIN_PASS = import.meta.env.VITE_ADMIN_PASSWORD || "";
-const IMGBB_API_KEY = import.meta.env.VITE_IMGBB_API_KEY || ""; // ponla en Vercel
+const ADMIN_PASS =
+  import.meta.env.VITE_ADMIN_PASS ||
+  import.meta.env.VITE_ADMIN_PASSWORD ||
+  "";
+
+const IMGBB_KEY = import.meta.env.VITE_IMGBB_API_KEY || "";
 
 /* =========================
-   Utilidades
+   Helpers
    ========================= */
-const emptyProduct = () => ({
-  id: "", // text
-  titulo: "",
-  descripcion: "",
-  descripcion_detallada: "",
-  serie: "",
-  precio: "",
-  moneda: "MXN",
-  descuento: 0,
-  etiquetas: [],
-  imagenes: [], // guardamos URLs absolutas
-  destacado: false,
-  bajo_pedido: false,
-  disponible: true,
-  tiempo_entreg: "",
-  stock: 0,
-  stripe_price_id: "",
-  payment_link: "",
-});
-
-const moneyFmt = (v) =>
+const money = (n) =>
   new Intl.NumberFormat("es-MX", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(Number(v || 0));
+  }).format(Number(n || 0));
 
-async function fileToBase64(file) {
-  const buf = await file.arrayBuffer();
-  const bytes = new Uint8Array(buf);
-  let binary = "";
-  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-  return btoa(binary);
+function parseTags(v) {
+  if (Array.isArray(v)) return v;
+  return String(v || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
-async function uploadToImgBB(file) {
-  if (!IMGBB_API_KEY) throw new Error("Falta VITE_IMGBB_API_KEY");
-  const base64 = await fileToBase64(file);
-  const fd = new FormData();
-  fd.append("image", base64);
+function tagsToInput(v) {
+  if (!Array.isArray(v)) return "";
+  return v.join(", ");
+}
 
-  const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
+function isHttp(url) {
+  return /^https?:\/\//i.test(url || "");
+}
+
+/* Normaliza para mostrar en frontend (soporta URLs completas o rutas locales) */
+function previewSrc(raw) {
+  if (!raw) return "/placeholder.jpg";
+  if (isHttp(raw)) return raw;
+  let cleaned = String(raw).replace(/^public\//, "");
+  if (!/^obras\//.test(cleaned)) cleaned = `obras/${cleaned}`;
+  return `/${cleaned}`;
+}
+
+/* Lee archivo como base64 (requerido por ImgBB) */
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result).split(",")[1] || "");
+    fr.onerror = reject;
+    fr.readAsDataURL(file);
+  });
+}
+
+/* Sube un archivo a ImgBB y devuelve la URL pública */
+async function uploadToImgBB(file) {
+  if (!IMGBB_KEY) throw new Error("Falta VITE_IMGBB_API_KEY");
+  const base64 = await fileToBase64(file);
+
+  const form = new FormData();
+  form.append("key", IMGBB_KEY);
+  form.append("image", base64);
+
+  const res = await fetch("https://api.imgbb.com/1/upload", {
     method: "POST",
-    body: fd,
+    body: form,
   });
   const json = await res.json();
   if (!res.ok || !json?.data?.url) {
-    throw new Error(json?.error?.message || "No se pudo subir la imagen a ImgBB");
+    throw new Error(json?.error?.message || "Fallo al subir a ImgBB");
   }
   return json.data.url; // URL pública
 }
 
 /* =========================
-   Gate por contraseña
+   Página
    ========================= */
-function AdminGate({ children }) {
-  const [ok, setOk] = useState(false);
-  const [pwd, setPwd] = useState("");
+export default function AdminProductos() {
+  const navigate = useNavigate();
 
+  const [authed, setAuthed] = useState(false);
+  const [pass, setPass] = useState("");
+  const [passError, setPassError] = useState("");
+
+  const [loading, setLoading] = useState(true);
+  const [list, setList] = useState([]);
+  const [error, setError] = useState("");
+
+  const [editingId, setEditingId] = useState(null);
+
+  // Form ligado a tu tabla 'productos'
+  const [form, setForm] = useState({
+    id: "",
+    titulo: "",
+    descripcion: "",
+    descripcion_detallada: "",
+    serie: "",
+    precio: "",
+    moneda: "MXN",
+    descuento: 0,
+    etiquetas: [],
+    imagenes: [],
+    destacado: false,
+    bajo_pedido: false,
+    disponible: true,
+    tiempo_entrega: "",
+    stock: 0,
+    stripe_price_id: "",
+    payment_link_url: "",
+  });
+
+  const canSave =
+    form.id &&
+    form.titulo &&
+    String(form.moneda).length > 0 &&
+    !Number.isNaN(Number(form.precio));
+
+  /* ---------- Auth simple por contraseña ---------- */
   useEffect(() => {
-    const mem = localStorage.getItem("admin:auth");
-    if (mem === "ok") setOk(true);
+    try {
+      const ok = localStorage.getItem("admin_ok") === "1";
+      setAuthed(ok);
+    } catch {}
   }, []);
 
-  const login = (e) => {
-    e.preventDefault();
-    if (ADMIN_PASS && pwd === ADMIN_PASS) {
-      localStorage.setItem("admin:auth", "ok");
-      setOk(true);
+  const onLogin = () => {
+    if (!ADMIN_PASS) {
+      setPassError("Falta configurar VITE_ADMIN_PASS en Vercel.");
+      return;
+    }
+    if (pass === ADMIN_PASS) {
+      setAuthed(true);
+      setPassError("");
+      try {
+        localStorage.setItem("admin_ok", "1");
+      } catch {}
     } else {
-      alert("Contraseña incorrecta");
+      setPassError("Contraseña incorrecta.");
     }
   };
-  const logout = () => {
-    localStorage.removeItem("admin:auth");
-    setOk(false);
-    setPwd("");
+
+  const onLogout = () => {
+    setAuthed(false);
+    try {
+      localStorage.removeItem("admin_ok");
+    } catch {}
   };
 
-  if (!ok) {
+  /* ---------- Cargar listado ---------- */
+  const load = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const { data, error: e } = await supabase
+        .from("productos")
+        .select(
+          "id,titulo,precio,moneda,descuento,imagenes,destacado,bajo_pedido,disponible,serie,stock,tiempo_entrega,updated_at"
+        )
+        .order("updated_at", { ascending: false });
+      if (e) throw e;
+      setList(data || []);
+    } catch (e) {
+      setError(String(e.message || e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (authed) load();
+  }, [authed]);
+
+  /* ---------- Editar / Nuevo ---------- */
+  const resetForm = () =>
+    setForm({
+      id: "",
+      titulo: "",
+      descripcion: "",
+      descripcion_detallada: "",
+      serie: "",
+      precio: "",
+      moneda: "MXN",
+      descuento: 0,
+      etiquetas: [],
+      imagenes: [],
+      destacado: false,
+      bajo_pedido: false,
+      disponible: true,
+      tiempo_entrega: "",
+      stock: 0,
+      stripe_price_id: "",
+      payment_link_url: "",
+    });
+
+  const onEdit = async (row) => {
+    setEditingId(row.id);
+    try {
+      const { data, error: e } = await supabase
+        .from("productos")
+        .select("*")
+        .eq("id", row.id)
+        .single();
+      if (e) throw e;
+
+      setForm({
+        id: data.id || "",
+        titulo: data.titulo || "",
+        descripcion: data.descripcion || "",
+        descripcion_detallada: data.descripcion_detallada || "",
+        serie: data.serie || "",
+        precio: data.precio ?? "",
+        moneda: data.moneda || "MXN",
+        descuento: data.descuento ?? 0,
+        etiquetas: Array.isArray(data.etiquetas) ? data.etiquetas : [],
+        imagenes: Array.isArray(data.imagenes) ? data.imagenes : [],
+        destacado: !!data.destacado,
+        bajo_pedido: !!data.bajo_pedido,
+        disponible: !!data.disponible,
+        tiempo_entrega: data.tiempo_entrega || "",
+        stock: data.stock ?? 0,
+        stripe_price_id: data.stripe_price_id || "",
+        payment_link_url: data.payment_link_url || "",
+      });
+    } catch (e) {
+      setError(String(e.message || e));
+    }
+  };
+
+  const onNew = () => {
+    setEditingId(null);
+    resetForm();
+  };
+
+  /* ---------- Guardar (upsert) ---------- */
+  const onSave = async () => {
+    if (!canSave) return;
+
+    const payload = {
+      id: String(form.id).trim(),
+      titulo: form.titulo,
+      descripcion: form.descripcion || null,
+      descripcion_detallada: form.descripcion_detallada || null,
+      serie: form.serie || null,
+      precio: Number(form.precio),
+      moneda: form.moneda || "MXN",
+      descuento: Number(form.descuento || 0),
+      etiquetas: form.etiquetas || [],
+      imagenes: form.imagenes || [],
+      destacado: !!form.destacado,
+      bajo_pedido: !!form.bajo_pedido,
+      disponible: !!form.disponible,
+      tiempo_entrega: form.tiempo_entrega || null,
+      stock: Number(form.stock || 0),
+      stripe_price_id: form.stripe_price_id || null,
+      payment_link_url: form.payment_link_url || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    try {
+      const { error: e } = await supabase.from("productos").upsert(payload, {
+        onConflict: "id",
+      });
+      if (e) throw e;
+      await load();
+      onNew();
+    } catch (e) {
+      setError(String(e.message || e));
+    }
+  };
+
+  /* ---------- Borrar ---------- */
+  const onDelete = async (id) => {
+    if (!confirm("¿Eliminar este producto?")) return;
+    try {
+      const { error: e } = await supabase.from("productos").delete().eq("id", id);
+      if (e) throw e;
+      if (editingId === id) onNew();
+      await load();
+    } catch (e) {
+      setError(String(e.message || e));
+    }
+  };
+
+  /* ---------- Imagenes (máx 5) ---------- */
+  const onPickImages = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    try {
+      // Límite de 5 total
+      const remaining = Math.max(0, 5 - (form.imagenes?.length || 0));
+      const toUpload = files.slice(0, remaining);
+
+      const urls = [];
+      for (const f of toUpload) {
+        const url = await uploadToImgBB(f);
+        urls.push(url);
+      }
+      setForm((s) => ({ ...s, imagenes: [...(s.imagenes || []), ...urls] }));
+    } catch (e2) {
+      setError(String(e2.message || e2));
+    } finally {
+      e.target.value = "";
+    }
+  };
+
+  const removeImageAt = (idx) => {
+    setForm((s) => ({
+      ...s,
+      imagenes: (s.imagenes || []).filter((_, i) => i !== idx),
+    }));
+  };
+
+  const moveImage = (from, to) => {
+    setForm((s) => {
+      const arr = [...(s.imagenes || [])];
+      if (to < 0 || to >= arr.length) return s;
+      const [el] = arr.splice(from, 1);
+      arr.splice(to, 0, el);
+      return { ...s, imagenes: arr };
+    });
+  };
+
+  if (!authed) {
     return (
-      <div className="min-h-screen grid place-items-center bg-[#f9f4ef]">
-        <form
-          onSubmit={login}
-          className="w-full max-w-sm rounded-2xl border bg-white p-6 shadow-sm"
-        >
-          <div className="flex items-center gap-2 mb-4">
-            <div className="h-10 w-10 grid place-items-center rounded-full bg-amber-100 text-amber-700">
-              <LockKeyhole size={18} />
-            </div>
-            <h1 className="text-lg font-semibold">Acceso administrativo</h1>
+      <div className="min-h-[80vh] grid place-items-center bg-[#f9f4ef] px-4">
+        <div className="w-full max-w-md rounded-2xl border bg-white p-6 shadow-sm">
+          <div className="flex items-center gap-2 text-lg font-semibold">
+            <span className="h-9 w-9 grid place-items-center rounded-full bg-amber-100 text-amber-700">
+              <Lock size={18} />
+            </span>
+            Acceso administrativo
           </div>
-          <label className="text-sm text-gray-600">Contraseña</label>
+
+          <label className="block text-sm mt-4 text-gray-600">Contraseña</label>
           <input
             type="password"
-            value={pwd}
-            onChange={(e) => setPwd(e.target.value)}
+            value={pass}
+            onChange={(e) => {
+              setPass(e.target.value);
+              setPassError("");
+            }}
             className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
             placeholder="••••••••"
           />
+          {passError && (
+            <div className="mt-2 text-xs text-rose-600">{passError}</div>
+          )}
+
           <button
-            type="submit"
-            className="mt-4 w-full rounded-xl bg-gray-900 text-white px-3 py-2 text-sm font-semibold shadow hover:shadow-md"
+            onClick={onLogin}
+            className="mt-4 inline-flex items-center gap-2 rounded-xl bg-gray-900 text-white px-4 py-2 text-sm font-semibold shadow hover:shadow-md"
           >
             Entrar
           </button>
-          {!ADMIN_PASS && (
-            <p className="mt-3 text-xs text-rose-600">
-              Falta configurar <code>VITE_ADMIN_PASSWORD</code> en Vercel.
-            </p>
-          )}
-        </form>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-[#f9f4ef]">
-      <header className="w-full px-4 py-4 border-b border-gray-300 bg-[#f0eae2]/80 backdrop-blur-md">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
+      {/* Header */}
+      <div className="sticky top-0 z-10 bg-[#f9f4ef]/80 backdrop-blur border-b">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="Logo" className="h-12" />
-            <div className="text-xl font-serif italic text-[#3b4d63]">Admin · Productos</div>
+            <img src="/logo.png" className="h-10" alt="logo" />
+            <div className="text-lg font-semibold text-[#3b4d63]">
+              Panel de administración
+            </div>
           </div>
-          <button
-            onClick={logout}
-            className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold hover:bg-gray-50"
-          >
-            <LogOut size={16} /> Salir
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate("/admin")}
+              className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold hover:bg-white"
+              title="Menú admin"
+            >
+              <ArrowLeft size={16} /> Admin
+            </button>
+            <button
+              onClick={onLogout}
+              className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold hover:bg-white"
+            >
+              <LogOut size={16} /> Salir
+            </button>
+          </div>
         </div>
-      </header>
-      {children}
-    </div>
-  );
-}
-
-/* =========================
-   Chips de etiquetas
-   ========================= */
-function TagsInput({ value = [], onChange, placeholder = "Añadir etiqueta y Enter" }) {
-  const [txt, setTxt] = useState("");
-  const add = () => {
-    const t = txt.trim();
-    if (!t) return;
-    const set = new Set(value.map((v) => v.trim().toLowerCase()));
-    if (!set.has(t.toLowerCase())) onChange([...(value || []), t]);
-    setTxt("");
-  };
-  return (
-    <div>
-      <div className="flex flex-wrap gap-2">
-        {(value || []).map((t, i) => (
-          <span
-            key={`${t}-${i}`}
-            className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700"
-          >
-            <Tag size={12} /> {t}
-            <button
-              className="ml-1 text-gray-500 hover:text-rose-600"
-              onClick={() => onChange(value.filter((_, idx) => idx !== i))}
-            >
-              ×
-            </button>
-          </span>
-        ))}
       </div>
-      <input
-        className="mt-2 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
-        placeholder={placeholder}
-        value={txt}
-        onChange={(e) => setTxt(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            add();
-          }
-        }}
-      />
-    </div>
-  );
-}
 
-/* =========================
-   Uploader de imágenes (ImgBB)
-   ========================= */
-function ImagesUploader({ urls = [], onChange }) {
-  const [loading, setLoading] = useState(false);
-  const canAdd = (urls?.length || 0) < 5;
-
-  const onFiles = async (files) => {
-    if (!files || files.length === 0) return;
-    const remain = 5 - (urls?.length || 0);
-    const toUpload = Array.from(files).slice(0, remain);
-    setLoading(true);
-    try {
-      const uploaded = [];
-      for (const f of toUpload) {
-        const url = await uploadToImgBB(f);
-        uploaded.push(url);
-      }
-      onChange([...(urls || []), ...uploaded]);
-    } catch (e) {
-      alert(String(e?.message || e));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const removeAt = (i) => onChange(urls.filter((_, idx) => idx !== i));
-
-  return (
-    <div>
-      <div className="flex flex-wrap gap-3">
-        {(urls || []).map((u, i) => (
-          <div key={i} className="relative">
-            <img
-              src={u}
-              alt={`img-${i}`}
-              className="h-24 w-24 object-cover rounded-xl border"
-              onError={(e) => (e.currentTarget.src = "/placeholder.jpg")}
-            />
-            <button
-              onClick={() => removeAt(i)}
-              className="absolute -top-2 -right-2 h-7 w-7 grid place-items-center rounded-full bg-white border shadow text-rose-600"
-              title="Eliminar"
-            >
-              <Trash2 size={14} />
-            </button>
-          </div>
-        ))}
-
-        {canAdd && (
-          <label className="h-24 w-24 grid place-items-center rounded-xl border bg-white text-gray-600 cursor-pointer hover:bg-gray-50">
-            {loading ? (
-              <RefreshCw size={18} className="animate-spin" />
-            ) : (
-              <ImagePlus size={18} />
-            )}
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={(e) => onFiles(e.target.files)}
-            />
-          </label>
-        )}
-      </div>
-      <div className="mt-2 text-xs text-gray-500">
-        Máximo 5 imágenes. Se suben a ImgBB y se guarda el URL público.
-      </div>
-    </div>
-  );
-}
-
-/* =========================
-   Formulario Producto
-   ========================= */
-function ProductForm({ value, onChange, seriesOptions, onCreateSeries, onSave, saving }) {
-  const v = value || emptyProduct();
-
-  const set = (k, val) => onChange({ ...v, [k]: val });
-
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-      <div className="rounded-2xl border bg-white p-5 shadow-sm">
-        <h3 className="text-lg font-semibold flex items-center gap-2">
-          <Package size={18} /> Datos principales
-        </h3>
-
-        <div className="mt-4 space-y-3">
-          <div>
-            <label className="text-sm text-gray-600">ID (text)</label>
-            <input
-              className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
-              value={v.id}
-              onChange={(e) => set("id", e.target.value)}
-              placeholder="p1 / slug único"
-            />
-          </div>
-
-          <div>
-            <label className="text-sm text-gray-600">Título</label>
-            <input
-              className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
-              value={v.titulo}
-              onChange={(e) => set("titulo", e.target.value)}
-              placeholder="Nombre de la obra"
-            />
-          </div>
-
-          <div>
-            <label className="text-sm text-gray-600">Serie</label>
+      <div className="max-w-6xl mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Listado */}
+        <div className="lg:col-span-2 rounded-3xl border bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Productos</h2>
             <div className="flex gap-2">
-              <select
-                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
-                value={v.serie}
-                onChange={(e) => set("serie", e.target.value)}
-              >
-                <option value="">— Sin serie —</option>
-                {seriesOptions.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
               <button
-                type="button"
-                onClick={() => {
-                  const s = prompt("Nueva serie:");
-                  if (s) onCreateSeries(s);
-                }}
-                className="mt-1 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold hover:bg-gray-50"
+                onClick={load}
+                className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold hover:bg-gray-50"
+                title="Refrescar"
               >
-                <Plus size={14} /> Serie
+                <RefreshCw size={16} /> Actualizar
+              </button>
+              <button
+                onClick={onNew}
+                className="inline-flex items-center gap-2 rounded-full bg-gray-900 text-white px-3 py-1.5 text-sm font-semibold shadow hover:shadow-md"
+              >
+                <Plus size={16} /> Nuevo
               </button>
             </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2">
-            <div className="col-span-2">
-              <label className="text-sm text-gray-600">Precio</label>
-              <input
-                type="number"
-                step="0.01"
-                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
-                value={v.precio}
-                onChange={(e) => set("precio", e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-            <div>
-              <label className="text-sm text-gray-600">Moneda</label>
-              <select
-                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
-                value={v.moneda}
-                onChange={(e) => set("moneda", e.target.value)}
-              >
-                <option value="MXN">MXN</option>
-                <option value="USD">USD</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-sm text-gray-600">Descuento (%)</label>
-              <input
-                type="number"
-                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
-                value={v.descuento}
-                onChange={(e) => set("descuento", Number(e.target.value || 0))}
-              />
-            </div>
-            <div>
-              <label className="text-sm text-gray-600">Stock</label>
-              <input
-                type="number"
-                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
-                value={v.stock}
-                onChange={(e) => set("stock", Number(e.target.value || 0))}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2">
-            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-              <input
-                type="checkbox"
-                className="h-4 w-4"
-                checked={v.destacado}
-                onChange={(e) => set("destacado", e.target.checked)}
-              />
-              Destacado
-            </label>
-            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-              <input
-                type="checkbox"
-                className="h-4 w-4"
-                checked={v.bajo_pedido}
-                onChange={(e) => set("bajo_pedido", e.target.checked)}
-              />
-              Bajo pedido
-            </label>
-            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-              <input
-                type="checkbox"
-                className="h-4 w-4"
-                checked={v.disponible}
-                onChange={(e) => set("disponible", e.target.checked)}
-              />
-              Disponible
-            </label>
-          </div>
-
-          <div>
-            <label className="text-sm text-gray-600">Tiempo de entrega</label>
-            <input
-              className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
-              value={v.tiempo_entreg || v.tiempo_entrega || ""}
-              onChange={(e) => set("tiempo_entreg", e.target.value)}
-              placeholder="Listo para envío / Hecho bajo pedido (3 semanas)…"
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="rounded-2xl border bg-white p-5 shadow-sm">
-        <h3 className="text-lg font-semibold">Contenido & vínculos</h3>
-
-        <div className="mt-4 space-y-3">
-          <div>
-            <label className="text-sm text-gray-600">Descripción corta</label>
-            <textarea
-              rows={2}
-              className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
-              value={v.descripcion}
-              onChange={(e) => set("descripcion", e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="text-sm text-gray-600">Descripción detallada</label>
-            <textarea
-              rows={4}
-              className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
-              value={v.descripcion_detallada}
-              onChange={(e) => set("descripcion_detallada", e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="text-sm text-gray-600">Etiquetas</label>
-            <TagsInput
-              value={v.etiquetas || []}
-              onChange={(arr) => set("etiquetas", arr)}
-            />
-          </div>
-
-          <div>
-            <label className="text-sm text-gray-600">Imágenes (máx 5)</label>
-            <ImagesUploader
-              urls={v.imagenes || []}
-              onChange={(arr) => set("imagenes", arr)}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            <div>
-              <label className="text-sm text-gray-600">Stripe price id</label>
-              <input
-                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
-                value={v.stripe_price_id}
-                onChange={(e) => set("stripe_price_id", e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="text-sm text-gray-600">Payment Link</label>
-              <input
-                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
-                value={v.payment_link}
-                onChange={(e) => set("payment_link", e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="pt-2">
-            <button
-              onClick={onSave}
-              disabled={saving}
-              className="inline-flex items-center gap-2 rounded-xl bg-gray-900 text-white px-4 py-2 text-sm font-semibold shadow hover:shadow-md disabled:opacity-60"
-            >
-              <Save size={16} />
-              {saving ? "Guardando…" : "Guardar producto"}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* =========================
-   Página de Productos
-   ========================= */
-export default function AdminProductos() {
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [list, setList] = useState([]); // productos
-  const [series, setSeries] = useState([]); // strings únicas
-  const [editing, setEditing] = useState(emptyProduct());
-  const [search, setSearch] = useState("");
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return list;
-    return list.filter(
-      (p) =>
-        p.id.toLowerCase().includes(q) ||
-        (p.titulo || "").toLowerCase().includes(q) ||
-        (p.serie || "").toLowerCase().includes(q)
-    );
-  }, [list, search]);
-
-  const refresh = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const { data, error } = await supabase
-        .from("productos")
-        .select(
-          "id,titulo,descripcion,descripcion_detallada,serie,precio,moneda,descuento,etiquetas,imagenes,destacado,bajo_pedido,disponible,tiempo_entreg,stock,stripe_price_id,payment_link,created_at,updated_at"
-        )
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      setList(data || []);
-      const s = Array.from(
-        new Set((data || []).map((r) => (r.serie || "").trim()).filter(Boolean))
-      );
-      setSeries(s);
-    } catch (e) {
-      setError(String(e?.message || e));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    refresh();
-  }, []);
-
-  const startNew = () => setEditing(emptyProduct());
-  const editOne = (p) => setEditing({ ...emptyProduct(), ...p });
-
-  const upsert = async () => {
-    if (!editing.id) {
-      alert("El ID es obligatorio.");
-      return;
-    }
-    setSaving(true);
-    setError("");
-    try {
-      const payload = {
-        ...editing,
-        descuento: Number(editing.descuento || 0),
-        precio: editing.precio === "" ? null : Number(editing.precio),
-        stock: Number(editing.stock || 0),
-        etiquetas: editing.etiquetas || [],
-        imagenes: editing.imagenes || [],
-        tiempo_entreg: editing.tiempo_entreg || null,
-      };
-
-      const { data, error } = await supabase
-        .from("productos")
-        .upsert(payload, { onConflict: "id" })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // merge en lista
-      const exists = list.findIndex((r) => r.id === data.id);
-      let next = [...list];
-      if (exists >= 0) next[exists] = data;
-      else next.unshift(data);
-      setList(next);
-
-      // actualizar series
-      const s = Array.from(
-        new Set(next.map((r) => (r.serie || "").trim()).filter(Boolean))
-      );
-      setSeries(s);
-
-      alert("Producto guardado.");
-    } catch (e) {
-      setError(String(e?.message || e));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const createSeries = (name) => {
-    const n = name.trim();
-    if (!n) return;
-    if (!series.includes(n)) setSeries((prev) => [...prev, n]);
-    setEditing((v) => ({ ...v, serie: n }));
-  };
-
-  return (
-    <AdminGate>
-      <main className="max-w-6xl mx-auto px-4 py-8">
-        <div className="mb-5 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold">Gestión de productos</h1>
-            <p className="text-sm text-gray-600">
-              Crea y edita obras, series y etiquetas. Sube hasta 5 imágenes por producto (ImgBB).
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={startNew}
-              className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold hover:bg-gray-50"
-            >
-              <Plus size={16} /> Nuevo
-            </button>
-            <button
-              onClick={refresh}
-              className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold hover:bg-gray-50"
-              title="Recargar"
-            >
-              <RefreshCw size={16} />
-              Recargar
-            </button>
-          </div>
-        </div>
-
-        {/* LISTA */}
-        <div className="rounded-2xl border bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-lg font-semibold">Productos</div>
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por id, título o serie…"
-              className="w-full md:w-80 rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
-            />
           </div>
 
           {loading ? (
             <div className="mt-4 text-sm text-gray-600">Cargando…</div>
           ) : error ? (
             <div className="mt-4 text-sm text-rose-700">{error}</div>
+          ) : list.length === 0 ? (
+            <div className="mt-4 text-sm">Sin productos.</div>
           ) : (
-            <div className="mt-4 overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="text-left text-gray-500">
-                    <th className="py-2 pr-3">ID</th>
-                    <th className="py-2 pr-3">Título</th>
-                    <th className="py-2 pr-3">Serie</th>
-                    <th className="py-2 pr-3 text-right">Precio</th>
-                    <th className="py-2 pr-3">Estado</th>
-                    <th className="py-2">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {filtered.map((p) => (
-                    <tr key={p.id} className="align-top">
-                      <td className="py-2 pr-3">{p.id}</td>
-                      <td className="py-2 pr-3">
-                        <div className="font-medium">{p.titulo || "—"}</div>
-                        <div className="text-xs text-gray-500">
-                          {(p.etiquetas || []).slice(0, 3).join(", ")}
-                          {(p.etiquetas?.length || 0) > 3 ? "…" : ""}
-                        </div>
-                      </td>
-                      <td className="py-2 pr-3">{p.serie || "—"}</td>
-                      <td className="py-2 pr-3 text-right">
-                        {p.precio != null ? `$${moneyFmt(p.precio)}` : "—"}
-                      </td>
-                      <td className="py-2 pr-3">
-                        <div className="text-xs">
-                          {p.disponible ? (
-                            <span className="inline-block rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5">
-                              Disponible
-                            </span>
-                          ) : (
-                            <span className="inline-block rounded-full bg-gray-100 text-gray-700 px-2 py-0.5">
-                              Oculto
-                            </span>
-                          )}
-                          {p.bajo_pedido && (
-                            <span className="inline-block ml-2 rounded-full bg-amber-100 text-amber-700 px-2 py-0.5">
-                              Bajo pedido
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="py-2">
-                        <button
-                          onClick={() => editOne(p)}
-                          className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold hover:bg-gray-50"
-                        >
-                          Editar
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {filtered.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="py-4 text-center text-gray-500">
-                        Sin resultados
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+            <div className="mt-4 divide-y">
+              {list.map((p) => {
+                const first = (p.imagenes || [])[0];
+                return (
+                  <div key={p.id} className="py-3 flex items-center gap-3">
+                    <img
+                      src={previewSrc(first)}
+                      alt={p.titulo}
+                      className="h-12 w-12 rounded object-cover border"
+                      onError={(e) => (e.currentTarget.src = "/placeholder.jpg")}
+                    />
+                    <div className="min-w-0">
+                      <div className="font-medium truncate">{p.titulo}</div>
+                      <div className="text-xs text-gray-500">
+                        {p.id} • {p.serie || "—"} • {p.moneda} ${money(p.precio)}
+                        {p.descuento ? ` (−${p.descuento}%)` : ""} •{" "}
+                        {p.disponible ? "Disponible" : "No disponible"}
+                      </div>
+                    </div>
+                    <div className="ml-auto flex items-center gap-2">
+                      <button
+                        onClick={() => onEdit(p)}
+                        className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold hover:bg-gray-50"
+                      >
+                        <Pencil size={14} /> Editar
+                      </button>
+                      <button
+                        onClick={() => onDelete(p.id)}
+                        className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-50"
+                      >
+                        <Trash2 size={14} /> Borrar
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
 
-        {/* FORM */}
-        <div className="mt-6">
-          <ProductForm
-            value={editing}
-            onChange={setEditing}
-            seriesOptions={series}
-            onCreateSeries={createSeries}
-            onSave={upsert}
-            saving={saving}
+        {/* Formulario */}
+        <div className="rounded-3xl border bg-white p-5 shadow-sm">
+          <h2 className="text-lg font-semibold">
+            {editingId ? `Editar (${editingId})` : "Nuevo producto"}
+          </h2>
+
+          {/* id */}
+          <label className="block text-sm mt-3 text-gray-600">
+            ID (ej. p9)
+          </label>
+          <input
+            value={form.id}
+            onChange={(e) => setForm({ ...form, id: e.target.value })}
+            className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
+            placeholder="p9"
           />
+
+          {/* titulo */}
+          <label className="block text-sm mt-3 text-gray-600">Título</label>
+          <input
+            value={form.titulo}
+            onChange={(e) => setForm({ ...form, titulo: e.target.value })}
+            className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
+            placeholder="Nombre de la obra"
+          />
+
+          {/* descripcion */}
+          <label className="block text-sm mt-3 text-gray-600">Descripción</label>
+          <textarea
+            value={form.descripcion}
+            onChange={(e) =>
+              setForm({ ...form, descripcion: e.target.value })
+            }
+            rows={2}
+            className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
+            placeholder="Descripción corta"
+          />
+
+          {/* descripcion_detallada */}
+          <label className="block text-sm mt-3 text-gray-600">
+            Descripción detallada
+          </label>
+          <textarea
+            value={form.descripcion_detallada}
+            onChange={(e) =>
+              setForm({ ...form, descripcion_detallada: e.target.value })
+            }
+            rows={3}
+            className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
+            placeholder="Ficha técnica, técnica, etc."
+          />
+
+          {/* serie */}
+          <label className="block text-sm mt-3 text-gray-600">Serie</label>
+          <input
+            value={form.serie}
+            onChange={(e) => setForm({ ...form, serie: e.target.value })}
+            className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
+            placeholder="Serie 1 / Serie 2 / Serie 3"
+          />
+
+          <div className="grid grid-cols-2 gap-3 mt-3">
+            {/* precio */}
+            <div>
+              <label className="block text-sm text-gray-600">Precio</label>
+              <input
+                type="number"
+                step="0.01"
+                value={form.precio}
+                onChange={(e) => setForm({ ...form, precio: e.target.value })}
+                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
+                placeholder="0.00"
+              />
+            </div>
+
+            {/* moneda */}
+            <div>
+              <label className="block text-sm text-gray-600">Moneda</label>
+              <input
+                value={form.moneda}
+                onChange={(e) => setForm({ ...form, moneda: e.target.value })}
+                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
+                placeholder="MXN"
+              />
+            </div>
+          </div>
+
+          {/* descuento */}
+          <label className="block text-sm mt-3 text-gray-600">
+            Descuento (%)
+          </label>
+          <input
+            type="number"
+            value={form.descuento}
+            onChange={(e) =>
+              setForm({ ...form, descuento: Number(e.target.value || 0) })
+            }
+            className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
+            placeholder="0"
+          />
+
+          {/* etiquetas */}
+          <label className="block text-sm mt-3 text-gray-600">
+            Etiquetas (separadas por coma)
+          </label>
+          <input
+            value={tagsToInput(form.etiquetas)}
+            onChange={(e) =>
+              setForm({ ...form, etiquetas: parseTags(e.target.value) })
+            }
+            className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
+            placeholder="acrílico, paisaje"
+          />
+
+          {/* switches */}
+          <div className="grid grid-cols-3 gap-3 mt-3">
+            <label className="inline-flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={form.destacado}
+                onChange={(e) =>
+                  setForm({ ...form, destacado: e.target.checked })
+                }
+              />
+              Destacado
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={form.bajo_pedido}
+                onChange={(e) =>
+                  setForm({ ...form, bajo_pedido: e.target.checked })
+                }
+              />
+              Bajo pedido
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={form.disponible}
+                onChange={(e) =>
+                  setForm({ ...form, disponible: e.target.checked })
+                }
+              />
+              Disponible
+            </label>
+          </div>
+
+          {/* tiempo_entrega */}
+          <label className="block text-sm mt-3 text-gray-600">
+            Tiempo de entrega
+          </label>
+          <input
+            value={form.tiempo_entrega}
+            onChange={(e) =>
+              setForm({ ...form, tiempo_entrega: e.target.value })
+            }
+            className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
+            placeholder="Listo para envío / Hecho bajo pedido (3 semanas)"
+          />
+
+          {/* stock */}
+          <label className="block text-sm mt-3 text-gray-600">Stock</label>
+          <input
+            type="number"
+            value={form.stock}
+            onChange={(e) =>
+              setForm({ ...form, stock: Number(e.target.value || 0) })
+            }
+            className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
+            placeholder="0"
+          />
+
+          {/* stripe_price_id / payment_link_url (opcional) */}
+          <label className="block text-sm mt-3 text-gray-600">
+            Stripe price ID (opcional)
+          </label>
+          <input
+            value={form.stripe_price_id}
+            onChange={(e) =>
+              setForm({ ...form, stripe_price_id: e.target.value })
+            }
+            className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
+            placeholder="price_123"
+          />
+
+          <label className="block text-sm mt-3 text-gray-600">
+            Payment link URL (opcional)
+          </label>
+          <input
+            value={form.payment_link_url}
+            onChange={(e) =>
+              setForm({ ...form, payment_link_url: e.target.value })
+            }
+            className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
+            placeholder="https://buy.stripe.com/..."
+          />
+
+          {/* Imágenes */}
+          <div className="mt-4">
+            <div className="flex items-center justify-between">
+              <label className="text-sm text-gray-600">Imágenes (máx. 5)</label>
+              <label className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold hover:bg-gray-50 cursor-pointer">
+                <UploadCloud size={14} />
+                Subir a ImgBB
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={onPickImages}
+                />
+              </label>
+            </div>
+
+            {(!form.imagenes || form.imagenes.length === 0) ? (
+              <div className="mt-2 h-28 grid place-items-center rounded-xl border text-gray-500 text-sm">
+                <ImageIcon size={16} /> Sin imágenes
+              </div>
+            ) : (
+              <div className="mt-2 grid grid-cols-3 gap-3">
+                {form.imagenes.map((src, idx) => (
+                  <div key={idx} className="relative group">
+                    <img
+                      src={previewSrc(src)}
+                      alt={`img-${idx}`}
+                      className="h-28 w-full object-cover rounded-xl border"
+                      onError={(e) =>
+                        (e.currentTarget.src = "/placeholder.jpg")
+                      }
+                    />
+                    <div className="absolute inset-x-0 -bottom-2 flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition">
+                      <button
+                        onClick={() => moveImage(idx, idx - 1)}
+                        className="h-7 w-7 grid place-items-center rounded-full bg-white border shadow"
+                        title="Mover izq"
+                      >
+                        <ArrowLeft size={14} />
+                      </button>
+                      <button
+                        onClick={() => moveImage(idx, idx + 1)}
+                        className="h-7 w-7 grid place-items-center rounded-full bg-white border shadow"
+                        title="Mover der"
+                      >
+                        <ArrowRight size={14} />
+                      </button>
+                      <button
+                        onClick={() => removeImageAt(idx)}
+                        className="h-7 w-7 grid place-items-center rounded-full bg-white border text-rose-600 shadow"
+                        title="Quitar"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="text-xs text-gray-500 mt-1">
+              Se guardan las URLs públicas devueltas por ImgBB.
+            </div>
+          </div>
+
+          {/* Acciones */}
+          <div className="mt-5 flex flex-wrap gap-2">
+            <button
+              disabled={!canSave}
+              onClick={onSave}
+              className="inline-flex items-center gap-2 rounded-full bg-gray-900 text-white px-4 py-2 text-sm font-semibold shadow hover:shadow-md disabled:opacity-50"
+            >
+              <Save size={16} /> {editingId ? "Guardar cambios" : "Crear"}
+            </button>
+            <button
+              onClick={onNew}
+              className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold hover:bg-gray-50"
+            >
+              <Plus size={16} /> Nuevo
+            </button>
+          </div>
         </div>
-      </main>
-    </AdminGate>
+      </div>
+    </div>
   );
 }
