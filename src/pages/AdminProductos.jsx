@@ -16,6 +16,7 @@ import {
   Pencil,
   ArrowLeft,
   Layers,
+  Star,
 } from "lucide-react";
 
 /* =========================
@@ -62,7 +63,6 @@ function genClientId() {
       return crypto.randomUUID();
     }
   } catch {}
-  // Fallback simple a pseudo-uuid
   const s4 = () => Math.floor((1 + Math.random()) * 0x10000).toString(16).slice(-4);
   return `${s4()}${s4()}-${s4()}-${s4()}-${s4()}-${s4()}${s4()}${s4()}`;
 }
@@ -177,6 +177,7 @@ function ProductosAdminUI() {
   const [bajoPedido, setBajoPedido] = useState(false);
   const [tiempoEntrega, setTiempoEntrega] = useState("Listo para envío");
   const [stock, setStock] = useState(1);
+  const [destacado, setDestacado] = useState(false); // ⬅️ NUEVO: bandera de destacado
 
   // etiquetas
   const [tagInput, setTagInput] = useState("");
@@ -198,7 +199,7 @@ function ProductosAdminUI() {
     try {
       const { data, error } = await supabase
         .from("productos")
-        .select("id,titulo,precio,moneda,stock,serie,imagenes,created_at")
+        .select("id,titulo,precio,moneda,stock,serie,imagenes,created_at,destacado")
         .order("created_at", { ascending: false });
       if (error) throw error;
       setList(data || []);
@@ -242,6 +243,7 @@ function ProductosAdminUI() {
     setFilesNew([]);
     setSerieSel("");
     setSerieNueva("");
+    setDestacado(false); // reset
   };
 
   const loadForEdit = async (id) => {
@@ -265,6 +267,7 @@ function ProductosAdminUI() {
       setImgUrls(Array.isArray(data.imagenes) ? data.imagenes : []);
       setFilesNew([]);
       setSerieSel(data.serie || "");
+      setDestacado(!!data.destacado); // ⬅️ cargar destacado
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e) {
       setErrMsg(e.message || String(e));
@@ -351,7 +354,7 @@ function ProductosAdminUI() {
       }
       const imagenesFinal = [...imgUrls, ...newUrls].slice(0, 5);
 
-      // 2) Payload
+      // 2) Payload (ahora incluye destacado)
       const payload = {
         titulo: titulo.trim(),
         descripcion: (descripcion || "").trim() || null,
@@ -361,7 +364,7 @@ function ProductosAdminUI() {
         descuento: Number.isFinite(Number(descuento)) ? Number(descuento) : 0,
         etiquetas,
         imagenes: imagenesFinal,
-        destacado: false,
+        destacado: !!destacado, // ⬅️ guardar destacado
         bajo_pedido: !!bajoPedido,
         disponible: Number(stock) > 0,
         tiempo_entrega: tiempoEntrega || null,
@@ -376,7 +379,7 @@ function ProductosAdminUI() {
         if (error) throw error;
         setOkMsg("Producto actualizado.");
       } else {
-        const newId = genClientId(); // <<<<<< ID generado en el cliente
+        const newId = genClientId(); // ID generado en el cliente
         const { error } = await supabase.from("productos").insert([{ id: newId, ...payload }]);
         if (error) throw error;
         setOkMsg(`Producto creado (ID: ${newId.slice(0, 8)}…)`);
@@ -578,6 +581,18 @@ function ProductosAdminUI() {
               </Field>
             </div>
 
+            {/* ⬅️ NUEVO CAMPO: Destacada */}
+            <Field label="Destacada">
+              <label className="inline-flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={destacado}
+                  onChange={(e) => setDestacado(e.target.checked)}
+                />
+                Mostrar como destacada en la tienda
+              </label>
+            </Field>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Field label="Descripción breve">
                 <textarea
@@ -657,11 +672,7 @@ function ProductosAdminUI() {
                 onChange={onPickFiles}
               />
 
-              <div
-                className={`mt-3 grid grid-cols-2 sm:grid-cols-3 gap-3 ${
-                  canAddMore ? "md:grid-cols-5" : "md:grid-cols-5"
-                }`}
-              >
+              <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
                 {/* existentes */}
                 {imgUrls.map((u, idx) => (
                   <div key={`u-${idx}`} className="relative rounded-2xl overflow-hidden border">
@@ -761,7 +772,12 @@ function ProductosAdminUI() {
                   key={p.id}
                   className="rounded-2xl border bg-white p-4 shadow-sm hover:shadow transition flex gap-4"
                 >
-                  <div className="h-24 w-24 rounded-xl overflow-hidden border bg-gray-50 shrink-0">
+                  <div className="h-24 w-24 rounded-xl overflow-hidden border bg-gray-50 shrink-0 relative">
+                    {p.destacado && (
+                      <span className="absolute top-1 left-1 inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-2 py-[2px] text-[10px] font-semibold">
+                        <Star size={12} /> Destacado
+                      </span>
+                    )}
                     {Array.isArray(p.imagenes) && p.imagenes[0] ? (
                       <img
                         src={p.imagenes[0]}
