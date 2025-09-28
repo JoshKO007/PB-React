@@ -1,7 +1,7 @@
 // src/pages/AdminHome.jsx
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Boxes, Package } from "lucide-react";
+import { Boxes, Package, Video } from "lucide-react";
 
 export default function AdminHome() {
   const navigate = useNavigate();
@@ -25,6 +25,7 @@ export default function AdminHome() {
         </h1>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* Productos */}
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -39,6 +40,26 @@ export default function AdminHome() {
                 <div className="font-semibold">Productos</div>
                 <div className="text-sm text-gray-600">
                   Crear/editar obras, series, etiquetas, imágenes…
+                </div>
+              </div>
+            </div>
+          </motion.button>
+
+          {/* Videos */}
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => navigate("/admin/videos")}
+            className="rounded-2xl border bg-white p-6 shadow-sm text-left hover:shadow-md transition"
+          >
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 grid place-items-center rounded-full bg-rose-100 text-rose-700">
+                <Video size={18}/>
+              </div>
+              <div>
+                <div className="font-semibold">Videos</div>
+                <div className="text-sm text-gray-600">
+                  Agregar/editar videos de YouTube con vista previa, título y descripción.
                 </div>
               </div>
             </div>
