@@ -12,7 +12,6 @@ import { useNavigate } from "react-router-dom";
    Config y Supabase
    ========================= */
 const SUPABASE_URL  = import.meta.env.VITE_SUPABASE_URL;
-the
 const SUPABASE_KEY  = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const ADMIN_PASS    = import.meta.env.VITE_ADMIN_PASSWORD || "";
 const supabase      = createClient(SUPABASE_URL, SUPABASE_KEY);
