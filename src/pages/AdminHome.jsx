@@ -8,39 +8,47 @@ export default function AdminHome() {
 
   return (
     <div className="min-h-screen bg-[#f9f4ef] text-[#333333]">
-      <header className="w-full px-4 py-4 border-b border-gray-300 bg-[#f0eae2]/80 backdrop-blur-md">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="Logo" className="h-12" />
-            <div className="text-xl font-serif italic text-[#3b4d63]">
-              Panel de administración
+      {/* Header sticky */}
+      <header className="sticky top-0 z-30 w-full border-b border-gray-300 bg-[#f0eae2]/80 backdrop-blur-md">
+        <div className="max-w-6xl mx-auto px-4 py-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <img src="/logo.png" alt="Logo" className="h-12 shrink-0" />
+              <div className="min-w-0">
+                <div className="text-xs text-gray-600">Administración</div>
+                <div className="text-xl font-serif italic text-[#3b4d63] truncate">
+                  Panel de administración
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </header>
 
+      {/* Main */}
       <main className="max-w-6xl mx-auto px-4 py-10">
         <h1 className="text-2xl font-bold mb-6 flex items-center gap-2">
-          <Boxes size={22}/> Selecciona una sección
+          <Boxes size={22} /> Selecciona una sección
         </h1>
 
+        {/* Grid de secciones */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {/* Productos */}
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => navigate("/admin/productos")}
-            className="rounded-2xl border bg-white p-6 shadow-sm text-left hover:shadow-md transition"
+            className="group h-full rounded-2xl border bg-white p-6 text-left shadow-sm transition hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-200"
           >
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 grid place-items-center rounded-full bg-indigo-100 text-indigo-700">
-                <Package size={18}/>
+            <div className="flex items-start gap-4">
+              <div className="h-12 w-12 grid place-items-center rounded-xl bg-indigo-100 text-indigo-700 shrink-0">
+                <Package size={20} />
               </div>
-              <div>
-                <div className="font-semibold">Productos</div>
-                <div className="text-sm text-gray-600">
-                  Crear/editar obras, series, etiquetas, imágenes…
-                </div>
+              <div className="min-w-0">
+                <div className="font-semibold text-lg">Productos</div>
+                <p className="mt-1 text-sm text-gray-600 leading-relaxed">
+                  Crear/editar obras, series, etiquetas e imágenes.
+                </p>
               </div>
             </div>
           </motion.button>
@@ -50,28 +58,26 @@ export default function AdminHome() {
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => navigate("/admin/videos")}
-            className="rounded-2xl border bg-white p-6 shadow-sm text-left hover:shadow-md transition"
+            className="group h-full rounded-2xl border bg-white p-6 text-left shadow-sm transition hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-200"
           >
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 grid place-items-center rounded-full bg-rose-100 text-rose-700">
-                <Video size={18}/>
+            <div className="flex items-start gap-4">
+              <div className="h-12 w-12 grid place-items-center rounded-xl bg-rose-100 text-rose-700 shrink-0">
+                <Video size={20} />
               </div>
-              <div>
-                <div className="font-semibold">Videos</div>
-                <div className="text-sm text-gray-600">
+              <div className="min-w-0">
+                <div className="font-semibold text-lg">Videos</div>
+                <p className="mt-1 text-sm text-gray-600 leading-relaxed">
                   Agregar/editar videos de YouTube con vista previa, título y descripción.
-                </div>
+                </p>
               </div>
             </div>
           </motion.button>
 
-          {/* Futuras secciones:
-          <motion.button ...>Pedidos</motion.button>
-          <motion.button ...>Contenido</motion.button>
-          */}
+          {/* Ejemplo futuro (placeholder) */}
+          {/* <motion.button ... /> */}
         </div>
 
-        <p className="mt-8 text-xs text-gray-500">
+        <p className="mt-10 text-xs text-gray-500">
           Nota: Esta portada no está protegida con contraseña; la protección está en cada módulo.
         </p>
       </main>
