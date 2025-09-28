@@ -1,29 +1,52 @@
+// src/pages/Galeria.jsx
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import FondoParticulas from "../components/FondoParticulas";
 import { Volume2, VolumeX, LogOut, Music, Music2 } from "lucide-react";
 import { useNavigate } from 'react-router-dom';
 
-const obras = [
-  {
-    titulo: 'Fragmentos de silencio',
-    descripcion: 'Acrílico sobre lienzo. Serie introspectiva que explora la memoria emocional.',
-    imagen: '/obras/obra1.jpg',
-  },
-  {
-    titulo: 'Ecos de lo invisible',
-    descripcion: 'Técnica mixta. Una obra que sugiere el movimiento del pensamiento.',
-    imagen: '/obras/obra2.jpeg',
-  },
-  {
-    titulo: 'Sombras del alba',
-    descripcion: 'Carboncillo sobre papel. Fragmentos de la frontera entre sueño y vigilia.',
-    imagen: '/obras/obra3.jpg',
-  },
-];
+// ===== Supabase =====
+import { createClient } from "@supabase/supabase-js";
+const SUPABASE_URL =
+  import.meta.env.VITE_SUPABASE_URL || "https://ousgktyljynqzrnafoqd.supabase.co";
+const SUPABASE_ANON_KEY =
+  import.meta.env.VITE_SUPABASE_ANON_KEY ||
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im91c2drdHlsanlucXpybmFmb3FkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2MDMxNjYsImV4cCI6MjA2ODE3OTE2Nn0.hG27iuA-iNH3e3PPRck7ELgO89aRTbMiM8I65085TcE";
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* ============ Helpers ============ */
+function parseImagenes(v) {
+  try {
+    if (!v) return [];
+    if (Array.isArray(v)) return v;
+    // en tu tabla viene como string JSON
+    const arr = JSON.parse(v);
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    // si no es JSON, intenta split por coma
+    return String(v).split(",").map(s => s.trim()).filter(Boolean);
+  }
+}
+
+function normalizeImg(pathLike) {
+  if (!pathLike) return "/placeholder.jpg";
+  // si ya es http(s), respétalo
+  if (/^https?:\/\//i.test(pathLike)) return pathLike;
+  // limpia "public/" y fuerza prefijo "obras/"
+  let cleaned = String(pathLike).replace(/^public\//, "");
+  if (!/^obras\//.test(cleaned)) cleaned = `obras/${cleaned}`;
+  return `/${cleaned}`;
+}
 
 export default function Galeria() {
   const [index, setIndex] = useState(0);
+
+  // Datos desde BD
+  const [obras, setObras] = useState([]); // [{titulo, descripcion, imagen}]
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  // UI/FX
   const [mostrarTutorial, setMostrarTutorial] = useState(true);
   const [narradorActivo, setNarradorActivo] = useState(false);
   const [musicaActiva, setMusicaActiva] = useState(true);
@@ -32,47 +55,75 @@ export default function Galeria() {
   const containerRef = useRef(null);
   const navigate = useNavigate();
 
+  // Carga de productos
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      setError("");
+      try {
+        const { data, error } = await supabase
+          .from("productos")
+          .select("id, titulo, descripcion, imagenes")
+          .order("id", { ascending: true });
+
+        if (error) throw error;
+
+        const mapped = (data || []).map(r => {
+          const imgs = parseImagenes(r.imagenes);
+          const first = imgs[0] || "";
+          return {
+            titulo: r.titulo || "Sin título",
+            descripcion: r.descripcion || "",
+            imagen: normalizeImg(first),
+          };
+        });
+
+        setObras(mapped);
+        setIndex(0);
+      } catch (e) {
+        setError("No se pudieron cargar las obras.");
+        setObras([]); // sin fallback si prefieres
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
   const siguiente = () => {
+    if (obras.length === 0) return;
     setIndex((prev) => (prev + 1) % obras.length);
-    ocultarTutorial();
+    setMostrarTutorial(false);
   };
 
   const anterior = () => {
+    if (obras.length === 0) return;
     setIndex((prev) => (prev - 1 + obras.length) % obras.length);
-    ocultarTutorial();
+    setMostrarTutorial(false);
   };
 
-  const ocultarTutorial = () => setMostrarTutorial(false);
-
-  const transicion = {
-    duration: 0.6,
-    ease: [0.43, 0.13, 0.23, 0.96],
-  };
+  const transicion = { duration: 0.6, ease: [0.43, 0.13, 0.23, 0.96] };
 
   const narrarObra = (obra) => {
-    if (!narradorActivo) return;
+    if (!narradorActivo || !obra) return;
     window.speechSynthesis.cancel();
-
     const texto = `${obra.titulo}. ${obra.descripcion}`;
     const utterance = new SpeechSynthesisUtterance(texto);
     utterance.lang = 'es-MX';
-
     const voces = window.speechSynthesis.getVoices();
     const vozNatural = voces.find(v => v.lang === 'es-MX' && v.name.toLowerCase().includes('paulina'));
     if (vozNatural) utterance.voice = vozNatural;
-
     utterance.rate = 0.9;
     utterance.pitch = 1;
-
     window.speechSynthesis.speak(utterance);
   };
 
   useEffect(() => {
+    if (!obras || obras.length === 0) return;
     const timeout = setTimeout(() => {
       if (narradorActivo) narrarObra(obras[index]);
     }, 3000);
     return () => clearTimeout(timeout);
-  }, [index, narradorActivo]);
+  }, [index, narradorActivo, obras]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -81,12 +132,11 @@ export default function Galeria() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [obras]);
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
-
     if (musicaActiva && !narradorActivo) {
       audio.volume = 0.1;
       audio.play().catch(() => {});
@@ -112,6 +162,8 @@ export default function Galeria() {
     };
   }, []);
 
+  const obraActual = obras[index];
+
   return (
     <div className="relative min-h-screen bg-[#0d0d0d] text-white overflow-hidden" ref={containerRef}>
       <FondoParticulas />
@@ -130,10 +182,7 @@ export default function Galeria() {
               <h2 className="text-lg font-bold">¿Deseas activar el narrador de voz?</h2>
               <div className="flex justify-center gap-6 mt-4">
                 <button
-                  onClick={() => {
-                    setNarradorActivo(true);
-                    setMostrarDialogo(false);
-                  }}
+                  onClick={() => { setNarradorActivo(true); setMostrarDialogo(false); }}
                   className="bg-[#a16207] text-white px-4 py-2 rounded-md hover:bg-[#854d06]"
                 >
                   Sí
@@ -165,13 +214,9 @@ export default function Galeria() {
 
       {/* Botones verticales */}
       <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-4">
-        {/* Narrador */}
         <div className="group flex flex-row-reverse items-center gap-2">
           <button
-            onClick={() => {
-              window.speechSynthesis.cancel();
-              setNarradorActivo(prev => !prev);
-            }}
+            onClick={() => { window.speechSynthesis.cancel(); setNarradorActivo(prev => !prev); }}
             className="bg-white/10 border border-white/20 text-white p-3 rounded-full backdrop-blur hover:scale-110 transition"
           >
             {narradorActivo ? <Volume2 size={22} /> : <VolumeX size={22} />}
@@ -181,7 +226,6 @@ export default function Galeria() {
           </span>
         </div>
 
-        {/* Música */}
         <div className="group flex flex-row-reverse items-center gap-2">
           <button
             onClick={() => setMusicaActiva(prev => !prev)}
@@ -197,14 +241,13 @@ export default function Galeria() {
 
       {/* Tutorial */}
       <AnimatePresence>
-        {mostrarTutorial && (
+        {mostrarTutorial && obras.length > 1 && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 0.9 }}
             exit={{ opacity: 0 }}
             className="absolute bottom-8 w-full flex justify-center items-center z-40 pointer-events-none"
           >
-            {/* Flechas PC */}
             <div className="hidden md:flex gap-6 text-white text-5xl font-bold">
               <motion.div
                 className="bg-white/10 rounded-full px-6 py-3 border border-white/30"
@@ -223,7 +266,6 @@ export default function Galeria() {
                 →
               </motion.div>
             </div>
-            {/* Swipe móvil */}
             <motion.img
               src="/Mano.gif"
               alt="Swipe tutorial"
@@ -236,57 +278,69 @@ export default function Galeria() {
         )}
       </AnimatePresence>
 
-      {/* CONTENIDO */}
-      <div className="relative z-10 min-h-screen flex items-center justify-center px-4 py-20">
-        <div className="max-w-6xl w-full flex flex-col md:flex-row items-center justify-between gap-12">
-          {/* Botón anterior solo visible en escritorio */}
-          <button
-            onClick={anterior}
-            className="hidden md:block text-white text-4xl md:text-5xl px-6 py-2 hover:scale-110 transition transform z-20"
-          >
-            ‹
-          </button>
-
-          <div className="w-full max-w-4xl">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={index}
-                className="flex flex-col md:flex-row gap-8 items-center"
-                initial={{ opacity: 0, x: 100 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -100 }}
-                transition={transicion}
-                drag="x"
-                dragConstraints={{ left: 0, right: 0 }}
-                onDragEnd={(e, info) => {
-                  if (info.offset.x < -100) siguiente();
-                  else if (info.offset.x > 100) anterior();
-                }}
-              >
-                <motion.img
-                  src={obras[index].imagen}
-                  alt={obras[index].titulo}
-                  className="w-full md:w-1/2 max-h-[500px] object-cover rounded-xl shadow-lg"
-                  whileHover={{ scale: 1.01 }}
-                  transition={{ duration: 0.4 }}
-                />
-                <div className="md:w-1/2 space-y-4 text-center md:text-left">
-                  <h2 className="text-3xl font-semibold text-white">{obras[index].titulo}</h2>
-                  <p className="text-lg text-gray-300">{obras[index].descripcion}</p>
-                </div>
-              </motion.div>
-            </AnimatePresence>
-          </div>
-
-          {/* Botón siguiente solo visible en escritorio */}
-          <button
-            onClick={siguiente}
-            className="hidden md:block text-white text-4xl md:text-5xl px-6 py-2 hover:scale-110 transition transform z-20"
-          >
-            ›
-          </button>
-        </div>
+      {/* Estados de carga / error */}
+      <div className="absolute top-6 left-1/2 -translate-x-1/2 text-sm">
+        {loading && <span className="text-white/80">Cargando obras…</span>}
+        {!loading && error && <span className="text-rose-300">{error}</span>}
+        {!loading && !error && obras.length === 0 && (
+          <span className="text-white/80">No hay obras para mostrar.</span>
+        )}
       </div>
+
+      {/* CONTENIDO */}
+      {obras.length > 0 && (
+        <div className="relative z-10 min-h-screen flex items-center justify-center px-4 py-20">
+          <div className="max-w-6xl w-full flex flex-col md:flex-row items-center justify-between gap-12">
+            {/* Botón anterior (desktop) */}
+            <button
+              onClick={anterior}
+              className="hidden md:block text-white text-4xl md:text-5xl px-6 py-2 hover:scale-110 transition transform z-20"
+            >
+              ‹
+            </button>
+
+            <div className="w-full max-w-4xl">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={index}
+                  className="flex flex-col md:flex-row gap-8 items-center"
+                  initial={{ opacity: 0, x: 100 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -100 }}
+                  transition={transicion}
+                  drag="x"
+                  dragConstraints={{ left: 0, right: 0 }}
+                  onDragEnd={(e, info) => {
+                    if (info.offset.x < -100) setTimeout(siguiente, 0);
+                    else if (info.offset.x > 100) setTimeout(anterior, 0);
+                  }}
+                >
+                  <motion.img
+                    src={obraActual.imagen}
+                    alt={obraActual.titulo}
+                    className="w-full md:w-1/2 max-h-[500px] object-cover rounded-xl shadow-lg"
+                    whileHover={{ scale: 1.01 }}
+                    transition={{ duration: 0.4 }}
+                    onError={(e) => (e.currentTarget.src = "/placeholder.jpg")}
+                  />
+                  <div className="md:w-1/2 space-y-4 text-center md:text-left">
+                    <h2 className="text-3xl font-semibold text-white">{obraActual.titulo}</h2>
+                    <p className="text-lg text-gray-300">{obraActual.descripcion}</p>
+                  </div>
+                </motion.div>
+              </AnimatePresence>
+            </div>
+
+            {/* Botón siguiente (desktop) */}
+            <button
+              onClick={siguiente}
+              className="hidden md:block text-white text-4xl md:text-5xl px-6 py-2 hover:scale-110 transition transform z-20"
+            >
+              ›
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
