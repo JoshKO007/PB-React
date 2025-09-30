@@ -1,3 +1,24 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Sticky Cursor (inspirado en el video) */
+.sticky-bubble{
+  width: var(--bubble-size, 24px);
+  height: var(--bubble-size, 24px);
+  border-radius: 9999px;
+  position: fixed;
+  top: 0; left: 0;
+  transform: translate(-50%, -50%);
+  background: #fff;
+  mix-blend-mode: difference;
+  pointer-events: none;
+  z-index: 9999;
+  transition: width .18s ease, height .18s ease, box-shadow .25s ease;
+}
+
+/* opcional: cuando el target está activo, puedes dar feedback visual */
+[data-cursor-target][data-cursor-active="true"]{
+  filter: brightness(1.05);
+  transform: translateZ(0);
+}

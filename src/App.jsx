@@ -1,6 +1,6 @@
 // src/App.jsx
 import { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useMotionValue, useSpring } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import {
   Home,
@@ -24,6 +24,79 @@ const supabase = createClient(
   "https://ousgktyljynqzrnafoqd.supabase.co",
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im91c2drdHlsanlucXpybmFmb3FkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2MDMxNjYsImV4cCI6MjA2ODE3OTE2Nn0.hG27iuA-iNH3e3PPRck7ELgO89aRTbMiM8I65085TcE"
 );
+
+/* ======================= Sticky Cursor (del video) ======================= */
+function StickyCursor() {
+  const bubbleRef = useRef(null);
+  const x = useMotionValue(-100);
+  const y = useMotionValue(-100);
+  const smoothX = useSpring(x, { stiffness: 500, damping: 40, mass: 0.6 });
+  const smoothY = useSpring(y, { stiffness: 500, damping: 40, mass: 0.6 });
+
+  const isTouch =
+    typeof window !== "undefined" &&
+    ("ontouchstart" in window || navigator.maxTouchPoints > 0);
+
+  const setSize = (px) => {
+    if (bubbleRef.current) {
+      bubbleRef.current.style.setProperty("--bubble-size", `${px}px`);
+    }
+  };
+
+  useEffect(() => {
+    if (isTouch) return;
+
+    const onMove = (e) => {
+      x.set(e.clientX);
+      y.set(e.clientY);
+    };
+
+    const onOver = (e) => {
+      const t = e.target.closest("[data-cursor-target]");
+      if (!t) return;
+      const rect = t.getBoundingClientRect();
+      const custom = Number(t.getAttribute("data-cursor-size")) || 42;
+      setSize(custom);
+      x.set(rect.left + rect.width / 2);
+      y.set(rect.top + rect.height / 2);
+      t.setAttribute("data-cursor-active", "true");
+    };
+
+    const onOut = (e) => {
+      const leaving = e.target.closest("[data-cursor-target]");
+      const related =
+        e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest("[data-cursor-target]");
+      if (leaving && leaving !== related) {
+        leaving.removeAttribute("data-cursor-active");
+        setSize(24);
+      }
+    };
+
+    setSize(24);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseover", onOver);
+    window.addEventListener("mouseout", onOut);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseover", onOver);
+      window.removeEventListener("mouseout", onOut);
+    };
+  }, [x, y, isTouch]);
+
+  if (isTouch) return null;
+
+  return (
+    <motion.div
+      ref={bubbleRef}
+      aria-hidden="true"
+      style={{
+        translateX: smoothX,
+        translateY: smoothY,
+      }}
+      className="sticky-bubble"
+    />
+  );
+}
 
 /* ======================= Helpers imágenes ======================= */
 function buildImgUrl(pathLike) {
@@ -260,7 +333,11 @@ export default function App() {
                 onMouseLeave={handleUserMouseLeave}
                 className="relative"
               >
-                <button className="p-2 rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md hover:shadow-lg flex items-center">
+                <button
+                  data-cursor-target
+                  data-cursor-size="36"
+                  className="p-2 rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md hover:shadow-lg flex items-center"
+                >
                   <User size={24} className="text-[#333333]" />
                 </button>
 
@@ -315,6 +392,8 @@ export default function App() {
 
               {usuarioActivo && (
                 <button
+                  data-cursor-target
+                  data-cursor-size="36"
                   onClick={() => navigate("/carrito")}
                   className="relative group"
                   title="Carrito"
@@ -355,6 +434,8 @@ export default function App() {
             {menu.map((item, index) => (
               <motion.span
                 key={index}
+                data-cursor-target
+                data-cursor-size="40"
                 onMouseEnter={() => setHovered(index)}
                 onMouseLeave={() => setHovered(null)}
                 onClick={item.onClick}
@@ -398,6 +479,8 @@ export default function App() {
             Sumérgete en una galería donde cada trazo cuenta una historia. Todas las obras están hechas a mano, con alma, y ahora puedes llevarlas contigo.
           </p>
           <motion.button
+            data-cursor-target
+            data-cursor-size="48"
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.97 }}
             onClick={() => navigate("/tienda")}
@@ -468,6 +551,8 @@ export default function App() {
             </div>
 
             <motion.button
+              data-cursor-target
+              data-cursor-size="46"
               whileHover={{ scale: 1.08 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => navigate("/tienda")}
@@ -647,6 +732,9 @@ export default function App() {
           <p className="text-sm">&copy; 2025 Arte - Restauración - Visuales. Todos los derechos reservados.</p>
         </div>
       </footer>
+
+      {/* Cursor “sticky” (una sola vez) */}
+      <StickyCursor />
     </div>
   );
 }
