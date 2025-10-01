@@ -1,544 +1,819 @@
-// src/pages/AdminRastreo.jsx
-import { useEffect, useMemo, useState } from "react";
+// src/pages/MisPedidos.jsx
+import { useEffect, useRef, useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Truck, Search, CornerUpLeft, LogOut, Save, Loader2, ArrowLeftRight,
-  ChevronLeft, ChevronRight, CheckCircle2, AlertTriangle, Undo2, ExternalLink, Package
+  ShoppingBag,
+  User,
+  Mail,
+  KeyRound,
+  UserPlus,
+  LogIn,
+  LogOut,
+  Heart as HeartIcon,
+  Home,
+  Image as ImageIcon,
+  Video,
+  Brush,
+  Loader2,
+  Truck,
+  ExternalLink,
+  AlertCircle,
+  Search,
+  CalendarDays,
+  History,
+  X,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+
+// ===== Supabase =====
 import { createClient } from "@supabase/supabase-js";
+const SUPABASE_URL =
+  import.meta.env.VITE_SUPABASE_URL || "https://ousgktyljynqzrnafoqd.supabase.co";
+const SUPABASE_ANON_KEY =
+  import.meta.env.VITE_SUPABASE_ANON_KEY ||
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im91c2drdHlsanlucXpybmFmb3FkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2MDMxNjYsImV4cCI6MjA2ODE3OTE2Nn0.hG27iuA-iNH3e3PPRck7ELgO89aRTbMiM8I65085TcE";
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-/* =========================
-   Config / Supabase
-   ========================= */
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const ADMIN_PASS   = import.meta.env.VITE_ADMIN_PASSWORD || import.meta.env.VITE_ADMIN_PASS || "";
-const supabase     = createClient(SUPABASE_URL, SUPABASE_KEY);
+/* ======================= Helpers: links ======================= */
+const SITE_URL =
+  import.meta.env.VITE_SITE_URL ||
+  (typeof window !== "undefined" ? window.location.origin : "");
 
-/* =========================
-   Estados y helpers
-   ========================= */
-const STATUS = [
-  "created",
-  "paid",
-  "packed",
-  "shipped",
-  "in_transit",
-  "out_for_delivery",
-  "delivered",
-];
-const STATUS_LABEL = {
-  created: "Creado",
-  paid: "Pagado",
-  packed: "Empacado",
-  shipped: "Enviado",
-  in_transit: "En tránsito",
-  out_for_delivery: "En reparto",
-  delivered: "Entregado",
-  exception: "Incidencia",
-  returned: "Devuelto",
-};
-const ALL_STATUSES = [...STATUS, "exception", "returned"];
-
-const fmtDateTime = (d) => {
+function findSessionIdForOrder(orderId) {
+  if (!orderId) return "";
   try {
-    return new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeStyle: "short" })
-      .format(new Date(d));
-  } catch { return "—"; }
-};
+    const direct = localStorage.getItem(`orderSession:${orderId}`);
+    if (direct) return direct;
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k || !k.startsWith("finalized:")) continue;
+      const cached = localStorage.getItem(k);
+      if (!cached) continue;
+      try {
+        const data = JSON.parse(cached);
+        if (data && (data.pedido_id === orderId || data.id === orderId)) {
+          return k.slice("finalized:".length);
+        }
+      } catch {}
+    }
+  } catch {}
+  return "";
+}
+function buildReceiptLink(order_id) {
+  const session_id = findSessionIdForOrder(order_id);
+  const qs = new URLSearchParams({
+    ...(session_id ? { session_id } : {}),
+    order: order_id,
+  }).toString();
+  return `${SITE_URL}/recibo?${qs}`;
+}
+function buildTrackingLink({ carrier_tracking_url, order_id, tracking_code }) {
+  if (carrier_tracking_url) return carrier_tracking_url;
+  const qs = new URLSearchParams({
+    ...(order_id ? { order: order_id } : {}),
+    ...(tracking_code ? { tracking: tracking_code } : {}),
+  }).toString();
+  return `${SITE_URL}/rastreo?${qs}`;
+}
 
-/* =========================
-   Página
-   ========================= */
-export default function AdminRastreo() {
+/* ======================= Helpers varias ======================= */
+function normalizeImgPath(p) {
+  if (!p) return "/placeholder.jpg";
+  let cleaned = String(p).replace(/^public\//, "");
+  if (!/^obras\//.test(cleaned)) cleaned = `obras/${cleaned}`;
+  return `/${cleaned}`;
+}
+function buildImgFromProducto(prod) {
+  const raw = (Array.isArray(prod?.imagenes) && prod.imagenes[0]) || "";
+  return normalizeImgPath(raw);
+}
+function money(n, code = "MXN") {
+  const sym = String(code).toUpperCase() === "MXN" ? "$" : "";
+  return `${sym}${new Intl.NumberFormat("es-MX", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(n || 0))}`;
+}
+function fmtDate(d) {
+  try {
+    return new Intl.DateTimeFormat("es-MX", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(new Date(d));
+  } catch {
+    return "—";
+  }
+}
+function getUserFromLocal() {
+  try {
+    const s = JSON.parse(localStorage.getItem("sesionActiva") || "null");
+    if (s && (s.email || s.correo)) return { id: s.id, email: s.email || s.correo, nombre: s.nombre || s.usuario };
+  } catch {}
+  return null;
+}
+function ymd(dateStr) {
+  try {
+    const d = new Date(dateStr);
+    const y = d.getFullYear();
+    const m = `${d.getMonth() + 1}`.padStart(2, "0");
+    return { y, m, ym: `${y}-${m}` };
+  } catch {
+    return { y: null, m: null, ym: "" };
+  }
+}
+
+/* ======================= Página ======================= */
+export default function MisPedidos() {
   const navigate = useNavigate();
-  const [authed, setAuthed] = useState(false);
-  const [passInput, setPassInput] = useState("");
 
-  // búsqueda
-  const [qOrder, setQOrder] = useState("");
-  const [qTracking, setQTracking] = useState("");
+  // ====== Estado usuario/header ======
+  const [usuarioActivo, setUsuarioActivo] = useState(getUserFromLocal());
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [cerrandoSesion, setCerrandoSesion] = useState(false);
+  const userMenuTimeout = useRef(null);
 
-  // envío cargado
-  const [row, setRow] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
+  // ====== Datos de pedidos ======
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [pedidos, setPedidos] = useState([]);
+  // pedido: { id, email, total, moneda, created_at, items:[{title, thumb, qty, unitPrice}], shipment? }
 
-  // formulario editable
-  const [form, setForm] = useState({
-    order_id: "",
-    carrier: "",
-    tracking_code: "",
-    tracking_url: "",
-    status: "in_transit",
-    destination: null, // opcional
-    updated_at: null,
-  });
+  // ====== UI: filtros / historial ======
+  const [q, setQ] = useState("");
+  const [yearFilter, setYearFilter] = useState("");
+  const [monthFilter, setMonthFilter] = useState("");
 
-  const progressPct = useMemo(() => {
-    const i = Math.max(0, STATUS.findIndex((s) => s === form.status));
-    return Math.min(((i + 1) / STATUS.length) * 100, 100);
-  }, [form.status]);
-
-  const loadByOrderOrTracking = async () => {
-    if (!qOrder && !qTracking) {
-      setError("Ingresa un ID de pedido o un código de rastreo.");
-      return;
-    }
-    setError("");
-    setLoading(true);
-    setRow(null);
-    try {
-      let data = null;
-      if (qOrder) {
-        const { data: r, error: e } = await supabase
-          .from("shipments")
-          .select("*")
-          .eq("order_id", qOrder)
-          .maybeSingle();
-        if (e) throw e;
-        data = r || null;
-      }
-      if (!data && qTracking) {
-        const { data: r2, error: e2 } = await supabase
-          .from("shipments")
-          .select("*")
-          .eq("tracking_code", qTracking)
-          .maybeSingle();
-        if (e2) throw e2;
-        data = r2 || null;
-      }
-
-      // si no existe, pre llenar para crear
-      if (!data) {
-        const initial = {
-          order_id: qOrder || "",
-          carrier: "",
-          tracking_code: qTracking || "",
-          tracking_url: "",
-          status: "in_transit",
-          destination: null,
-          updated_at: null,
-        };
-        setRow(null);
-        setForm(initial);
-      } else {
-        setRow(data);
-        setForm({
-          order_id: data.order_id || "",
-          carrier: data.carrier || "",
-          tracking_code: data.tracking_code || "",
-          tracking_url: data.tracking_url || "",
-          status: data.status || "in_transit",
-          destination: data.destination ?? null,
-          updated_at: data.updated_at || null,
-        });
-      }
-    } catch (e) {
-      setError(String(e.message || e));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const moveStep = (delta) => {
-    const i = STATUS.findIndex((s) => s === form.status);
-    if (i < 0) return;
-    const next = STATUS[Math.min(Math.max(i + delta, 0), STATUS.length - 1)];
-    setForm((f) => ({ ...f, status: next }));
-  };
-
-  const setHardStatus = (s) => setForm((f) => ({ ...f, status: s }));
-
-  const onSave = async () => {
-    if (!form.order_id) {
-      setError("Falta order_id para guardar.");
-      return;
-    }
-    setSaving(true);
-    setError("");
-    try {
-      const payload = {
-        order_id: form.order_id,
-        carrier: form.carrier || null,
-        tracking_code: form.tracking_code || null,
-        tracking_url: form.tracking_url || null,
-        status: form.status || "in_transit",
-        destination: form.destination ?? null,
-        updated_at: new Date().toISOString(),
-      };
-
-      // upsert por order_id
-      const { data, error } = await supabase
-        .from("shipments")
-        .upsert(payload, { onConflict: "order_id" })
-        .select()
-        .single();
-
-      if (error) throw error;
-      setRow(data);
-      setForm((f) => ({ ...f, updated_at: data.updated_at || payload.updated_at }));
-    } catch (e) {
-      setError(String(e.message || e));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  /* =========================
-     UI
-     ========================= */
-
-  if (!authed) {
-    return (
-      <div className="min-h-screen grid place-items-center bg-[#f9f4ef]">
-        <div className="w-full max-w-sm bg-white rounded-2xl border shadow p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Truck className="text-[#a16207]" />
-            <h1 className="text-lg font-semibold">Admin · Rastreos</h1>
-          </div>
-          <label className="text-sm text-gray-600">Contraseña de admin</label>
-          <input
-            type="password"
-            className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
-            value={passInput}
-            onChange={(e) => setPassInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                if (!ADMIN_PASS || passInput === ADMIN_PASS) setAuthed(true);
-                else alert("Contraseña incorrecta.");
-              }
-            }}
-          />
-          <button
-            onClick={() => {
-              if (!ADMIN_PASS || passInput === ADMIN_PASS) setAuthed(true);
-              else alert("Contraseña incorrecta.");
-            }}
-            className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#a16207] text-white px-4 py-2 text-sm font-semibold hover:bg-[#854d06]"
-          >
-            Entrar
-          </button>
-
-          <button
-            onClick={() => navigate("/admin")}
-            className="mt-3 inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold hover:bg-gray-50"
-          >
-            <CornerUpLeft size={16} /> Volver al panel
-          </button>
-        </div>
-      </div>
-    );
+  // ====== Header helpers ======
+  const [cartCount, setCartCount] = useState(0);
+  function getCartKeyBySession(s) {
+    return s?.id ? `carrito:${s.id}` : null;
+  }
+  function safeCartCount(cartArray) {
+    return (cartArray || []).reduce((sum, it) => sum + Math.max(0, Number(it?.cantidad) || 1), 0);
   }
 
+  // Sincroniza sesión
+  useEffect(() => {
+    const onFocus = () => setUsuarioActivo(getUserFromLocal());
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, []);
+  // Cart badge
+  useEffect(() => {
+    try {
+      if (!usuarioActivo?.id) {
+        setCartCount(0);
+        return;
+      }
+      const key = getCartKeyBySession(usuarioActivo);
+      const cart = JSON.parse(localStorage.getItem(key) || "[]");
+      setCartCount(safeCartCount(cart));
+    } catch {
+      setCartCount(0);
+    }
+  }, [usuarioActivo]);
+
+  // ====== Cargar pedidos por email ======
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      setError("");
+      setPedidos([]);
+      try {
+        const current = getUserFromLocal();
+        if (!current?.email) {
+          throw new Error("No pudimos identificar tu sesión. Inicia sesión para ver tus pedidos.");
+        }
+
+        // 1) Pedidos por email
+        const { data: peds, error: e1 } = await supabase
+          .from("pedidos")
+          .select("id, email, total, moneda, created_at")
+          .eq("email", current.email)
+          .order("created_at", { ascending: false });
+
+        if (e1) throw e1;
+        if (!peds || peds.length === 0) {
+          setPedidos([]);
+          setLoading(false);
+          return;
+        }
+
+        const pedidoIds = peds.map((p) => p.id);
+
+        // 2) Items (necesitamos titulo, cantidad y unit_price)
+        const { data: items, error: e2 } = await supabase
+          .from("pedidos_items")
+          .select("pedido_id, titulo, cantidad, unit_price")
+          .in("pedido_id", pedidoIds);
+
+        if (e2) throw e2;
+
+        // 3) Títulos únicos válidos (ignoramos cargos de procesamiento u otros sin imagen)
+        const TITLES_TO_IGNORE = new Set(
+          ["Cargo por procesamiento (tarjeta)", "Cargo por procesamiento", "Procesamiento"].map((s) =>
+            s.toLowerCase()
+          )
+        );
+
+        const titles = Array.from(
+          new Set(
+            (items || [])
+              .map((it) => (it?.titulo || "").trim())
+              .filter((t) => t && !TITLES_TO_IGNORE.has(t.toLowerCase()))
+          )
+        );
+
+        // 4) Productos por TÍTULO
+        let productosByTitle = {};
+        if (titles.length > 0) {
+          const { data: prods, error: e3 } = await supabase.from("productos").select("id, titulo, imagenes");
+          if (e3) throw e3;
+          for (const pr of prods || []) {
+            const key = (pr.titulo || "").trim().toLowerCase();
+            if (key && !productosByTitle[key]) productosByTitle[key] = pr;
+          }
+        }
+
+        // 5) Agrupa por pedido con thumbs + datos para la lista (nombre y precio)
+        const itemsByPedido = new Map();
+        (items || []).forEach((it) => {
+          const list = itemsByPedido.get(it.pedido_id) || [];
+          const title = (it?.titulo || "").trim();
+          if (!title || TITLES_TO_IGNORE.has(title.toLowerCase())) {
+            itemsByPedido.set(it.pedido_id, list);
+            return;
+          }
+          const prod = productosByTitle[title.toLowerCase()];
+          list.push({
+            title,
+            thumb: prod ? buildImgFromProducto(prod) : "/placeholder.jpg",
+            qty: Number(it?.cantidad || 1),
+            unitPrice: Number(it?.unit_price || 0),
+          });
+          itemsByPedido.set(it.pedido_id, list);
+        });
+
+        // 6) Shipments (tracking opcional)
+        let shipmentMap = {};
+        try {
+          const { data: ships, error: e4 } = await supabase
+            .from("shipments")
+            .select("order_id, tracking_code, tracking_url")
+            .in("order_id", pedidoIds);
+          if (e4) throw e4;
+          shipmentMap = (ships || []).reduce((acc, s) => {
+            acc[s.order_id] = { tracking_code: s.tracking_code || "", tracking_url: s.tracking_url || "" };
+            return acc;
+          }, {});
+        } catch {
+          shipmentMap = {};
+        }
+
+        // 7) Resultado final
+        const out = peds.map((p) => ({
+          id: p.id,
+          email: p.email,
+          total: p.total,
+          moneda: p.moneda,
+          created_at: p.created_at,
+          items: itemsByPedido.get(p.id) || [],
+          shipment: shipmentMap[p.id] || null,
+        }));
+
+        setPedidos(out);
+      } catch (err) {
+        setError(String(err.message || err));
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  /* ======================= Derivados para Historial ======================= */
+  // Años y meses disponibles a partir de los pedidos
+  const yearOptions = useMemo(() => {
+    const ys = new Set();
+    pedidos.forEach((p) => {
+      const d = new Date(p.created_at);
+      if (!isNaN(+d)) ys.add(d.getFullYear());
+    });
+    return Array.from(ys).sort((a, b) => b - a);
+  }, [pedidos]);
+
+  const monthOptions = useMemo(() => {
+    // Si no hay yearFilter, listamos meses presentes en general
+    const ms = new Set();
+    pedidos.forEach((p) => {
+      const d = new Date(p.created_at);
+      if (isNaN(+d)) return;
+      if (yearFilter && d.getFullYear() !== Number(yearFilter)) return;
+      ms.add(d.getMonth() + 1);
+    });
+    const arr = Array.from(ms).sort((a, b) => b - a);
+    // Devuelve pares: [{value:'01', label:'Enero'}, ...]
+    const names = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+    return arr.map((m) => ({ value: String(m).padStart(2, "0"), label: names[m - 1] }));
+  }, [pedidos, yearFilter]);
+
+  // Filtro de texto + fecha
+  const filteredPedidos = useMemo(() => {
+    const t = (q || "").trim().toLowerCase();
+    return pedidos.filter((p) => {
+      // Filtro por año/mes
+      const { y, m } = ymd(p.created_at);
+      if (yearFilter && String(y) !== String(yearFilter)) return false;
+      if (monthFilter && String(m).padStart(2, "0") !== String(monthFilter)) return false;
+
+      // Filtro por texto
+      if (!t) return true;
+      const id = (p.id || "").toLowerCase();
+      const email = (p.email || "").toLowerCase();
+      const itemsText = (p.items || []).map((it) => it.title || "").join(" ").toLowerCase();
+      return id.includes(t) || email.includes(t) || itemsText.includes(t);
+    });
+  }, [pedidos, q, yearFilter, monthFilter]);
+
+  // Agrupar por Año-Mes para encabezados
+  const groups = useMemo(() => {
+    const map = new Map(); // ym -> array
+    filteredPedidos.forEach((p) => {
+      const { y, m, ym } = ymd(p.created_at);
+      const key = ym || "otros";
+      const list = map.get(key) || [];
+      list.push(p);
+      map.set(key, list);
+    });
+    // Ordenar por key desc (más recientes primero)
+    return Array.from(map.entries())
+      .sort((a, b) => (a[0] < b[0] ? 1 : -1))
+      .map(([key, arr]) => ({ key, items: arr }));
+  }, [filteredPedidos]);
+
+  const clearFilters = () => {
+    setQ("");
+    setYearFilter("");
+    setMonthFilter("");
+  };
+
+  /* ======================= Header UI ======================= */
+  const [hovered, setHovered] = useState(null);
+  const handleUserMouseEnter = () => {
+    clearTimeout(userMenuTimeout.current);
+    setShowUserMenu(true);
+  };
+  const handleUserMouseLeave = () => {
+    userMenuTimeout.current = setTimeout(() => setShowUserMenu(false), 300);
+  };
+  const menu = [
+    { label: "Inicio", icon: <Home size={28} />, onClick: () => navigate("/") },
+    { label: "Galería", icon: <ImageIcon size={24} />, onClick: () => navigate("/galeria") },
+    { label: "Videos", icon: <Video size={24} />, onClick: () => navigate("/videos") },
+    { label: "Tienda", icon: <ShoppingBag size={24} />, onClick: () => navigate("/tienda") },
+    { label: "Restauración", icon: <Brush size={24} />, onClick: () => navigate("/restauracion") },
+    { label: "Contacto", icon: <Mail size={24} />, onClick: () => navigate("/contacto") },
+  ];
+  const cerrarSesion = () => {
+    setCerrandoSesion(true);
+    setTimeout(() => {
+      try {
+        localStorage.removeItem("carrito");
+        const prev = JSON.parse(localStorage.getItem("sesionActiva") || "null");
+        if (prev?.id) localStorage.removeItem(`carrito:${prev.id}`);
+      } catch {}
+      localStorage.removeItem("sesionActiva");
+      setCerrandoSesion(false);
+      setUsuarioActivo(null);
+      navigate("/");
+    }, 1200);
+  };
+
+  /* ======================= Render ======================= */
   return (
-    <div className="min-h-screen bg-[#f9f4ef] text-[#333]">
-      {/* Header */}
-      <div className="sticky top-0 z-30 bg-[#f0eae2]/80 backdrop-blur border-b">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 grid place-items-center rounded-full bg-white border">
-              <Truck className="text-[#a16207]" />
-            </div>
-            <div>
-              <div className="text-xs text-gray-500">Administración</div>
-              <div className="font-semibold">Rastreos de envíos</div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => navigate("/admin")}
-              className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold hover:bg-gray-50"
-              title="Volver"
-            >
-              <CornerUpLeft size={16} /> Panel
-            </button>
-            <button
-              onClick={() => setAuthed(false)}
-              className="inline-flex items-center gap-2 rounded-full bg-white border px-3 py-1.5 text-sm font-semibold hover:bg-gray-50"
-            >
-              <LogOut size={16} /> Salir
-            </button>
-          </div>
+    <div className="min-h-screen bg-[#f9f4ef] text-[#333333] font-sans flex flex-col items-center">
+      {cerrandoSesion && (
+        <div className="fixed inset-0 bg-white/80 z-50 flex flex-col items-center justify-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-[#a16207]" />
+          <p className="mt-4 text-[#a16207] font-semibold">Cerrando sesión...</p>
         </div>
-      </div>
+      )}
 
-      {/* Layout */}
-      <div className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-[1.1fr_1px_1fr] gap-6">
-        {/* Buscador + Editor */}
-        <div>
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="rounded-3xl border bg-white shadow-sm p-5"
-          >
-            <div className="flex items-center gap-2">
-              <Search className="text-[#a16207]" />
-              <h2 className="text-lg font-semibold">Buscar envío</h2>
+      {/* Header (copiado del App.jsx) */}
+      <motion.header
+        initial={{ opacity: 0, y: -30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8 }}
+        className="w-full text-center relative z-40 px-4 py-3 sm:px-6 sm:py-4 border-b border-gray-300 bg-[#f0eae2]/80 backdrop-blur-md shadow-xl rounded-b-xl"
+      >
+        <div className="max-w-7xl mx-auto w-full flex flex-col gap-2 relative z-40">
+          <div className="flex flex-col sm:flex-row justify-between items-center w-full relative gap-2 sm:gap-0">
+            <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4">
+              <img src="/logo.png" alt="Logo" className="h-14 sm:h-16" />
+              <div className="flex gap-2 sm:gap-6 text-lg sm:text-2xl font-semibold font-serif italic text-[#3b4d63] tracking-wide">
+                <span>ARTE</span>
+                <span>RESTAURACIÓN</span>
+                <span>VISUALES</span>
+              </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div>
-                <label className="text-xs text-gray-600">ID de pedido</label>
-                <input
-                  value={qOrder}
-                  onChange={(e) => setQOrder(e.target.value)}
-                  placeholder="Ej. 8242f430-..."
-                  className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-600">Código de rastreo</label>
-                <input
-                  value={qTracking}
-                  onChange={(e) => setQTracking(e.target.value)}
-                  placeholder="Ej. 1Z999AA10123456784"
-                  className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
-                />
-              </div>
-              <div className="flex items-end">
-                <button
-                  onClick={loadByOrderOrTracking}
-                  disabled={loading}
-                  className="w-full rounded-xl bg-gray-900 text-white px-3 py-2 text-sm font-semibold shadow hover:shadow-md disabled:opacity-50"
-                >
-                  {loading ? <Loader2 className="animate-spin inline mr-2" /> : null}
-                  Buscar / Cargar
+            <div className="flex items-center gap-2 mt-2 sm:mt-0 pr-1 sm:pr-2">
+              <div
+                onMouseEnter={handleUserMouseEnter}
+                onMouseLeave={handleUserMouseLeave}
+                className="relative"
+              >
+                <button className="p-2 rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md hover:shadow-lg flex items-center">
+                  <User size={24} className="text-[#333333]" />
                 </button>
-              </div>
-            </div>
-
-            <AnimatePresence>
-              {error && (
-                <motion.div
-                  initial={{ opacity: 0, y: -6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
-                  className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700"
-                >
-                  {error}
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Editor */}
-            <div className="mt-6 grid gap-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs text-gray-600">Pedido (order_id)</label>
-                  <input
-                    value={form.order_id}
-                    onChange={(e) => setForm((f) => ({ ...f, order_id: e.target.value }))}
-                    placeholder="Obligatorio para guardar"
-                    className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-600">Transportista (carrier)</label>
-                  <input
-                    value={form.carrier}
-                    onChange={(e) => setForm((f) => ({ ...f, carrier: e.target.value }))}
-                    placeholder="Ej. DHL, FedEx, Estafeta…"
-                    className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs text-gray-600">Código de rastreo</label>
-                  <input
-                    value={form.tracking_code}
-                    onChange={(e) => setForm((f) => ({ ...f, tracking_code: e.target.value }))}
-                    placeholder="Número proporcionado por la paquetería"
-                    className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200 break-all"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-600">URL del rastreo (opcional)</label>
-                  <input
-                    value={form.tracking_url}
-                    onChange={(e) => setForm((f) => ({ ...f, tracking_url: e.target.value }))}
-                    placeholder="Enlace directo del carrier"
-                    className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
-                  />
-                </div>
-              </div>
-
-              {/* Estado & Progreso */}
-              <div className="rounded-2xl border p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <Package className="text-gray-600" size={18} />
-                    <div>
-                      <div className="text-xs text-gray-500">Estado</div>
-                      <div className="font-semibold">
-                        {STATUS_LABEL[form.status] || form.status}
-                      </div>
-                      {form.updated_at && (
-                        <div className="text-xs text-gray-500">
-                          Actualizado: {fmtDateTime(form.updated_at)}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={() => moveStep(-1)}
-                      className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold hover:bg-gray-50"
-                      title="Retroceder estado"
-                    >
-                      <ChevronLeft size={16} /> Retroceder
-                    </button>
-                    <button
-                      onClick={() => moveStep(1)}
-                      className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold hover:bg-gray-50"
-                      title="Avanzar estado"
-                    >
-                      Avanzar <ChevronRight size={16} />
-                    </button>
-                    <button
-                      onClick={() => setHardStatus("delivered")}
-                      className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold hover:bg-gray-50 text-emerald-700"
-                      title="Marcar como entregado"
-                    >
-                      <CheckCircle2 size={16} /> Entregado
-                    </button>
-                    <button
-                      onClick={() => setHardStatus("exception")}
-                      className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold hover:bg-gray-50 text-amber-700"
-                      title="Marcar incidencia"
-                    >
-                      <AlertTriangle size={16} /> Incidencia
-                    </button>
-                    <button
-                      onClick={() => setHardStatus("returned")}
-                      className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold hover:bg-gray-50"
-                      title="Marcar como devuelto"
-                    >
-                      <Undo2 size={16} /> Devuelto
-                    </button>
-                  </div>
-                </div>
-
-                {/* barra de progreso */}
-                <div className="mt-4">
-                  <div className="h-2 w-full rounded-full bg-gray-100 overflow-hidden">
+                <AnimatePresence>
+                  {showUserMenu && (
                     <motion.div
-                      className="h-full bg-indigo-500"
-                      initial={{ width: 0 }}
-                      animate={{ width: `${progressPct}%` }}
-                      transition={{ type: "tween", duration: 0.5 }}
-                    />
-                  </div>
-                  <div className="mt-2 grid grid-cols-7 gap-2 text-[11px] text-gray-500">
-                    {STATUS.map((s) => (
-                      <div key={s} className="text-center">
-                        {STATUS_LABEL[s]}
-                      </div>
-                    ))}
-                  </div>
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      onMouseEnter={handleUserMouseEnter}
+                      onMouseLeave={handleUserMouseLeave}
+                      className="absolute mt-2 w-60 left-1/2 -translate-x-1/2 sm:left-auto sm:right-0 sm:translate-x-0 bg-white border border-gray-200 rounded-lg shadow-xl py-3 text-left z-[9999]"
+                    >
+                      {usuarioActivo ? (
+                        <>
+                          <div className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-gray-800">
+                            <User size={16} /> {usuarioActivo.nombre || usuarioActivo.email}
+                          </div>
+                          <button onClick={() => navigate("/usuario")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                            <User size={16} className="mr-2" /> Información de cuenta
+                          </button>
+                          <button onClick={() => navigate("/direccion")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                            <Mail size={16} className="mr-2" /> Direcciones
+                          </button>
+                          <button onClick={() => navigate("/favoritos")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                            <HeartIcon size={16} className="mr-2" /> Favoritos
+                          </button>
+                          <button onClick={() => navigate("/contrasena")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                            <KeyRound size={16} className="mr-2" /> Cambiar contraseña
+                          </button>
+                          <button onClick={cerrarSesion} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100 text-red-600">
+                            <LogOut size={16} className="mr-2" /> Cerrar sesión
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button onClick={() => navigate("/iniciar-sesion")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                            <LogIn size={16} className="mr-2" /> Iniciar sesión
+                          </button>
+                          <button onClick={() => navigate("/registro")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
+                            <UserPlus size={16} className="mr-2" /> Crear cuenta
+                          </button>
+                        </>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {usuarioActivo && (
+                <button
+                  onClick={() => navigate("/carrito")}
+                  className="relative group"
+                  title="Carrito"
+                  aria-label={`Carrito con ${cartCount} ${cartCount === 1 ? "artículo" : "artículos"}`}
+                >
+                  <span className="grid place-items-center rounded-full bg-white/90 backdrop-blur-md border border-gray-200 shadow-md transition h-11 w-11 group-hover:shadow-lg group-hover:scale-105">
+                    <ShoppingBag size={22} className="text-[#a16207]" />
+                  </span>
+                  {cartCount > 0 && (
+                    <span className="absolute -right-1 -top-1 rounded-full text-[11px] font-bold bg-rose-600 text-white h-5 min-w-[20px] px-1.5 grid place-items-center ring-2 ring-white shadow" style={{ lineHeight: 1 }}>
+                      {cartCount > 99 ? "99+" : cartCount}
+                    </span>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="w-full border-t border-gray-500 opacity-70 mt-2" />
+          <div className="w-full border-t-2 border-gray-500 opacity-70 mt-[2px]" />
+
+          <div className="text-sm italic text-gray-600 pt-1 text-right pr-1">por: Laura García</div>
+
+          <nav className="flex flex-wrap justify-center gap-3 sm:gap-6 text-sm sm:text-lg font-medium pt-2">
+            {menu.map((item, idx) => (
+              <motion.span
+                key={idx}
+                onMouseEnter={() => setHovered(idx)}
+                onMouseLeave={() => setHovered(null)}
+                onClick={item.onClick}
+                className={`flex flex-col items-center gap-1 cursor-pointer px-2 sm:px-3 py-1 transition-all duration-300 ease-out ${
+                  hovered === idx
+                    ? "bg-white/50 backdrop-blur-sm shadow-inner rounded-md scale-105 underline underline-offset-4"
+                    : "hover:bg-white/30 hover:backdrop-blur-sm hover:shadow-sm hover:rounded-md"
+                }`}
+                whileHover={{ scale: 1.05 }}
+              >
+                <div className="text-[#a16207]">{item.icon}</div>
+                <span>{item.label}</span>
+              </motion.span>
+            ))}
+          </nav>
+        </div>
+      </motion.header>
+
+      {/* Contenido */}
+      <div className="w-full max-w-6xl px-4 py-10">
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3 mb-4">
+          <h1 className="text-2xl font-bold">Mis pedidos</h1>
+
+          {/* Barra de filtros / historial */}
+          <div className="w-full md:w-auto">
+            <div className="rounded-2xl border bg-white p-3 shadow-sm">
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Buscar */}
+                <div className="relative">
+                  <Search size={16} className="absolute left-2 top-2.5 text-gray-400" />
+                  <input
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                    placeholder="Buscar por pedido o artículo…"
+                    className="pl-7 pr-8 w-64 rounded-full border px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-amber-200"
+                  />
+                  {q && (
+                    <button
+                      onClick={() => setQ("")}
+                      className="absolute right-2 top-2 text-gray-400 hover:text-gray-600"
+                      title="Limpiar búsqueda"
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
                 </div>
 
-                {/* selector directo */}
-                <div className="mt-4">
-                  <label className="text-xs text-gray-600">Cambiar estado directamente</label>
+                {/* Año */}
+                <div className="relative">
+                  <CalendarDays size={16} className="absolute left-2 top-2.5 text-gray-400" />
                   <select
-                    value={form.status}
-                    onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
-                    className="mt-1 w-full md:w-64 rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
+                    value={yearFilter}
+                    onChange={(e) => {
+                      setYearFilter(e.target.value);
+                      setMonthFilter(""); // reinicia mes al cambiar año
+                    }}
+                    className="pl-7 w-28 rounded-full border px-3 py-1.5 text-sm outline-none bg-white focus:ring-2 focus:ring-amber-200"
+                    title="Filtrar por año"
                   >
-                    {ALL_STATUSES.map((s) => (
-                      <option key={s} value={s}>
-                        {STATUS_LABEL[s] || s}
-                      </option>
+                    <option value="">Año</option>
+                    {yearOptions.map((y) => (
+                      <option key={y} value={y}>{y}</option>
                     ))}
                   </select>
                 </div>
-              </div>
 
-              {/* Guardar */}
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={onSave}
-                  disabled={saving || !form.order_id}
-                  className="inline-flex items-center gap-2 rounded-full bg-[#a16207] text-white px-4 py-2 text-sm font-semibold hover:bg-[#854d06] disabled:opacity-50"
-                >
-                  {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-                  Guardar cambios
-                </button>
-
-                {form.tracking_url && (
-                  <a
-                    href={form.tracking_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold hover:bg-gray-50"
-                    title="Abrir rastreo"
+                {/* Mes */}
+                <div className="relative">
+                  <CalendarDays size={16} className="absolute left-2 top-2.5 text-gray-400" />
+                  <select
+                    value={monthFilter}
+                    onChange={(e) => setMonthFilter(e.target.value)}
+                    className="pl-7 w-36 rounded-full border px-3 py-1.5 text-sm outline-none bg-white focus:ring-2 focus:ring-amber-200"
+                    title="Filtrar por mes"
+                    disabled={!yearFilter && monthOptions.length === 0}
                   >
-                    Abrir rastreo <ExternalLink size={16} />
-                  </a>
-                )}
+                    <option value="">Mes</option>
+                    {monthOptions.map((m) => (
+                      <option key={m.value} value={m.value}>{m.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  onClick={clearFilters}
+                  className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold hover:bg-gray-50"
+                  title="Limpiar filtros"
+                >
+                  Limpiar
+                </button>
               </div>
+
+              {/* Historial rápido (últimos 8) */}
+              {pedidos.length > 0 && (
+                <div className="mt-3 flex items-center gap-2 text-xs text-gray-600">
+                  <History size={14} />
+                  <div className="flex flex-wrap gap-1">
+                    {pedidos.slice(0, 8).map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => setQ(p.id)}
+                        className="rounded-full border px-2 py-0.5 hover:bg-gray-50"
+                        title={`Buscar ${p.id}`}
+                      >
+                        {p.id}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          </motion.div>
+
+            {/* Resumen resultados */}
+            <div className="mt-2 text-sm text-gray-600">
+              {filteredPedidos.length} resultado{filteredPedidos.length === 1 ? "" : "s"}
+              {q && <> • búsqueda: <span className="font-medium">“{q}”</span></>}
+              {(yearFilter || monthFilter) && (
+                <>
+                  {" "}• fecha:
+                  {yearFilter && <> {yearFilter}</>}
+                  {monthFilter && <> / {monthFilter}</>}
+                </>
+              )}
+            </div>
+          </div>
         </div>
 
-        {/* Divider */}
-        <div className="hidden lg:block w-px bg-gray-200 rounded-full" />
+        {loading && (
+          <div className="rounded-2xl border bg-white p-6 shadow-sm flex items-center gap-3">
+            <Loader2 className="animate-spin" /> Cargando tus pedidos…
+          </div>
+        )}
 
-        {/* Resumen actual */}
-        <div>
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="rounded-3xl border bg-white shadow-sm p-5"
-          >
-            <div className="flex items-center gap-2">
-              <ArrowLeftRight className="text-[#a16207]" />
-              <h2 className="text-lg font-semibold">Resumen del envío</h2>
-            </div>
+        {!loading && error && (
+          <div className="rounded-2xl border bg-rose-50 p-6 shadow-sm text-rose-700 flex items-start gap-2">
+            <AlertCircle size={18} className="mt-0.5" /> {error}
+          </div>
+        )}
 
-            {!form.order_id && !row ? (
-              <div className="mt-4 text-sm text-gray-600">
-                Busca un pedido para ver detalles o crea el envío con los datos de la izquierda.
-              </div>
-            ) : (
-              <div className="mt-4 space-y-2 text-sm">
-                <Info label="Pedido" value={form.order_id || "—"} />
-                <Info label="Transportista" value={form.carrier || "—"} />
-                <Info label="Código de rastreo" value={form.tracking_code || "—"} mono />
-                <Info label="URL de rastreo" value={form.tracking_url || "—"} />
-                <Info label="Estado" value={STATUS_LABEL[form.status] || form.status} />
-                <Info label="Última actualización" value={fmtDateTime(form.updated_at) || "—"} />
-              </div>
-            )}
+        {!loading && !error && filteredPedidos.length === 0 && (
+          <div className="rounded-2xl border bg-white p-6 shadow-sm">
+            No encontramos pedidos con esos filtros.
+          </div>
+        )}
 
-            <div className="mt-6 rounded-xl border p-4 bg-gray-50">
-              <div className="text-xs text-gray-600 mb-1">Consejo</div>
-              <p className="text-sm text-gray-700">
-                Si cambias el número de rastreo por el de la paquetería, pega también la URL de seguimiento del carrier para que el cliente
-                pueda abrirla desde su comprobante y la página de rastreo.
-              </p>
-            </div>
-          </motion.div>
-        </div>
+        {!loading && !error && filteredPedidos.length > 0 && (
+          <div className="space-y-10">
+            {groups.map(({ key, items }) => {
+              // Encabezado Año/Mes amigable
+              const [yy, mm] = key.split("-");
+              const monthNames = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+              const title =
+                yy && mm
+                  ? `${monthNames[Number(mm) - 1]} ${yy}`
+                  : "Otros";
+              return (
+                <section key={key}>
+                  <h2 className="text-lg font-semibold text-gray-700 mb-3">{title}</h2>
+                  <div className="space-y-6">
+                    {items.map((p) => {
+                      const receiptHref = buildReceiptLink(p.id);
+                      const trackingHref = buildTrackingLink({
+                        carrier_tracking_url: p.shipment?.tracking_url,
+                        order_id: p.id,
+                        tracking_code: p.shipment?.tracking_code,
+                      });
+
+                      const itemsToShow = p.items.slice(0, 4);
+                      const remaining = p.items.length - itemsToShow.length;
+
+                      return (
+                        <motion.div
+                          key={p.id}
+                          initial={{ opacity: 0, y: 16 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="rounded-3xl border bg-white p-5 shadow-sm"
+                        >
+                          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                            {/* Stack de miniaturas */}
+                            <div className="flex items-start gap-4">
+                              <div className="relative h-24 w-40">
+                                <ThumbStack items={p.items} />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="text-sm text-gray-500">Pedido</div>
+                                <div className="text-lg font-semibold truncate">{p.id}</div>
+                                <div className="text-xs text-gray-500 mt-1">{fmtDate(p.created_at)}</div>
+
+                                {/* LISTA DE ARTÍCULOS: nombre y precio */}
+                                <div className="mt-2 text-sm text-gray-800 space-y-1">
+                                  {itemsToShow.map((it, idx) => (
+                                    <div key={idx} className="flex flex-wrap items-center gap-x-2">
+                                      <span className="truncate max-w-[230px]">{it.title}</span>
+                                      <span className="text-gray-500">•</span>
+                                      <span className="font-medium">
+                                        {money(it.unitPrice, p.moneda)}
+                                        {it.qty > 1 ? ` × ${it.qty}` : ""}
+                                      </span>
+                                    </div>
+                                  ))}
+                                  {remaining > 0 && (
+                                    <div className="text-xs text-gray-500">+ {remaining} artículo(s) más</div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Totales + acciones */}
+                            <div className="flex flex-col items-start md:items-end gap-2">
+                              <div className="text-sm text-gray-600">Total</div>
+                              <div className="text-xl font-bold">{money(p.total, p.moneda)}</div>
+
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                {/* Comprobante como en Gracias */}
+                                <a
+                                  href={receiptHref}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold hover:bg-gray-50"
+                                  title="Ver comprobante"
+                                >
+                                  Ver comprobante <ExternalLink size={16} />
+                                </a>
+
+                                {/* Rastreo */}
+                                <a
+                                  href={trackingHref}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-2 rounded-full bg-gray-900 text-white px-3 py-1.5 text-sm font-semibold shadow hover:shadow-md"
+                                  title="Rastrear envío"
+                                >
+                                  Rastrear pedido <Truck size={16} />
+                                </a>
+                              </div>
+                            </div>
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+        )}
       </div>
+
+      {/* Footer */}
+      <footer className="w-full py-6 border-t border-gray-300 text-center mt-auto">
+        <div className="max-w-6xl mx-auto px-6">
+          <p className="text-sm">&copy; 2025 Arte - Restauración - Visuales. Todos los derechos reservados.</p>
+        </div>
+      </footer>
     </div>
   );
 }
 
-/* =========================
-   Subcomponentes
-   ========================= */
-function Info({ label, value, mono = false }) {
+/* ======================= Subcomponentes ======================= */
+
+/* ANIMACIÓN actualizada: al hacer click, la carta superior pasa al fondo */
+function ThumbStack({ items }) {
+  const thumbs = (items || [])
+    .map((it) => it.thumb)
+    .filter(Boolean)
+    .slice(0, 4);
+
+  // Mantener un “mazo” local para animar el reordenamiento
+  const [deck, setDeck] = useState(thumbs);
+  useEffect(() => setDeck(thumbs), [thumbs.join("|")]);
+
+  if (deck.length === 0) {
+    return (
+      <div className="absolute inset-0 grid place-items-center rounded-xl border bg-gray-50 text-gray-400 text-xs">
+        Sin imágenes
+      </div>
+    );
+  }
+
+  const positions = [
+    { r: -6, x: 0, y: 0 },
+    { r: 4, x: 10, y: 8 },
+    { r: -2, x: 20, y: 16 },
+    { r: 6, x: 30, y: 24 },
+  ];
+
+  const sendTopToBack = () => {
+    setDeck((arr) => (arr.length <= 1 ? arr : [...arr.slice(1), arr[0]]));
+  };
+
   return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="text-gray-600">{label}</span>
-      <span className={`font-medium text-right break-all ${mono ? "font-mono" : ""}`}>{value}</span>
+    <div className="absolute inset-0 cursor-pointer" onClick={sendTopToBack}>
+      <AnimatePresence initial={false}>
+        {deck.map((src, i) => {
+          const p = positions[i] || positions[positions.length - 1];
+          const z = 100 - i; // el primero arriba
+          return (
+            <motion.img
+              key={src}
+              src={src}
+              onError={(e) => (e.currentTarget.src = "/placeholder.jpg")}
+              alt={`artículo ${i + 1}`}
+              className="absolute h-24 w-24 object-cover rounded-xl border shadow-md select-none"
+              style={{ zIndex: z }}
+              layout
+              initial={{ opacity: 0, scale: 0.95, rotate: p.r - 6 }}
+              animate={{ opacity: 1, scale: 1, x: p.x, y: p.y, rotate: p.r }}
+              exit={{ opacity: 0, scale: 0.95, rotate: p.r + 10 }}
+              transition={{ type: "spring", stiffness: 260, damping: 18 }}
+              whileTap={{ scale: 0.98 }}
+            />
+          );
+        })}
+      </AnimatePresence>
     </div>
   );
 }
