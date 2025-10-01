@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Truck, Package, CornerUpLeft, LogOut, Loader2, Search, BadgeCheck,
   CheckCircle2, RefreshCw, FastForward, Rewind, Save, ExternalLink, Link as LinkIcon,
-  CalendarDays, MapPin, Hash as HashIcon, PencilLine, Plus, Trash2
+  CalendarDays, MapPin, Hash as HashIcon, PencilLine, Plus, Trash2, User as UserIcon
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { createClient } from "@supabase/supabase-js";
@@ -42,16 +42,12 @@ const STATUS_LABELS = {
 /* =========================
    Utilidades
    ========================= */
-const fmtDateTime = (d) => {
-  if (!d) return "—";
-  try {
-    return new Intl.DateTimeFormat("es-MX", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(new Date(d));
-  } catch {
-    return String(d);
-  }
+const money = (n, code = "MXN") => {
+  const sym = String(code).toUpperCase() === "MXN" ? "$" : "";
+  return `${sym}${new Intl.NumberFormat("es-MX", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(n || 0))}`;
 };
 const nextStatus = (s) => {
   const i = STATUS_ORDER.indexOf(s);
@@ -76,6 +72,9 @@ export default function AdminRastreo() {
 
   // Datos
   const [shipments, setShipments] = useState([]);
+  const [pedidosMap, setPedidosMap] = useState({});      // order_id -> pedido (incluye total/moneda/nombre/email)
+  const [itemsByPedido, setItemsByPedido] = useState({}); // order_id -> [{titulo, cantidad, unit_price}]
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState("");
@@ -92,44 +91,95 @@ export default function AdminRastreo() {
     tracking_code: "",
     tracking_url: "",
     status: "created",
-    eta: "",                // fecha o texto libre; guardar tal cual
+    eta: "",                // libre
     origin: "",
     destination: "",
-    last_update: "",        // solo lectura (servidor la cambia con trigger; aquí la mostramos)
   };
   const [form, setForm] = useState(blankForm);
 
-  /* ===== Cargar lista ===== */
+  /* ===== Cargar lista + datos relacionados ===== */
+  const loadAll = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      // 1) Traer envíos
+      const { data: ships, error: e1 } = await supabase
+        .from("shipments")
+        .select("id, order_id, carrier, tracking_code, tracking_url, status, eta, origin, destination, created_at, updated_at")
+        .order("created_at", { ascending: false });
+      if (e1) throw e1;
+
+      setShipments(ships || []);
+
+      const orderIds = Array.from(new Set((ships || []).map((s) => s.order_id).filter(Boolean)));
+      if (orderIds.length === 0) {
+        setPedidosMap({});
+        setItemsByPedido({});
+        return;
+      }
+
+      // 2) Traer pedidos (para nombre/email/total/moneda)
+      // Ajusta aquí si tu tabla "pedidos" tiene otro campo de nombre del cliente
+      const { data: peds, error: e2 } = await supabase
+        .from("pedidos")
+        .select("id, email, total, moneda, created_at, nombre") // <- si no existe "nombre", Supabase lo ignora
+        .in("id", orderIds);
+      if (e2) throw e2;
+
+      const pedMap = (peds || []).reduce((acc, p) => {
+        acc[p.id] = p;
+        return acc;
+      }, {});
+      setPedidosMap(pedMap);
+
+      // 3) Traer items de esos pedidos
+      const { data: items, error: e3 } = await supabase
+        .from("pedidos_items")
+        .select("pedido_id, titulo, cantidad, unit_price")
+        .in("pedido_id", orderIds);
+      if (e3) throw e3;
+
+      const byPed = {};
+      (items || []).forEach((it) => {
+        const arr = byPed[it.pedido_id] || [];
+        arr.push({
+          titulo: it.titulo,
+          cantidad: Number(it.cantidad || 1),
+          unit_price: Number(it.unit_price || 0),
+        });
+        byPed[it.pedido_id] = arr;
+      });
+      setItemsByPedido(byPed);
+    } catch (e) {
+      setError(e.message || String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!authed) return;
-    (async () => {
-      setLoading(true);
-      setError("");
-      try {
-        const { data, error } = await supabase
-          .from("shipments")
-          .select("id, order_id, carrier, tracking_code, tracking_url, status, last_update, eta, origin, destination, created_at, updated_at")
-          .order("created_at", { ascending: false });
-        if (error) throw error;
-        setShipments(data || []);
-      } catch (e) {
-        setError(e.message || String(e));
-      } finally {
-        setLoading(false);
-      }
-    })();
+    loadAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authed]);
 
   const filtered = useMemo(() => {
     const term = (q || "").toLowerCase().trim();
     if (!term) return shipments;
-    return shipments.filter((s) =>
-      (s.order_id || "").toLowerCase().includes(term) ||
-      (s.tracking_code || "").toLowerCase().includes(term) ||
-      (s.carrier || "").toLowerCase().includes(term) ||
-      (s.status || "").toLowerCase().includes(term)
-    );
-  }, [shipments, q]);
+    return shipments.filter((s) => {
+      const p = pedidosMap[s.order_id] || {};
+      const clientNameOrEmail = (p.nombre || p.email || "").toLowerCase();
+      const items = (itemsByPedido[s.order_id] || []).map(i => i.titulo || "").join(" • ").toLowerCase();
+      return (
+        (s.order_id || "").toLowerCase().includes(term) ||
+        (s.tracking_code || "").toLowerCase().includes(term) ||
+        (s.carrier || "").toLowerCase().includes(term) ||
+        (s.status || "").toLowerCase().includes(term) ||
+        clientNameOrEmail.includes(term) ||
+        items.includes(term)
+      );
+    });
+  }, [shipments, pedidosMap, itemsByPedido, q]);
 
   /* ===== Acciones editor ===== */
   const resetForm = () => setForm(blankForm);
@@ -144,7 +194,6 @@ export default function AdminRastreo() {
       eta: row.eta || "",
       origin: row.origin || "",
       destination: row.destination || "",
-      last_update: row.last_update || "",
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -186,8 +235,7 @@ export default function AdminRastreo() {
         if (error) throw error;
         setShipments((prev) => prev.map((x) => (x.id === form.id ? data : x)));
       } else {
-        // No tiene id -> intentamos insertar (si ya existe por order_id, actualizamos)
-        // 1) buscar si hay existente por order_id
+        // Insert o upsert por order_id (manual)
         const { data: existing, error: e0 } = await supabase
           .from("shipments")
           .select("id")
@@ -216,6 +264,8 @@ export default function AdminRastreo() {
       }
 
       resetForm();
+      // refrescar datos relacionados (por si cambiaste order_id, etc.)
+      loadAll();
     } catch (e) {
       setError(e.message || String(e));
     } finally {
@@ -339,21 +389,7 @@ export default function AdminRastreo() {
                 </h2>
               </div>
               <button
-                onClick={async () => {
-                  setLoading(true);
-                  try {
-                    const { data, error } = await supabase
-                      .from("shipments")
-                      .select("id, order_id, carrier, tracking_code, tracking_url, status, last_update, eta, origin, destination, created_at, updated_at")
-                      .order("created_at", { ascending: false });
-                    if (error) throw error;
-                    setShipments(data || []);
-                  } catch (e) {
-                    setError(e.message || String(e));
-                  } finally {
-                    setLoading(false);
-                  }
-                }}
+                onClick={loadAll}
                 className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold hover:bg-gray-50"
                 title="Refrescar"
               >
@@ -499,12 +535,6 @@ export default function AdminRastreo() {
                 </div>
               </div>
 
-              {form.last_update && (
-                <div className="text-xs text-gray-500">
-                  Última actualización: {fmtDateTime(form.last_update)}
-                </div>
-              )}
-
               {/* Acciones */}
               <div className="flex flex-wrap gap-2 pt-2">
                 <button
@@ -548,7 +578,7 @@ export default function AdminRastreo() {
                 <input
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
-                  placeholder="Buscar por pedido, código, transportista, estado…"
+                  placeholder="Buscar por cliente, pedido, código, transportista, estado, artículo…"
                   className="pl-7 w-80 rounded-full border px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-amber-200"
                 />
               </div>
@@ -564,86 +594,110 @@ export default function AdminRastreo() {
               </div>
             ) : (
               <div className="mt-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {filtered.map((s) => (
-                  <motion.div
-                    key={s.id}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="rounded-2xl border overflow-hidden bg-white shadow-sm flex flex-col"
-                  >
-                    <div className="p-3 flex-1 flex flex-col gap-2">
-                      <div className="flex items-center justify-between">
-                        <div className="text-xs text-gray-500">Pedido</div>
-                        <span
-                          className={`text-xs px-2 py-0.5 rounded-full ${
-                            s.status === "delivered"
-                              ? "bg-emerald-100 text-emerald-700"
-                              : "bg-gray-100 text-gray-600"
-                          }`}
-                        >
-                          {STATUS_LABELS[s.status] || s.status}
-                        </span>
-                      </div>
-                      <div className="font-semibold truncate">{s.order_id}</div>
+                {filtered.map((s) => {
+                  const ped = pedidosMap[s.order_id] || {};
+                  const items = itemsByPedido[s.order_id] || [];
+                  const cliente = ped.nombre || ped.cliente_nombre || ped.email || "Cliente";
+                  const total = money(ped.total, ped.moneda);
 
-                      <div className="text-xs text-gray-500 mt-1">
-                        {s.carrier ? `Transportista: ${s.carrier}` : "Transportista no especificado"}
-                      </div>
+                  // Resumen de lo pedido: "Título × qty, Título × qty"
+                  const resumen =
+                    items.length === 0
+                      ? "—"
+                      : items
+                          .slice(0, 3)
+                          .map((i) => `${i.titulo}${i.cantidad > 1 ? ` × ${i.cantidad}` : ""}`)
+                          .join(", ") + (items.length > 3 ? `, +${items.length - 3} más` : "");
 
-                      <div className="mt-1 text-sm">
+                  return (
+                    <motion.div
+                      key={s.id}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="rounded-2xl border overflow-hidden bg-white shadow-sm flex flex-col"
+                    >
+                      <div className="p-3 flex-1 flex flex-col gap-2">
                         <div className="flex items-center justify-between">
-                          <span className="text-gray-600">Código</span>
-                          <span className="font-medium break-all">{s.tracking_code || "—"}</span>
+                          <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                            <UserIcon size={14} />
+                            <span className="font-medium truncate max-w-[190px]" title={cliente}>{cliente}</span>
+                          </div>
+                          <span
+                            className={`text-xs px-2 py-0.5 rounded-full ${
+                              s.status === "delivered"
+                                ? "bg-emerald-100 text-emerald-700"
+                                : "bg-gray-100 text-gray-600"
+                            }`}
+                          >
+                            {STATUS_LABELS[s.status] || s.status}
+                          </span>
                         </div>
-                        {s.tracking_url && (
-                          <a
-                            href={s.tracking_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="mt-1 inline-flex items-center gap-1 text-xs text-indigo-700 hover:underline"
-                          >
-                            Ver rastreo <ExternalLink size={14} />
-                          </a>
-                        )}
-                      </div>
 
-                      <div className="mt-2 grid grid-cols-1 gap-1 text-xs text-gray-600">
-                        <div>ETA: <span className="font-medium">{s.eta || "—"}</span></div>
-                        <div>Origen: <span className="font-medium">{s.origin || "—"}</span></div>
-                        <div>Destino: <span className="font-medium">{s.destination || "—"}</span></div>
-                        <div>Actualizado: <span className="font-medium">{fmtDateTime(s.last_update)}</span></div>
-                      </div>
+                        <div className="text-xs text-gray-500">Pedido</div>
+                        <div className="font-semibold truncate">{s.order_id}</div>
 
-                      <div className="mt-auto pt-3 flex items-center justify-between">
-                        <div className="flex items-center gap-1.5">
+                        <div className="mt-1 text-sm">
+                          <div className="text-gray-600">Lo que pidió</div>
+                          <div className="font-medium line-clamp-2">{resumen}</div>
+                        </div>
+
+                        <div className="mt-1 text-sm">
+                          <div className="text-gray-600">Total</div>
+                          <div className="font-semibold">{total}</div>
+                        </div>
+
+                        <div className="mt-2 text-xs text-gray-600">
+                          <div className="flex items-center justify-between">
+                            <span>Transportista</span>
+                            <span className="font-medium">{s.carrier || "—"}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span>Código</span>
+                            <span className="font-medium break-all">{s.tracking_code || "—"}</span>
+                          </div>
+                          {s.tracking_url && (
+                            <a
+                              href={s.tracking_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="mt-1 inline-flex items-center gap-1 text-xs text-indigo-700 hover:underline"
+                            >
+                              Ver rastreo <ExternalLink size={14} />
+                            </a>
+                          )}
+                        </div>
+
+                        <div className="mt-auto pt-3 flex items-center justify-between flex-wrap gap-2">
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => onEdit(s)}
+                              className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold hover:bg-gray-50"
+                              title="Editar"
+                            >
+                              <PencilLine size={14} /> Modificar
+                            </button>
+                            <button
+                              onClick={() => onNewFromOrder(s.order_id)}
+                              className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold hover:bg-gray-50"
+                              title="Nuevo con este pedido"
+                            >
+                              <Plus size={14} /> Nuevo
+                            </button>
+                          </div>
                           <button
-                            onClick={() => onEdit(s)}
-                            className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold hover:bg-gray-50"
-                            title="Editar"
+                            onClick={() => handleDelete(s)}
+                            disabled={deleting === s.id}
+                            className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold hover:bg-gray-50 text-rose-600 disabled:opacity-50"
+                            title="Eliminar"
                           >
-                            <PencilLine size={14} /> Editar
-                          </button>
-                          <button
-                            onClick={() => onNewFromOrder(s.order_id)}
-                            className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold hover:bg-gray-50"
-                            title="Nuevo con este pedido"
-                          >
-                            <Plus size={14} /> Nuevo
+                            {deleting === s.id ? <Loader2 className="animate-spin" size={14} /> : <Trash2 size={14} />}
+                            Eliminar
                           </button>
                         </div>
-                        <button
-                          onClick={() => handleDelete(s)}
-                          disabled={deleting === s.id}
-                          className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold hover:bg-gray-50 text-rose-600 disabled:opacity-50"
-                          title="Eliminar"
-                        >
-                          {deleting === s.id ? <Loader2 className="animate-spin" size={14} /> : <Trash2 size={14} />}
-                          Eliminar
-                        </button>
                       </div>
-                    </div>
-                  </motion.div>
-                ))}
+                    </motion.div>
+                  );
+                })}
               </div>
             )}
           </motion.div>
