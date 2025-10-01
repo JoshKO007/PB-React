@@ -4,7 +4,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Truck, Package, CornerUpLeft, LogOut, Loader2, Search, BadgeCheck,
   CheckCircle2, RefreshCw, FastForward, Rewind, Save, ExternalLink, Link as LinkIcon,
-  CalendarDays, MapPin, Hash as HashIcon, PencilLine, Plus, Trash2, User as UserIcon
+  CalendarDays, MapPin, Hash as HashIcon, PencilLine, Plus, Trash2,
+  User as UserIcon, Mail, Phone
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { createClient } from "@supabase/supabase-js";
@@ -70,28 +71,29 @@ export default function AdminRastreo() {
   const [authed, setAuthed] = useState(false);
   const [passInput, setPassInput] = useState("");
 
-  // Datos
+  // Datos base
   const [shipments, setShipments] = useState([]);
-  const [pedidosMap, setPedidosMap] = useState({});      // order_id -> pedido (incluye total/moneda/nombre/email)
+  const [pedidosMap, setPedidosMap] = useState({});       // order_id -> pedido
   const [itemsByPedido, setItemsByPedido] = useState({}); // order_id -> [{titulo, cantidad, unit_price}]
+  const [usersById, setUsersById] = useState({});         // user_id -> usuario
+  const [usersByEmail, setUsersByEmail] = useState({});   // email -> usuario
 
+  // Estados UI
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState("");
   const [error, setError] = useState("");
-
-  // Filtros/listado
   const [q, setQ] = useState("");
 
   // Editor
   const blankForm = {
-    id: null,               // UUID en la tabla shipments (si existe)
+    id: null,               // UUID shipments
     order_id: "",
     carrier: "",
     tracking_code: "",
     tracking_url: "",
     status: "created",
-    eta: "",                // libre
+    eta: "",
     origin: "",
     destination: "",
   };
@@ -102,27 +104,27 @@ export default function AdminRastreo() {
     setLoading(true);
     setError("");
     try {
-      // 1) Traer envíos
+      // 1) Envíos
       const { data: ships, error: e1 } = await supabase
         .from("shipments")
         .select("id, order_id, carrier, tracking_code, tracking_url, status, eta, origin, destination, created_at, updated_at")
         .order("created_at", { ascending: false });
       if (e1) throw e1;
-
       setShipments(ships || []);
 
       const orderIds = Array.from(new Set((ships || []).map((s) => s.order_id).filter(Boolean)));
       if (orderIds.length === 0) {
         setPedidosMap({});
         setItemsByPedido({});
+        setUsersById({});
+        setUsersByEmail({});
         return;
       }
 
-      // 2) Traer pedidos (para nombre/email/total/moneda)
-      // Ajusta aquí si tu tabla "pedidos" tiene otro campo de nombre del cliente
+      // 2) Pedidos (para total/moneda/email/posible user_id/nombre si existe)
       const { data: peds, error: e2 } = await supabase
         .from("pedidos")
-        .select("id, email, total, moneda, created_at, nombre") // <- si no existe "nombre", Supabase lo ignora
+        .select("id, email, total, moneda, created_at, user_id, nombre, cliente_nombre")
         .in("id", orderIds);
       if (e2) throw e2;
 
@@ -132,7 +134,7 @@ export default function AdminRastreo() {
       }, {});
       setPedidosMap(pedMap);
 
-      // 3) Traer items de esos pedidos
+      // 3) Items de cada pedido
       const { data: items, error: e3 } = await supabase
         .from("pedidos_items")
         .select("pedido_id, titulo, cantidad, unit_price")
@@ -150,6 +152,52 @@ export default function AdminRastreo() {
         byPed[it.pedido_id] = arr;
       });
       setItemsByPedido(byPed);
+
+      // 4) Usuarios: por user_id y por email
+      const userIds = Array.from(
+        new Set(
+          (peds || [])
+            .map((p) => p.user_id)
+            .filter((v) => v !== null && v !== undefined && String(v).trim() !== "")
+        )
+      );
+      const emails = Array.from(
+        new Set(
+          (peds || [])
+            .map((p) => (p.email || "").trim().toLowerCase())
+            .filter(Boolean)
+        )
+      );
+
+      // Por ID
+      let usersIdMap = {};
+      if (userIds.length > 0) {
+        const { data: usersByIdData, error: e4 } = await supabase
+          .from("usuarios")
+          .select("id, email, nombre, telefono")
+          .in("id", userIds);
+        if (e4) throw e4;
+        usersIdMap = (usersByIdData || []).reduce((acc, u) => {
+          acc[u.id] = u;
+          return acc;
+        }, {});
+      }
+      setUsersById(usersIdMap);
+
+      // Por email
+      let usersEmailMap = {};
+      if (emails.length > 0) {
+        const { data: usersByEmailData, error: e5 } = await supabase
+          .from("usuarios")
+          .select("id, email, nombre, telefono")
+          .in("email", emails);
+        if (e5) throw e5;
+        usersEmailMap = (usersByEmailData || []).reduce((acc, u) => {
+          if (u.email) acc[String(u.email).trim().toLowerCase()] = u;
+          return acc;
+        }, {});
+      }
+      setUsersByEmail(usersEmailMap);
     } catch (e) {
       setError(e.message || String(e));
     } finally {
@@ -163,45 +211,83 @@ export default function AdminRastreo() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authed]);
 
+  // Fusión de datos por envío (función helper)
+  const hydrateRow = (s) => {
+    const ped = pedidosMap[s.order_id] || {};
+    const items = itemsByPedido[s.order_id] || [];
+
+    // Resolver usuario: primero por user_id, luego por email
+    let user = null;
+    if (ped.user_id && usersById[ped.user_id]) {
+      user = usersById[ped.user_id];
+    } else if (ped.email) {
+      user = usersByEmail[String(ped.email).trim().toLowerCase()] || null;
+    }
+
+    const clienteNombre =
+      user?.nombre || ped.nombre || ped.cliente_nombre || null;
+    const clienteEmail =
+      user?.email || ped.email || null;
+    const clienteTelefono = user?.telefono || null;
+
+    return {
+      shipment: s,
+      pedido: ped,
+      items,
+      user: user,
+      clienteNombre,
+      clienteEmail,
+      clienteTelefono,
+      totalFmt: money(ped.total, ped.moneda),
+      itemsResumen:
+        items.length === 0
+          ? "—"
+          : items
+              .slice(0, 3)
+              .map((i) => `${i.titulo}${i.cantidad > 1 ? ` × ${i.cantidad}` : ""}`)
+              .join(", ") + (items.length > 3 ? `, +${items.length - 3} más` : ""),
+    };
+  };
+
+  // Listado filtrado con datos fusionados
+  const merged = useMemo(() => shipments.map(hydrateRow), [shipments, pedidosMap, itemsByPedido, usersById, usersByEmail]);
+
   const filtered = useMemo(() => {
     const term = (q || "").toLowerCase().trim();
-    if (!term) return shipments;
-    return shipments.filter((s) => {
-      const p = pedidosMap[s.order_id] || {};
-      const clientNameOrEmail = (p.nombre || p.email || "").toLowerCase();
-      const items = (itemsByPedido[s.order_id] || []).map(i => i.titulo || "").join(" • ").toLowerCase();
+    if (!term) return merged;
+    return merged.filter(({ shipment: s, pedido: p, items, clienteNombre, clienteEmail }) => {
+      const itemsText = items.map(i => i.titulo || "").join(" • ").toLowerCase();
       return (
         (s.order_id || "").toLowerCase().includes(term) ||
         (s.tracking_code || "").toLowerCase().includes(term) ||
         (s.carrier || "").toLowerCase().includes(term) ||
         (s.status || "").toLowerCase().includes(term) ||
-        clientNameOrEmail.includes(term) ||
-        items.includes(term)
+        (clienteNombre || "").toLowerCase().includes(term) ||
+        (clienteEmail || "").toLowerCase().includes(term) ||
+        itemsText.includes(term)
       );
     });
-  }, [shipments, pedidosMap, itemsByPedido, q]);
+  }, [merged, q]);
 
   /* ===== Acciones editor ===== */
   const resetForm = () => setForm(blankForm);
   const onEdit = (row) => {
+    const s = row.shipment || row; // acepta merged o shipment puro
     setForm({
-      id: row.id || null,
-      order_id: row.order_id || "",
-      carrier: row.carrier || "",
-      tracking_code: row.tracking_code || "",
-      tracking_url: row.tracking_url || "",
-      status: row.status || "created",
-      eta: row.eta || "",
-      origin: row.origin || "",
-      destination: row.destination || "",
+      id: s.id || null,
+      order_id: s.order_id || "",
+      carrier: s.carrier || "",
+      tracking_code: s.tracking_code || "",
+      tracking_url: s.tracking_url || "",
+      status: s.status || "created",
+      eta: s.eta || "",
+      origin: s.origin || "",
+      destination: s.destination || "",
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
   const onNewFromOrder = (orderId) => {
-    setForm({
-      ...blankForm,
-      order_id: orderId || "",
-    });
+    setForm({ ...blankForm, order_id: orderId || "" });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -235,7 +321,7 @@ export default function AdminRastreo() {
         if (error) throw error;
         setShipments((prev) => prev.map((x) => (x.id === form.id ? data : x)));
       } else {
-        // Insert o upsert por order_id (manual)
+        // Insert o upsert por order_id
         const { data: existing, error: e0 } = await supabase
           .from("shipments")
           .select("id")
@@ -264,8 +350,8 @@ export default function AdminRastreo() {
       }
 
       resetForm();
-      // refrescar datos relacionados (por si cambiaste order_id, etc.)
-      loadAll();
+      // refrescar todo para re-vincular usuario/items/pedido
+      await loadAll();
     } catch (e) {
       setError(e.message || String(e));
     } finally {
@@ -274,13 +360,14 @@ export default function AdminRastreo() {
   };
 
   const handleDelete = async (row) => {
-    if (!confirm(`¿Eliminar el envío del pedido “${row.order_id}”?`)) return;
+    const s = row.shipment || row;
+    if (!confirm(`¿Eliminar el envío del pedido “${s.order_id}”?`)) return;
     try {
-      setDeleting(row.id);
-      const { error } = await supabase.from("shipments").delete().eq("id", row.id);
+      setDeleting(s.id);
+      const { error } = await supabase.from("shipments").delete().eq("id", s.id);
       if (error) throw error;
-      setShipments((prev) => prev.filter((x) => x.id !== row.id));
-      if (form.id === row.id) resetForm();
+      setShipments((prev) => prev.filter((x) => x.id !== s.id));
+      if (form.id === s.id) resetForm();
     } catch (e) {
       alert(`No se pudo eliminar: ${e.message || e}`);
     } finally {
@@ -560,7 +647,7 @@ export default function AdminRastreo() {
         {/* Divider */}
         <div className="hidden lg:block w-px bg-gray-200 rounded-full" />
 
-        {/* Col derecha: listado */}
+        {/* Col derecha: listado fusionado */}
         <div>
           <motion.div
             initial={{ opacity: 0, y: 12 }}
@@ -594,20 +681,8 @@ export default function AdminRastreo() {
               </div>
             ) : (
               <div className="mt-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {filtered.map((s) => {
-                  const ped = pedidosMap[s.order_id] || {};
-                  const items = itemsByPedido[s.order_id] || [];
-                  const cliente = ped.nombre || ped.cliente_nombre || ped.email || "Cliente";
-                  const total = money(ped.total, ped.moneda);
-
-                  // Resumen de lo pedido: "Título × qty, Título × qty"
-                  const resumen =
-                    items.length === 0
-                      ? "—"
-                      : items
-                          .slice(0, 3)
-                          .map((i) => `${i.titulo}${i.cantidad > 1 ? ` × ${i.cantidad}` : ""}`)
-                          .join(", ") + (items.length > 3 ? `, +${items.length - 3} más` : "");
+                {filtered.map((row) => {
+                  const { shipment: s, pedido: p, items, clienteNombre, clienteEmail, clienteTelefono, totalFmt } = row;
 
                   return (
                     <motion.div
@@ -620,7 +695,9 @@ export default function AdminRastreo() {
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-1.5 text-xs text-gray-600">
                             <UserIcon size={14} />
-                            <span className="font-medium truncate max-w-[190px]" title={cliente}>{cliente}</span>
+                            <span className="font-medium truncate max-w-[190px]" title={clienteNombre || clienteEmail || "Cliente"}>
+                              {clienteNombre || clienteEmail || "Cliente"}
+                            </span>
                           </div>
                           <span
                             className={`text-xs px-2 py-0.5 rounded-full ${
@@ -633,19 +710,38 @@ export default function AdminRastreo() {
                           </span>
                         </div>
 
+                        {/* Datos cliente */}
+                        <div className="text-[12px] text-gray-600 flex flex-col gap-0.5">
+                          {clienteEmail && (
+                            <div className="inline-flex items-center gap-1">
+                              <Mail size={12} /> <span className="truncate">{clienteEmail}</span>
+                            </div>
+                          )}
+                          {clienteTelefono && (
+                            <div className="inline-flex items-center gap-1">
+                              <Phone size={12} /> <span className="truncate">{clienteTelefono}</span>
+                            </div>
+                          )}
+                        </div>
+
                         <div className="text-xs text-gray-500">Pedido</div>
                         <div className="font-semibold truncate">{s.order_id}</div>
 
+                        {/* Lo que pidió */}
                         <div className="mt-1 text-sm">
                           <div className="text-gray-600">Lo que pidió</div>
-                          <div className="font-medium line-clamp-2">{resumen}</div>
+                          <div className="font-medium line-clamp-2">
+                            {row.itemsResumen}
+                          </div>
                         </div>
 
+                        {/* Total */}
                         <div className="mt-1 text-sm">
                           <div className="text-gray-600">Total</div>
-                          <div className="font-semibold">{total}</div>
+                          <div className="font-semibold">{totalFmt}</div>
                         </div>
 
+                        {/* Carrier/Tracking */}
                         <div className="mt-2 text-xs text-gray-600">
                           <div className="flex items-center justify-between">
                             <span>Transportista</span>
@@ -670,7 +766,7 @@ export default function AdminRastreo() {
                         <div className="mt-auto pt-3 flex items-center justify-between flex-wrap gap-2">
                           <div className="flex items-center gap-1.5">
                             <button
-                              onClick={() => onEdit(s)}
+                              onClick={() => onEdit(row)}
                               className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold hover:bg-gray-50"
                               title="Editar"
                             >
@@ -685,7 +781,7 @@ export default function AdminRastreo() {
                             </button>
                           </div>
                           <button
-                            onClick={() => handleDelete(s)}
+                            onClick={() => handleDelete(row)}
                             disabled={deleting === s.id}
                             className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold hover:bg-gray-50 text-rose-600 disabled:opacity-50"
                             title="Eliminar"
