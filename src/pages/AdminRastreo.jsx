@@ -56,6 +56,13 @@ const STATUS_LABEL = {
   returned: "Devuelto",
 };
 
+// 👉 NUEVO: etiqueta “Se está enviando” para estados intermedios de envío
+function humanStatus(s) {
+  const sendings = new Set(["shipped", "in_transit", "out_for_delivery"]);
+  if (sendings.has(s)) return "Se está enviando";
+  return STATUS_LABEL[s] || "—";
+}
+
 function clampStatus(s) {
   return STATUS_LABEL[s] ? s : "in_transit";
 }
@@ -217,6 +224,7 @@ export default function AdminRastreo() {
         clienteNombre,
         clienteEmail,
         clienteTel,
+        itemsResumen,
         totalFmt: money(ped.total, ped.moneda),
         createdFmt: ped.created_at ? fmtDate(ped.created_at) : "—",
         status: clampStatus(s.status),
@@ -292,12 +300,10 @@ export default function AdminRastreo() {
         carrier: (editFor.carrier || "").trim() || null,
         status: clampStatus(editFor.status || "in_transit"),
       };
-      const { error, data } = await supabase
+      const { error } = await supabase
         .from("shipments")
         .update(payload)
-        .eq("order_id", editFor.order_id)
-        .select()
-        .maybeSingle();
+        .eq("order_id", editFor.order_id);
       if (error) throw error;
       setShipments((prev) =>
         prev.map((s) => (s.order_id === editFor.order_id ? { ...s, ...payload } : s))
@@ -460,7 +466,7 @@ export default function AdminRastreo() {
                             : "bg-indigo-100 text-indigo-700"
                         }`}
                       >
-                        {STATUS_LABEL[r.status]}
+                        {humanStatus(r.status)}
                       </span>
                       <button
                         onClick={() => openEdit(r)}
