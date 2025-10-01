@@ -1,7 +1,7 @@
 // src/pages/AdminHome.jsx
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Boxes, Package, Video } from "lucide-react";
+import { Boxes, Package, Video, Truck } from "lucide-react";
 
 export default function AdminHome() {
   const navigate = useNavigate();
@@ -73,8 +73,25 @@ export default function AdminHome() {
             </div>
           </motion.button>
 
-          {/* Ejemplo futuro (placeholder) */}
-          {/* <motion.button ... /> */}
+          {/* Rastreos */}
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => navigate("/admin/rastreo")}
+            className="group h-full rounded-2xl border bg-white p-6 text-left shadow-sm transition hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-200"
+          >
+            <div className="flex items-start gap-4">
+              <div className="h-12 w-12 grid place-items-center rounded-xl bg-emerald-100 text-emerald-700 shrink-0">
+                <Truck size={20} />
+              </div>
+              <div className="min-w-0">
+                <div className="font-semibold text-lg">Rastreos</div>
+                <p className="mt-1 text-sm text-gray-600 leading-relaxed">
+                  Buscar, actualizar y marcar estados de envío; editar número y URL de rastreo.
+                </p>
+              </div>
+            </div>
+          </motion.button>
         </div>
 
         <p className="mt-10 text-xs text-gray-500">

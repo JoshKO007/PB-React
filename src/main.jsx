@@ -26,6 +26,7 @@ import MisPedidos from "./pages/Pedidos";
 import AdminProductos from "./pages/AdminProductos";
 import AdminHome from "./pages/AdminHome";
 import AdminVideos from "./pages/AdminVideos";
+import AdminRastreo from "./pages/AdminRastreo";
 
 
 ReactDOM.createRoot(document.getElementById("root")).render(
@@ -55,6 +56,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         <Route path="/admin" element={<AdminHome />} />
         <Route path="/admin/productos" element={<AdminProductos />} />
         <Route path="/admin/videos" element={<AdminVideos />} />
+        <Route path="/admin/rastreo" element={<AdminRastreo />} />
         <Route path="*" element={<h1>404 - Página no encontrada</h1>} />
       </Routes>
     </BrowserRouter>
