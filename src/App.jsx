@@ -242,27 +242,26 @@ export default function App() {
       >
         <div className="max-w-7xl mx-auto w-full flex flex-col gap-2 relative z-40">
 
-        <div className="flex flex-col sm:flex-row justify-between items-center w-full relative gap-2 sm:gap-0">
-          {/* Logo + Título superpuestos */}
-          <div className="relative flex items-center h-14 sm:h-16 w-full sm:w-auto">
-            {/* GIF agrandado y recortado dentro del mismo alto del header */}
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 h-[150%] sm:h-[170%] overflow-hidden pointer-events-none">
-              <img
-                src="/Intro.gif"
-                alt="Logo animado"
-                className="h-full w-auto select-none"
-                onError={(e) => { e.currentTarget.src = "/logo.png"; }}
-              />
-            </div>
 
-            {/* Texto encima del GIF */}
-            <div className="relative z-10 flex gap-2 sm:gap-6 text-lg sm:text-2xl font-semibold font-serif italic text-[#3b4d63] tracking-wide
-                            pl-16 sm:pl-20">
-              <span>ARTE</span>
-              <span>RESTAURACIÓN</span>
-              <span>VISUALES</span>
-            </div>
-          </div>
+          <div className="flex flex-col sm:flex-row justify-between items-center w-full relative gap-2 sm:gap-0">
+  <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4">
+    {/* Contenedor cuadrado recortando el GIF */}
+    <div className="h-14 sm:h-16 aspect-square overflow-hidden flex items-center justify-center">
+      <img
+        src="/intro.gif"
+        alt="Logo animado"
+        className="h-full w-full object-cover"
+        onError={(e) => { e.currentTarget.src = "/logo.png"; }}
+      />
+    </div>
+
+    {/* Texto */}
+    <div className="flex gap-2 sm:gap-6 text-lg sm:text-2xl font-semibold font-serif italic text-[#3b4d63] tracking-wide">
+      <span>ARTE</span>
+      <span>RESTAURACIÓN</span>
+      <span>VISUALES</span>
+    </div>
+  </div>
 
             {/* User / carrito */}
             <div className="flex items-center gap-2 mt-2 sm:mt-0 pr-1 sm:pr-2">
