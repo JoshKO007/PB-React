@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Home,
   Image as ImageIcon,
-  Video,
+  Video as VideoIcon,
   ShoppingBag,
   Brush,
   User,
@@ -15,7 +15,11 @@ import {
   LogOut,
   KeyRound,
   HeartIcon,
-  ShoppingBasket
+  ShoppingBasket,
+  Truck,
+  Sparkles,
+  Store,
+  PlayCircle
 } from "lucide-react";
 
 // ===== Supabase =====
@@ -168,7 +172,7 @@ export default function App() {
         setUsuarioActivo(sesion?.id ? sesion : null);
         if (sesion?.id) {
           const key = getCartKeyBySession(sesion);
-          const cart = JSON.parse(localStorage.getItem(key)) || [];
+          const cart = JSON.parse(localStorage.getItem(key) || "[]");
           setCartCount(safeCartCount(cart));
         } else {
           setCartCount(0);
@@ -186,17 +190,14 @@ export default function App() {
     clearTimeout(userMenuTimeout.current);
     setShowUserMenu(true);
   };
-
   const handleUserMouseLeave = () => {
-    userMenuTimeout.current = setTimeout(() => {
-      setShowUserMenu(false);
-    }, 300);
+    userMenuTimeout.current = setTimeout(() => setShowUserMenu(false), 300);
   };
 
   const menu = [
     { label: "Inicio", icon: <Home size={28} />, onClick: () => navigate("/") },
     { label: "Galería", icon: <ImageIcon size={24} />, onClick: () => navigate("/galeria") },
-    { label: "Videos", icon: <Video size={24} />, onClick: () => navigate("/videos") },
+    { label: "Videos", icon: <VideoIcon size={24} />, onClick: () => navigate("/videos") },
     { label: "Tienda", icon: <ShoppingBag size={24} />, onClick: () => navigate("/tienda") },
     { label: "Restauración", icon: <Brush size={24} />, onClick: () => navigate("/restauracion") },
     { label: "Contacto", icon: <Mail size={24} />, onClick: () => navigate("/contacto") },
@@ -215,7 +216,7 @@ export default function App() {
       setCartCount(0);
       setCerrandoSesion(false);
       navigate("/");
-    }, 5000);
+    }, 1200);
   };
 
   const destacadoActual = destacados[index] || null;
@@ -241,27 +242,23 @@ export default function App() {
         className="w-full text-center relative z-40 px-4 py-3 sm:px-6 sm:py-4 border-b border-gray-300 bg-[#f0eae2]/80 backdrop-blur-md shadow-xl rounded-b-xl"
       >
         <div className="max-w-7xl mx-auto w-full flex flex-col gap-2 relative z-40">
-
-
-<div className="flex flex-col sm:flex-row justify-between items-center w-full relative gap-2 sm:gap-0">
-  <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4">
-    {/* Logo cuadrado más grande */}
-    <div className="h-20 sm:h-24 aspect-square overflow-hidden flex items-center justify-center">
-      <img
-        src="/intro.gif"
-        alt="Logo animado"
-        className="h-full w-full object-cover"
-        onError={(e) => { e.currentTarget.src = "/logo.png"; }}
-      />
-    </div>
-
-    {/* Texto alineado con el logo */}
-    <div className="flex gap-2 sm:gap-6 text-lg sm:text-2xl font-semibold font-serif italic text-[#3b4d63] tracking-wide">
-      <span>ARTE</span>
-      <span>RESTAURACIÓN</span>
-      <span>VISUALES</span>
-    </div>
-  </div>
+          <div className="flex flex-col sm:flex-row justify-between items-center w-full relative gap-2 sm:gap-0">
+            <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4">
+              {/* Logo animado */}
+              <div className="h-20 sm:h-24 aspect-square overflow-hidden flex items-center justify-center rounded-xl shadow-sm ring-1 ring-gray-300/50 bg-white">
+                <img
+                  src="/intro.gif"
+                  alt="Logo animado"
+                  className="h-full w-full object-cover"
+                  onError={(e) => { e.currentTarget.src = "/logo.png"; }}
+                />
+              </div>
+              <div className="flex gap-2 sm:gap-6 text-lg sm:text-2xl font-semibold font-serif italic text-[#3b4d63] tracking-wide">
+                <span>ARTE</span>
+                <span>RESTAURACIÓN</span>
+                <span>VISUALES</span>
+              </div>
+            </div>
 
             {/* User / carrito */}
             <div className="flex items-center gap-2 mt-2 sm:mt-0 pr-1 sm:pr-2">
@@ -362,14 +359,14 @@ export default function App() {
 
           {/* Menú */}
           <nav className="flex flex-wrap justify-center gap-3 sm:gap-6 text-sm sm:text-lg font-medium pt-2">
-            {menu.map((item, index) => (
+            {menu.map((item, i) => (
               <motion.span
-                key={index}
-                onMouseEnter={() => setHovered(index)}
+                key={i}
+                onMouseEnter={() => setHovered(i)}
                 onMouseLeave={() => setHovered(null)}
                 onClick={item.onClick}
                 className={`flex flex-col items-center gap-1 cursor-pointer px-2 sm:px-3 py-1 transition-all duration-300 ease-out
-                  ${hovered === index
+                  ${hovered === i
                     ? "bg-white/50 backdrop-blur-sm shadow-inner rounded-md scale-105 underline underline-offset-4"
                     : "hover:bg-white/30 hover:backdrop-blur-sm hover:shadow-sm hover:rounded-md"
                   }`}
@@ -388,8 +385,8 @@ export default function App() {
         initial={{ opacity: 0, y: 40 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.8 }}
-        className="w-full relative overflow-hidden border-t border-gray-200"
-        style={{ height: "400px" }}
+        className="w-full relative overflow-hidden border-t border-gray-200 rounded-b-3xl"
+        style={{ height: "420px" }}
       >
         <video
           src="/Pintura1.mov"
@@ -399,255 +396,248 @@ export default function App() {
           playsInline
           className="absolute inset-0 w-full h-full object-cover"
         />
-        <div className="absolute inset-0 bg-black/20 z-10" />
-        <div className="relative z-20 h-full flex flex-col justify-center items-center textcenter px-4">
-          <h2 className="text-4xl sm:text-5xl font-bold mb-4 text-white rounded-lg px-4 py-2">
-            Bienvenido a la nueva experiencia visual
-          </h2>
-          <p className="text-lg text-white max-w-xl mx-auto px-6 py-3 rounded-lg leading-relaxed">
-            Sumérgete en una galería donde cada trazo cuenta una historia. Todas las obras están hechas a mano, con alma, y ahora puedes llevarlas contigo.
-          </p>
-          <motion.button
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.97 }}
-            onClick={() => navigate("/tienda")}
-            className="mt-8 px-6 py-3 bg-[#a16207] text-white border border-[#a16207] rounded-full shadow-lg hover:bg-[#854d06] hover:scale-105 transition-all duration-300"
+        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/30 to-black/50 z-10" />
+        <div className="relative z-20 h-full flex flex-col justify-center items-center px-4 text-center">
+          <motion.h2
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.1 }}
+            className="text-4xl sm:text-5xl font-black text-white tracking-tight"
           >
-            Ver colección destacada
-          </motion.button>
+            Arte contemporáneo, tienda y restauración
+          </motion.h2>
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.25 }}
+            className="text-lg text-white/90 max-w-2xl mt-4"
+          >
+            Explora la galería, adquiere piezas originales, mira videos y solicita restauración profesional.
+          </motion.p>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.4 }}
+            className="mt-8 flex flex-wrap gap-3 justify-center"
+          >
+            <button
+              onClick={() => navigate("/tienda")}
+              className="px-6 py-3 bg-white text-gray-900 rounded-full shadow hover:shadow-lg hover:-translate-y-0.5 transition"
+            >
+              Ver tienda
+            </button>
+            <button
+              onClick={() => navigate("/restauracion")}
+              className="px-6 py-3 bg-[#a16207] text-white rounded-full shadow hover:shadow-lg hover:-translate-y-0.5 transition"
+            >
+              Restauración
+            </button>
+          </motion.div>
         </div>
       </motion.section>
 
-      {/* Productos destacados */}
-      <section className="w-full py-16 border-t border-gray-300">
-        <div className="max-w-[1400px] mx-auto px-6 sm:px-12 grid grid-cols-1 md:grid-cols-[1fr_1px_1fr] gap-6 min-h-[500px]">
-          <div className="flex items-center justify-center">
-            <div className="text-left text-center md:text-left px-2">
-              <h3 className="text-4xl font-extrabold mb-6 text-center text-[#a16207]">Obras destacadas</h3>
-              <p className="text-lg text-gray-800 font-medium leading-relaxed mb-4">
-                Descubre nuestras piezas más populares. Cada una es una ventana al alma de la artista.
-              </p>
-              <p className="text-lg text-gray-700 font-medium leading-relaxed mb-4">
-                Estas obras han sido seleccionadas por su impacto visual y emocional.
-              </p>
-              <p className="text-lg text-gray-600 font-medium leading-relaxed mb-4">
-                Desde trazos delicados hasta composiciones intensas, cada obra ofrece una experiencia única.
-              </p>
-              <p className="text-lg text-gray-600 font-medium leading-relaxed">
-                Explora cada detalle, cada textura, y déjate envolver por la energía que emana de cada creación.
-              </p>
-            </div>
-          </div>
+      {/* Qué ofrecemos */}
+      <section className="w-full py-14">
+        <div className="max-w-6xl mx-auto px-6">
+          <motion.h3
+            initial={{ opacity: 0, y: 12 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+            className="text-3xl font-bold text-center text-[#a16207] mb-8"
+          >
+            ¿Qué ofrece esta página?
+          </motion.h3>
 
-          <div className="hidden md:block w-full h-full bg-gray-300 rounded"></div>
-
-          <div className="flex flex-col items-center justify-center gap-6 px-2">
-            <div className="relative w-full max-w-md flex items-center justify-center overflow-hidden min-h-[400px]">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={cargandoDest ? "loading" : index}
-                  initial={{ opacity: 0, x: 100 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -100 }}
-                  transition={{ duration: 0.6 }}
-                  className="absolute w-full p-6 bg-white/60 backdrop-blur-md border border-gray-300 rounded-xl shadow-lg text-center"
-                >
-                  {cargandoDest ? (
-                    <div className="py-24 text-gray-600">Cargando destacados…</div>
-                  ) : destacados.length === 0 ? (
-                    <div className="py-24 text-gray-600">No hay obras destacadas disponibles.</div>
-                  ) : (
-                    <>
-                      <img
-                        src={imgActual}
-                        alt={destacadoActual?.titulo || "Obra destacada"}
-                        className="w-full h-56 object-cover rounded mb-4"
-                        onError={(e) => (e.currentTarget.src = "/placeholder.jpg")}
-                      />
-                      <h4 className="text-lg font-semibold">{destacadoActual?.titulo}</h4>
-                      <p className="text-sm text-gray-700">{destacadoActual?.descripcion}</p>
-                      {Number.isFinite(destacadoActual?.precio) && (
-                        <p className="text-base font-medium mt-2 text-[#a16207]">
-                          ${destacadoActual.precio} {destacadoActual.moneda || "MXN"}
-                        </p>
-                      )}
-                    </>
-                  )}
-                </motion.div>
-              </AnimatePresence>
-            </div>
-
-            <motion.button
-              whileHover={{ scale: 1.08 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => navigate("/tienda")}
-              className="px-6 py-3 bg-[#a16207] text-white border border-[#a16207] rounded-full shadow-md hover:bg-[#854d06] transition-all duration-300"
-            >
-              Ver más obras
-            </motion.button>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[
+              { icon: <Store />, title: "Tienda en línea", desc: "Compra obras originales y series seleccionadas." },
+              { icon: <ImageIcon />, title: "Galería", desc: "Explora colecciones con fotografías de alta calidad." },
+              { icon: <VideoIcon />, title: "Videos", desc: "Contenido audiovisual y procesos de creación." },
+              { icon: <Brush />, title: "Restauración", desc: "Atención de obra pictórica con criterios profesionales." },
+              { icon: <Truck />, title: "Envío con rastreo", desc: "Seguimiento de tus pedidos desde el panel de usuario." },
+              { icon: <Sparkles />, title: "Ediciones especiales", desc: "Piezas destacadas y lanzamientos limitados." },
+            ].map((c, i) => (
+              <motion.div
+                key={i}
+                whileHover={{ y: -4, scale: 1.01 }}
+                className="rounded-2xl bg-white border shadow-sm p-5 flex items-start gap-3"
+              >
+                <div className="h-10 w-10 grid place-items-center rounded-xl bg-amber-100 text-amber-700">
+                  {c.icon}
+                </div>
+                <div>
+                  <h4 className="font-semibold">{c.title}</h4>
+                  <p className="text-sm text-gray-700 mt-1">{c.desc}</p>
+                </div>
+              </motion.div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* Bio + imagen */}
-      <section className="w-full py-20 px-6 max-w-6xl mx-auto">
-        <div className="grid md:grid-cols-2 gap-10 items-center">
-          <img
-            src="/artista.jpg"
-            alt="Artista"
-            className="w-full rounded-xl shadow-xl object-cover"
-          />
-          <div className="space-y-4">
-            <h2 className="text-4xl font-extrabold text-[#a16207]">Sobre la artista</h2>
-            <p className="text-lg text-gray-700 leading-relaxed">
-              Nacida en <strong>1980</strong> en <strong>Ciudad de México</strong>, su obra se mueve entre la
-              <strong> investigación y la restauración</strong> y la <strong>creatividad abstracta y figurativa</strong>.
-              Cada pieza persigue la belleza como experiencia estética, combinando técnica, material y contemplación.
-            </p>
+      {/* Publicaciones / destacados de la tienda */}
+      <section className="w-full py-10 border-t border-gray-300 bg-white/60">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="flex items-center justify-between gap-3 mb-6">
+            <h3 className="text-2xl font-bold text-[#a16207] flex items-center gap-2">
+              <Store size={22}/> Publicaciones de la tienda
+            </h3>
+            <button
+              onClick={() => navigate("/tienda")}
+              className="text-sm rounded-full border px-3 py-1.5 hover:bg-gray-50"
+            >
+              Ver más
+            </button>
+          </div>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {cargandoDest ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="rounded-2xl border p-4 bg-gray-50 animate-pulse h-72" />
+              ))
+            ) : destacados.length === 0 ? (
+              <div className="col-span-full rounded-2xl border bg-gray-50 p-6 text-gray-600">
+                No hay obras destacadas disponibles por ahora.
+              </div>
+            ) : (
+              destacados.slice(0, 6).map((p) => (
+                <motion.div
+                  key={p.id}
+                  whileHover={{ y: -4 }}
+                  className="rounded-2xl border bg-white shadow-sm overflow-hidden"
+                >
+                  <img
+                    src={p.imagenes[0] || "/placeholder.jpg"}
+                    alt={p.titulo}
+                    className="h-44 w-full object-cover"
+                    onError={(e) => (e.currentTarget.src = "/placeholder.jpg")}
+                  />
+                  <div className="p-4">
+                    <h4 className="font-semibold truncate">{p.titulo}</h4>
+                    <p className="text-sm text-gray-700 line-clamp-2 mt-1">{p.descripcion}</p>
+                    {Number.isFinite(p.precio) && (
+                      <div className="mt-2 font-semibold text-[#a16207]">
+                        ${p.precio} {p.moneda}
+                      </div>
+                    )}
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        onClick={() => navigate("/tienda")}
+                        className="text-sm rounded-full bg-gray-900 text-white px-3 py-1.5 hover:shadow"
+                      >
+                        Comprar
+                      </button>
+                      <button
+                        onClick={() => navigate("/galeria")}
+                        className="text-sm rounded-full border px-3 py-1.5 hover:bg-gray-50"
+                      >
+                        Ver galería
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              ))
+            )}
           </div>
         </div>
+      </section>
 
-        {/* Línea de vida */}
-        <h3 className="text-3xl font-bold text-center text-[#a16207] mt-24 mb-20">Línea de vida artística</h3>
+      {/* Video destacado (sección aparte) */}
+      <section className="w-full py-14">
+        <div className="max-w-5xl mx-auto px-6">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <h3 className="text-2xl font-bold text-[#a16207] flex items-center gap-2">
+              <PlayCircle size={22}/> Video destacado
+            </h3>
+            <button
+              onClick={() => navigate("/videos")}
+              className="text-sm rounded-full border px-3 py-1.5 hover:bg-gray-50"
+            >
+              Ver todos
+            </button>
+          </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-20 justify-items-center">
-          {[
-            {
-              titulo: "Trayectoria profesional",
-              eventos: [
-                { año: "2005", evento: "“El caballete de la triste figura” – Galerías UAM." },
-                { año: "2012", evento: "“Mujeres: nuestros cuerpos, nuestras vidas” – Galería Aguafuerte." },
-                { año: "Anual", evento: "Exposiciones en el colectivo Esmeralda (Secretaría de Comunicaciones, Torre Pemex, Secretaría de Finanzas)." },
-                { año: "2017–2018", evento: "Exposición individual – Galería Antiqus." },
-                { año: "2024", evento: "Museo Barber Studio." }
-              ]
-            },
-            {
-              titulo: "Estudios",
-              eventos: [
-                { año: "2002–2005", evento: "Artes Plásticas, E.I.A No. 1 del INBA–CONACULTA." },
-                { año: "2005–2010 / 2011–2013", evento: "Antropología y Guion Cinematográfico." },
-                { año: "2007", evento: "Taller–Diplomado de Estética con el Dr. Moisés Ladrón de Guevara." },
-                { año: "2007", evento: "Técnica de materiales con el Dr. Moisés Ladrón de Guevara." },
-                { año: "2020–2022", evento: "Estudio independiente de Restauración." }
-              ]
-            },
-            {
-              titulo: "Premios y reconocimientos",
-              eventos: [
-                { año: "2010", evento: "Premio de Investigación CONACYT – Excelencia en investigación académica." },
-                { año: "s/f", evento: "Reconocimiento del Coloquio Internacional “El espejo simbolista”." },
-                { año: "s/f", evento: "Reconocimiento en el Simposio Internacional de Teoría sobre Arte." },
-                { año: "s/f", evento: "Reconocimiento en SITAC – Simposio Internacional de Teoría sobre Arte Contemporáneo." }
-              ]
-            }
-          ].map((seccion, i) => {
-            const isLastSingle = i === 2 && 3 % 2 !== 0;
-            return (
-              <div key={i} className={isLastSingle ? "md:col-span-2 flex justify-center" : ""}>
-                <div className="space-y-6 w-full max-w-xl">
-                  <h4 className="text-2xl font-semibold text-[#854d06]">{seccion.titulo}</h4>
-                  <div className="relative border-l-4 border-[#a16207] pl-8 space-y-8">
-                    {seccion.eventos.map((item, idx) => (
-                      <motion.div
-                        key={idx}
-                        initial={{ opacity: 0, y: 20 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        whileHover={{
-                          scale: 1.03,
-                          backgroundColor: "rgba(255,255,255,0.7)",
-                          boxShadow: "0 8px 20px rgba(0,0,0,0.1)"
-                        }}
-                        transition={{ duration: 0.3 }}
-                        viewport={{ once: true }}
-                        className="relative p-4 rounded-lg cursor-pointer"
-                      >
-                        <div className="absolute -left-5 top-4 w-4 h-4 rounded-full bg-[#a16207] shadow-md"></div>
-                        <p className="text-lg text-gray-800">
-                          <strong>{item.año}:</strong> {item.evento}
-                        </p>
-                      </motion.div>
-                    ))}
-                  </div>
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+            className="aspect-video w-full rounded-2xl overflow-hidden border shadow-sm bg-black"
+          >
+            <video
+              src="/videos/video1.mp4"
+              controls
+              playsInline
+              className="w-full h-full object-cover"
+            />
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Restauración */}
+      <section className="w-full py-16 border-t border-gray-300 bg-white/70">
+        <div className="max-w-6xl mx-auto px-6 grid md:grid-cols-2 gap-8 items-center">
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+            className="order-2 md:order-1"
+          >
+            <h3 className="text-3xl font-bold text-[#a16207] mb-3">Restauración de obra</h3>
+            <p className="text-lg text-gray-800 leading-relaxed">
+              Atención a obra pictórica con enfoque profesional: diagnósticos, limpieza,
+              consolidación y reintegración cromática cuando procede.
+            </p>
+            <p className="mt-3 text-gray-700">
+              <strong>Se auxilia de la investigación para la restauración de obra pictórica.</strong>
+            </p>
+            <div className="mt-5 flex gap-3">
+              <button
+                onClick={() => navigate("/restauracion")}
+                className="px-5 py-2.5 rounded-full bg-gray-900 text-white hover:shadow"
+              >
+                Conocer más
+              </button>
+              <button
+                onClick={() => navigate("/contacto")}
+                className="px-5 py-2.5 rounded-full border hover:bg-gray-50"
+              >
+                Solicitar valoración
+              </button>
+            </div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+            className="order-1 md:order-2"
+          >
+            {/* Visual moderno sin foto de persona */}
+            <div className="relative h-72 rounded-3xl overflow-hidden border shadow-lg bg-gradient-to-br from-amber-200 via-white to-amber-100">
+              <div className="absolute inset-0 opacity-40 mix-blend-multiply">
+                <svg viewBox="0 0 600 600" preserveAspectRatio="none" className="w-full h-full">
+                  <defs>
+                    <linearGradient id="g1" x1="0" x2="1">
+                      <stop offset="0%" stopColor="#f59e0b" />
+                      <stop offset="100%" stopColor="#fde68a" />
+                    </linearGradient>
+                  </defs>
+                  <circle cx="120" cy="120" r="110" fill="url(#g1)" />
+                  <circle cx="500" cy="120" r="70" fill="#fcd34d" />
+                  <circle cx="420" cy="380" r="140" fill="#fbbf24" />
+                </svg>
+              </div>
+              <div className="absolute inset-0 grid place-items-center">
+                <div className="px-6 py-3 bg-white/80 backdrop-blur rounded-full border text-sm font-medium flex items-center gap-2">
+                  <Brush className="text-[#a16207]" size={18}/> Restauración profesional
                 </div>
               </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* Manifiesto artístico */}
-      <section className="relative max-w-6xl mx-auto px-6 py-20">
-        <div className="absolute inset-0 bg-white/40 backdrop-blur-md rounded-3xl shadow-xl -z-10" />
-
-        <motion.h3
-          initial={{ opacity: 0, y: -20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="text-4xl font-bold text-center text-[#a16207] mb-12"
-        >
-          Manifiesto artístico
-        </motion.h3>
-
-        <div className="grid md:grid-cols-2 gap-12">
-          {[
-            {
-              titulo: "Investigación e integración",
-              texto:
-                "A favor de la investigación y la integración de nuevas técnicas y manifestaciones artísticas como caminos creativos."
-            },
-            {
-              titulo: "Diálogo con los manifiestos",
-              texto:
-                "Cada cambio tecnológico genera posiciones encontradas, como ocurrió con los futuristas, surrealistas, Black Mountain o la Bauhaus."
-            },
-            {
-              titulo: "Búsqueda de belleza",
-              texto:
-                "La meta es alcanzar la belleza en un cuadro: que la técnica o el material conduzcan a una experiencia estética plena."
-            },
-            {
-              titulo: "Contra la inmediatez catastrófica",
-              texto:
-                "Frente a la oleada de mensajes catastróficos, el arte abre un espacio de contemplación, reflexión y calma."
-            },
-            {
-              titulo: "Aspiración al público",
-              texto:
-                "Crear objetos que den respiro de tranquilidad al espacio y a quien los mira: paisajes, objetos o personas que invitan a contemplar."
-            },
-            {
-              titulo: "Herramientas de su tiempo",
-              texto:
-                "Un artista debe ser capaz de tomar las herramientas de su tiempo para expandir sus posibilidades creativas."
-            }
-          ].map((item, idx) => (
-            <motion.div
-              key={idx}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: idx * 0.1 }}
-              viewport={{ once: true }}
-              className="bg-white/70 backdrop-blur-md border border-gray-200 rounded-xl shadow-md p-6 hover:shadow-lg transition-all"
-            >
-              <h4 className="text-xl font-semibold text-[#854d06] mb-2">{item.titulo}</h4>
-              <p className="text-gray-800 text-base leading-relaxed">{item.texto}</p>
-            </motion.div>
-          ))}
-        </div>
-      </section>
-
-      {/* Técnicas y materiales */}
-      <section className="max-w-6xl mx-auto px-6 py-20">
-        <h3 className="text-3xl font-bold text-center text-[#a16207] mb-10">Técnicas y materiales</h3>
-        <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6 text-center">
-          {["Óleo", "Acrílico", "Cera", "Tintas mixtas", "Fotografía digital", "Composición digital"].map(
-            (item, idx) => (
-              <div key={idx} className="bg-white/70 p-6 rounded-xl shadow-md hover:shadow-lg transition">
-                <p className="text-lg font-medium text-gray-800">{item}</p>
-              </div>
-            )
-          )}
+            </div>
+          </motion.div>
         </div>
       </section>
 
