@@ -243,10 +243,10 @@ export default function App() {
         <div className="max-w-7xl mx-auto w-full flex flex-col gap-2 relative z-40">
 
 
-          <div className="flex flex-col sm:flex-row justify-between items-center w-full relative gap-2 sm:gap-0">
+<div className="flex flex-col sm:flex-row justify-between items-center w-full relative gap-2 sm:gap-0">
   <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4">
-    {/* Contenedor cuadrado recortando el GIF */}
-    <div className="h-14 sm:h-16 aspect-square overflow-hidden flex items-center justify-center">
+    {/* Logo cuadrado más grande */}
+    <div className="h-20 sm:h-24 aspect-square overflow-hidden flex items-center justify-center">
       <img
         src="/intro.gif"
         alt="Logo animado"
@@ -255,7 +255,7 @@ export default function App() {
       />
     </div>
 
-    {/* Texto */}
+    {/* Texto alineado con el logo */}
     <div className="flex gap-2 sm:gap-6 text-lg sm:text-2xl font-semibold font-serif italic text-[#3b4d63] tracking-wide">
       <span>ARTE</span>
       <span>RESTAURACIÓN</span>
