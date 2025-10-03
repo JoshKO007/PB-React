@@ -244,11 +244,13 @@ export default function App() {
 
         <div className="flex flex-col sm:flex-row justify-between items-center w-full relative gap-2 sm:gap-0">
           <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4">
-            <img
-              src="/Intro.gif"
-              alt="Logo animado"
-              className="h-14 sm:h-16 object-contain mx-auto"
-              onError={(e) => { e.currentTarget.src = "/logo.png"; }}
+            <video
+              src="/intro.webm"
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="h-14 sm:h-16 object-contain mx-auto mix-blend-multiply opacity-90"
             />
             <div className="flex gap-2 sm:gap-6 text-lg sm:text-2xl font-semibold font-serif italic text-[#3b4d63] tracking-wide">
               <span>ARTE</span>
