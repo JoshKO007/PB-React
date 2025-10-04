@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Home,
   Image as ImageIcon,
-  Video,
+  Video as VideoIcon,
   ShoppingBag,
   Brush,
   User,
@@ -15,7 +15,7 @@ import {
   LogOut,
   KeyRound,
   HeartIcon,
-  ShoppingBasket
+  ShoppingBasket,
 } from "lucide-react";
 
 // ===== Supabase =====
@@ -45,6 +45,33 @@ function rowToProductUI(r) {
   };
 }
 
+/* ======================= Helpers YouTube (para video en home) ======================= */
+function extractYouTubeId(urlOrId) {
+  if (!urlOrId) return "";
+  const v = String(urlOrId).trim();
+  if (/^[\w-]{11}$/.test(v)) return v; // ID directo
+  let m = v.match(/youtu\.be\/([\w-]{11})/i);
+  if (m) return m[1];
+  m = v.match(/[?&]v=([\w-]{11})/i);
+  if (m) return m[1];
+  m = v.match(/\/embed\/([\w-]{11})/i);
+  if (m) return m[1];
+  m = v.match(/\/shorts\/([\w-]{11})/i);
+  if (m) return m[1];
+  return "";
+}
+function embedUrl(id) {
+  if (!id) return "";
+  const params = new URLSearchParams({
+    autoplay: "1",
+    mute: "1",
+    rel: "0",
+    modestbranding: "1",
+    playsinline: "1",
+  });
+  return `https://www.youtube.com/embed/${id}?${params.toString()}`;
+}
+
 /* ======================= Helpers carrito por usuario ======================= */
 function getCartKeyBySession(sesion) {
   return sesion?.id ? `carrito:${sesion.id}` : null;
@@ -58,7 +85,6 @@ function safeCartCount(cartArray) {
 
 export default function App() {
   const [hovered, setHovered] = useState(null);
-  const [index, setIndex] = useState(0);
 
   // Usuario/menú/carro
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -68,7 +94,7 @@ export default function App() {
   const userMenuTimeout = useRef(null);
   const navigate = useNavigate();
 
-  // ====== Destacados (solo Supabase) ======
+  // ====== Publicaciones (3 productos) ======
   const [destacados, setDestacados] = useState([]);
   const [cargandoDest, setCargandoDest] = useState(true);
 
@@ -78,17 +104,17 @@ export default function App() {
       try {
         const { data, error } = await supabase
           .from("productos")
-          .select("id,titulo,descripcion,precio,moneda,imagenes,destacado")
-          .eq("destacado", true)
+          .select("id,titulo,descripcion,precio,moneda,imagenes,destacado,disponible")
           .is("disponible", true)
-          .order("id", { ascending: true });
+          .order("id", { ascending: false })
+          .limit(3);
 
         if (error) throw error;
         const mapped = (data || []).map(rowToProductUI);
         setDestacados(mapped);
       } catch (e) {
-        console.error("Error cargando destacados desde Supabase:", e);
-        setDestacados([]); // sin fallback local
+        console.error("Error cargando publicaciones desde Supabase:", e);
+        setDestacados([]);
       } finally {
         setCargandoDest(false);
       }
@@ -96,14 +122,35 @@ export default function App() {
     loadFeatured();
   }, []);
 
-  // Slider (solo corre si hay destacados)
+  // ====== Primer video publicado (para sección de videos en home) ======
+  const [videoFirst, setVideoFirst] = useState(null); // { id, _vid, titulo, descripcion }
+  const [loadingVideo, setLoadingVideo] = useState(true);
+  const [errorVideo, setErrorVideo] = useState("");
+
   useEffect(() => {
-    if (!destacados.length) return;
-    const interval = setInterval(() => {
-      setIndex((prev) => (prev + 1) % destacados.length);
-    }, 4000);
-    return () => clearInterval(interval);
-  }, [destacados.length]);
+    (async () => {
+      setLoadingVideo(true);
+      setErrorVideo("");
+      try {
+        const { data, error } = await supabase
+          .from("videos")
+          .select("id, video_id, url, titulo, descripcion, publicado, created_at")
+          .eq("publicado", true)
+          .order("created_at", { ascending: false })
+          .limit(1);
+
+        if (error) throw error;
+        const first = (data && data[0]) || null;
+        const _vid = first ? (first.video_id || extractYouTubeId(first.url)) : "";
+        setVideoFirst(first && _vid ? { ...first, _vid } : null);
+      } catch (e) {
+        setErrorVideo(String(e.message || e));
+        setVideoFirst(null);
+      } finally {
+        setLoadingVideo(false);
+      }
+    })();
+  }, []);
 
   // Cargar sesión al montar
   useEffect(() => {
@@ -186,17 +233,14 @@ export default function App() {
     clearTimeout(userMenuTimeout.current);
     setShowUserMenu(true);
   };
-
   const handleUserMouseLeave = () => {
-    userMenuTimeout.current = setTimeout(() => {
-      setShowUserMenu(false);
-    }, 300);
+    userMenuTimeout.current = setTimeout(() => setShowUserMenu(false), 300);
   };
 
   const menu = [
     { label: "Inicio", icon: <Home size={28} />, onClick: () => navigate("/") },
     { label: "Galería", icon: <ImageIcon size={24} />, onClick: () => navigate("/galeria") },
-    { label: "Videos", icon: <Video size={24} />, onClick: () => navigate("/videos") },
+    { label: "Videos", icon: <VideoIcon size={24} />, onClick: () => navigate("/videos") },
     { label: "Tienda", icon: <ShoppingBag size={24} />, onClick: () => navigate("/tienda") },
     { label: "Restauración", icon: <Brush size={24} />, onClick: () => navigate("/restauracion") },
     { label: "Contacto", icon: <Mail size={24} />, onClick: () => navigate("/contacto") },
@@ -218,12 +262,6 @@ export default function App() {
     }, 5000);
   };
 
-  const destacadoActual = destacados[index] || null;
-  const imgActual =
-    destacadoActual?.imagenes?.[0] ??
-    buildImgUrl(destacadoActual?.imagen) ??
-    "/placeholder.jpg";
-
   return (
     <div className="min-h-screen bg-[#f9f4ef] text-[#333333] font-sans flex flex-col items-center">
       {cerrandoSesion && (
@@ -241,27 +279,25 @@ export default function App() {
         className="w-full text-center relative z-40 px-4 py-3 sm:px-6 sm:py-4 border-b border-gray-300 bg-[#f0eae2]/80 backdrop-blur-md shadow-xl rounded-b-xl"
       >
         <div className="max-w-7xl mx-auto w-full flex flex-col gap-2 relative z-40">
+          <div className="flex flex-col sm:flex-row justify-between items-center w-full relative gap-2 sm:gap-0">
+            <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4">
+              <div className="h-20 sm:h-24 aspect-square overflow-hidden flex items-center justify-center">
+                <img
+                  src="/intro.gif"
+                  alt="Logo animado"
+                  className="h-full w-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.src = "/logo.png";
+                  }}
+                />
+              </div>
 
-
-<div className="flex flex-col sm:flex-row justify-between items-center w-full relative gap-2 sm:gap-0">
-  <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4">
-    {/* Logo cuadrado más grande */}
-    <div className="h-20 sm:h-24 aspect-square overflow-hidden flex items-center justify-center">
-      <img
-        src="/intro.gif"
-        alt="Logo animado"
-        className="h-full w-full object-cover"
-        onError={(e) => { e.currentTarget.src = "/logo.png"; }}
-      />
-    </div>
-
-    {/* Texto alineado con el logo */}
-    <div className="flex gap-2 sm:gap-6 text-lg sm:text-2xl font-semibold font-serif italic text-[#3b4d63] tracking-wide">
-      <span>ARTE</span>
-      <span>RESTAURACIÓN</span>
-      <span>VISUALES</span>
-    </div>
-  </div>
+              <div className="flex gap-2 sm:gap-6 text-lg sm:text-2xl font-semibold font-serif italic text-[#3b4d63] tracking-wide">
+                <span>ARTE</span>
+                <span>RESTAURACIÓN</span>
+                <span>VISUALES</span>
+              </div>
+            </div>
 
             {/* User / carrito */}
             <div className="flex items-center gap-2 mt-2 sm:mt-0 pr-1 sm:pr-2">
@@ -383,7 +419,7 @@ export default function App() {
         </div>
       </motion.header>
 
-      {/* Hero con video */}
+      {/* Hero con video de fondo */}
       <motion.section
         initial={{ opacity: 0, y: 40 }}
         animate={{ opacity: 1, y: 0 }}
@@ -418,97 +454,269 @@ export default function App() {
         </div>
       </motion.section>
 
-      {/* Productos destacados */}
+      {/* Publicaciones de la tienda (3 productos, SIN carrusel) */}
       <section className="w-full py-16 border-t border-gray-300">
-        <div className="max-w-[1400px] mx-auto px-6 sm:px-12 grid grid-cols-1 md:grid-cols-[1fr_1px_1fr] gap-6 min-h-[500px]">
-          <div className="flex items-center justify-center">
-            <div className="text-left text-center md:text-left px-2">
-              <h3 className="text-4xl font-extrabold mb-6 text-center text-[#a16207]">Obras destacadas</h3>
-              <p className="text-lg text-gray-800 font-medium leading-relaxed mb-4">
-                Descubre nuestras piezas más populares. Cada una es una ventana al alma de la artista.
-              </p>
-              <p className="text-lg text-gray-700 font-medium leading-relaxed mb-4">
-                Estas obras han sido seleccionadas por su impacto visual y emocional.
-              </p>
-              <p className="text-lg text-gray-600 font-medium leading-relaxed mb-4">
-                Desde trazos delicados hasta composiciones intensas, cada obra ofrece una experiencia única.
-              </p>
-              <p className="text-lg text-gray-600 font-medium leading-relaxed">
-                Explora cada detalle, cada textura, y déjate envolver por la energía que emana de cada creación.
-              </p>
-            </div>
+        <div className="max-w-7xl mx-auto px-6 sm:px-12">
+          <div className="text-center max-w-2xl mx-auto mb-12">
+            <h3 className="text-4xl font-extrabold text-[#a16207]">Últimas publicaciones de la tienda</h3>
+            <p className="mt-3 text-lg text-gray-700">Tres piezas recientes seleccionadas para ti.</p>
           </div>
 
-          <div className="hidden md:block w-full h-full bg-gray-300 rounded"></div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {(cargandoDest ? Array.from({ length: 3 }) : destacados).map((item, idx) => {
+              const img =
+                item?.imagenes?.[0] ??
+                (item?.imagen ? buildImgUrl(item.imagen) : "/placeholder.jpg");
 
-          <div className="flex flex-col items-center justify-center gap-6 px-2">
-            <div className="relative w-full max-w-md flex items-center justify-center overflow-hidden min-h-[400px]">
-              <AnimatePresence mode="wait">
+              return (
                 <motion.div
-                  key={cargandoDest ? "loading" : index}
-                  initial={{ opacity: 0, x: 100 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -100 }}
-                  transition={{ duration: 0.6 }}
-                  className="absolute w-full p-6 bg-white/60 backdrop-blur-md border border-gray-300 rounded-xl shadow-lg text-center"
+                  key={item?.id || `skeleton-${idx}`}
+                  initial={{ opacity: 0, y: 16 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.35, delay: idx * 0.05 }}
+                  className="group bg-white/60 backdrop-blur-md border border-gray-200 rounded-2xl overflow-hidden shadow-md hover:shadow-xl transition-all"
                 >
-                  {cargandoDest ? (
-                    <div className="py-24 text-gray-600">Cargando destacados…</div>
-                  ) : destacados.length === 0 ? (
-                    <div className="py-24 text-gray-600">No hay obras destacadas disponibles.</div>
-                  ) : (
-                    <>
-                      <img
-                        src={imgActual}
-                        alt={destacadoActual?.titulo || "Obra destacada"}
-                        className="w-full h-56 object-cover rounded mb-4"
+                  <div className="relative aspect-[4/3] overflow-hidden">
+                    {cargandoDest ? (
+                      <div className="w-full h-full animate-pulse bg-gray-200" />
+                    ) : (
+                      <motion.img
+                        src={img}
+                        alt={item?.titulo || "Publicación"}
+                        className="w-full h-full object-cover"
                         onError={(e) => (e.currentTarget.src = "/placeholder.jpg")}
+                        whileHover={{ scale: 1.04 }}
+                        transition={{ duration: 0.4 }}
                       />
-                      <h4 className="text-lg font-semibold">{destacadoActual?.titulo}</h4>
-                      <p className="text-sm text-gray-700">{destacadoActual?.descripcion}</p>
-                      {Number.isFinite(destacadoActual?.precio) && (
-                        <p className="text-base font-medium mt-2 text-[#a16207]">
-                          ${destacadoActual.precio} {destacadoActual.moneda || "MXN"}
-                        </p>
-                      )}
-                    </>
-                  )}
-                </motion.div>
-              </AnimatePresence>
-            </div>
+                    )}
+                    {!cargandoDest && item?.destacado && (
+                      <span className="absolute top-3 left-3 text-xs font-semibold bg-[#a16207] text-white px-2 py-1 rounded-full shadow">
+                        Destacado
+                      </span>
+                    )}
+                  </div>
 
+                  <div className="p-4">
+                    {cargandoDest ? (
+                      <>
+                        <div className="h-5 w-2/3 bg-gray-200 rounded animate-pulse mb-2" />
+                        <div className="h-4 w-full bg-gray-200 rounded animate-pulse mb-2" />
+                        <div className="h-4 w-5/6 bg-gray-200 rounded animate-pulse mb-4" />
+                        <div className="h-6 w-24 bg-gray-200 rounded animate-pulse" />
+                      </>
+                    ) : (
+                      <>
+                        <h4 className="text-lg font-semibold text-gray-900 line-clamp-1">
+                          {item?.titulo}
+                        </h4>
+                        <p className="text-sm text-gray-700 line-clamp-3 mt-1">
+                          {item?.descripcion}
+                        </p>
+
+                        {Number.isFinite(item?.precio) && (
+                          <p className="mt-3 text-base font-semibold text-[#a16207]">
+                            ${item.precio} {item.moneda || "MXN"}
+                          </p>
+                        )}
+
+                        <div className="mt-4 flex items-center gap-3">
+                          <button
+                            onClick={() => navigate("/tienda")}
+                            className="px-4 py-2 rounded-full bg-[#a16207] text-white text-sm font-medium shadow hover:bg-[#854d06] transition"
+                          >
+                            Ver en tienda
+                          </button>
+                          <button
+                            onClick={() => navigate("/tienda")}
+                            className="px-4 py-2 rounded-full border border-gray-300 text-sm font-medium text-gray-700 hover:bg-white transition"
+                          >
+                            Más detalles
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+
+          <div className="text-center mt-10">
             <motion.button
-              whileHover={{ scale: 1.08 }}
-              whileTap={{ scale: 0.95 }}
+              whileHover={{ scale: 1.06 }}
+              whileTap={{ scale: 0.97 }}
               onClick={() => navigate("/tienda")}
-              className="px-6 py-3 bg-[#a16207] text-white border border-[#a16207] rounded-full shadow-md hover:bg-[#854d06] transition-all duration-300"
+              className="px-6 py-3 bg-[#a16207] text-white border border-[#a16207] rounded-full shadow-md hover:bg-[#854d06] transition-all"
             >
-              Ver más obras
+              Ver todo el catálogo
             </motion.button>
           </div>
         </div>
       </section>
 
-      {/* Bio + imagen */}
+      {/* Lo que ofrecemos */}
       <section className="w-full py-20 px-6 max-w-6xl mx-auto">
-        <div className="grid md:grid-cols-2 gap-10 items-center">
-          <img
-            src="/artista.jpg"
-            alt="Artista"
-            className="w-full rounded-xl shadow-xl object-cover"
-          />
-          <div className="space-y-4">
-            <h2 className="text-4xl font-extrabold text-[#a16207]">Sobre la artista</h2>
-            <p className="text-lg text-gray-700 leading-relaxed">
-              Nacida en <strong>1980</strong> en <strong>Ciudad de México</strong>, su obra se mueve entre la
-              <strong> investigación y la restauración</strong> y la <strong>creatividad abstracta y figurativa</strong>.
-              Cada pieza persigue la belleza como experiencia estética, combinando técnica, material y contemplación.
-            </p>
-          </div>
-        </div>
+        <motion.h3
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+          className="text-3xl sm:text-4xl font-extrabold text-center text-[#a16207] mb-12"
+        >
+          Lo que ofrecemos
+        </motion.h3>
 
-        {/* Línea de vida */}
-        <h3 className="text-3xl font-bold text-center text-[#a16207] mt-24 mb-20">Línea de vida artística</h3>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[
+            { t: "Tienda de obra original", d: "Pinturas y piezas únicas listas para envío." },
+            { t: "Galería en línea", d: "Explora colecciones y series por temática." },
+            { t: "Videos y procesos", d: "Recorridos y cápsulas sobre técnica y obra." },
+            { t: "Restauración", d: "Diagnóstico y tratamiento profesional de obra pictórica." },
+          ].map((item, i) => (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: 20, scale: 0.98 }}
+              whileInView={{ opacity: 1, y: 0, scale: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.35, delay: i * 0.05 }}
+              className="bg-white/70 backdrop-blur-md border border-gray-200 rounded-2xl shadow-md p-5 hover:shadow-xl hover:-translate-y-0.5 transition-all"
+            >
+              <h4 className="text-lg font-semibold text-[#854d06] mb-1">{item.t}</h4>
+              <p className="text-gray-700">{item.d}</p>
+            </motion.div>
+          ))}
+        </div>
+      </section>
+
+      {/* Video (izquierda) + Texto (derecha) */}
+      <section className="w-full px-6 pb-4 max-w-6xl mx-auto">
+        <div className="grid md:grid-cols-2 gap-8 items-center">
+          {/* Video a la izquierda */}
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+            className="rounded-2xl overflow-hidden border border-gray-200 shadow-xl bg-white/60 backdrop-blur"
+          >
+            {loadingVideo ? (
+              <div className="w-full h-[240px] grid place-items-center text-gray-600">
+                Cargando video…
+              </div>
+            ) : errorVideo ? (
+              <div className="w-full h-[240px] grid place-items-center text-rose-600">
+                {errorVideo}
+              </div>
+            ) : videoFirst ? (
+              <iframe
+                key={videoFirst.id}
+                src={embedUrl(videoFirst._vid)}
+                title={videoFirst.titulo || videoFirst._vid}
+                className="w-full h-[240px]"
+                loading="lazy"
+                allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+                allowFullScreen
+              />
+            ) : (
+              <div className="w-full h-[240px] grid place-items-center text-gray-600">
+                No hay videos publicados aún.
+              </div>
+            )}
+          </motion.div>
+
+          {/* Texto a la derecha */}
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+            className="space-y-4"
+          >
+            <h3 className="text-3xl sm:text-4xl font-extrabold text-[#a16207]">
+              Desde nuestra sección de videos
+            </h3>
+            <p className="text-lg text-gray-700 leading-relaxed">
+              Un adelanto de los contenidos audiovisuales: procesos, recorridos y cápsulas
+              sobre técnica y obra. Aquí mostramos el video más reciente publicado; en la página
+              de videos encontrarás el archivo completo con navegación, miniaturas y descripciones extendidas.
+            </p>
+            <ul className="list-disc pl-6 text-gray-800 space-y-2">
+              <li>Procesos paso a paso y materiales empleados.</li>
+              <li>Recorridos por colecciones y montajes.</li>
+              <li>Técnicas mixtas y experimentación visual.</li>
+            </ul>
+            <div className="pt-2">
+              <button
+                onClick={() => navigate("/videos")}
+                className="px-5 py-2 rounded-full bg-[#a16207] text-white shadow hover:bg-[#854d06] transition"
+              >
+                Ver más videos
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Restauración */}
+      <section className="relative max-w-6xl mx-auto px-6 py-20">
+        <div className="absolute inset-0 bg-white/40 backdrop-blur-md rounded-3xl shadow-xl -z-10" />
+
+        <motion.h3
+          initial={{ opacity: 0, y: -20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+          className="text-3xl sm:text-4xl font-bold text-center text-[#a16207] mb-10"
+        >
+          Restauración
+        </motion.h3>
+
+        <div className="grid md:grid-cols-2 gap-10">
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+            className="bg-white/70 border border-gray-200 rounded-2xl p-6 shadow-md"
+          >
+            <h4 className="text-xl font-semibold text-[#854d06] mb-2">Servicios</h4>
+            <ul className="list-disc pl-5 space-y-2 text-gray-800">
+              <li>Evaluación y diagnóstico del estado de la obra.</li>
+              <li>Limpieza, estabilización y consolidación de materiales.</li>
+              <li>Reintegración cromática y conservación preventiva.</li>
+              <li>Asesoría para manejo, almacenamiento y exhibición.</li>
+            </ul>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+            className="bg-white/70 border border-gray-200 rounded-2xl p-6 shadow-md"
+          >
+            <h4 className="text-xl font-semibold text-[#854d06] mb-2">Enfoque</h4>
+            <p className="text-gray-800 leading-relaxed">
+              Restauramos con criterios profesionales, priorizando la integridad de la obra y materiales compatibles.
+              <br />
+              <strong>Se auxilia de la investigación para la restauración de obra pictórica.</strong>
+            </p>
+            <button
+              onClick={() => navigate("/restauracion")}
+              className="mt-4 px-5 py-2 rounded-full bg-[#a16207] text-white shadow hover:bg-[#854d06] transition"
+            >
+              Realiza tu cotización
+            </button>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Línea de vida artística (regresada, sin imagen de la artista) */}
+      <section className="w-full py-20 px-6 max-w-6xl mx-auto">
+        <h3 className="text-3xl sm:text-4xl font-bold text-center text-[#a16207] mb-16">
+          Línea de vida artística
+        </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-20 justify-items-center">
           {[
@@ -519,8 +727,8 @@ export default function App() {
                 { año: "2012", evento: "“Mujeres: nuestros cuerpos, nuestras vidas” – Galería Aguafuerte." },
                 { año: "Anual", evento: "Exposiciones en el colectivo Esmeralda (Secretaría de Comunicaciones, Torre Pemex, Secretaría de Finanzas)." },
                 { año: "2017–2018", evento: "Exposición individual – Galería Antiqus." },
-                { año: "2024", evento: "Museo Barber Studio." }
-              ]
+                { año: "2024", evento: "Museo Barber Studio." },
+              ],
             },
             {
               titulo: "Estudios",
@@ -529,8 +737,8 @@ export default function App() {
                 { año: "2005–2010 / 2011–2013", evento: "Antropología y Guion Cinematográfico." },
                 { año: "2007", evento: "Taller–Diplomado de Estética con el Dr. Moisés Ladrón de Guevara." },
                 { año: "2007", evento: "Técnica de materiales con el Dr. Moisés Ladrón de Guevara." },
-                { año: "2020–2022", evento: "Estudio independiente de Restauración." }
-              ]
+                { año: "2020–2022", evento: "Estudio independiente de Restauración." },
+              ],
             },
             {
               titulo: "Premios y reconocimientos",
@@ -538,9 +746,9 @@ export default function App() {
                 { año: "2010", evento: "Premio de Investigación CONACYT – Excelencia en investigación académica." },
                 { año: "s/f", evento: "Reconocimiento del Coloquio Internacional “El espejo simbolista”." },
                 { año: "s/f", evento: "Reconocimiento en el Simposio Internacional de Teoría sobre Arte." },
-                { año: "s/f", evento: "Reconocimiento en SITAC – Simposio Internacional de Teoría sobre Arte Contemporáneo." }
-              ]
-            }
+                { año: "s/f", evento: "Reconocimiento en SITAC – Simposio Internacional de Teoría sobre Arte Contemporáneo." },
+              ],
+            },
           ].map((seccion, i) => {
             const isLastSingle = i === 2 && 3 % 2 !== 0;
             return (
@@ -556,7 +764,7 @@ export default function App() {
                         whileHover={{
                           scale: 1.03,
                           backgroundColor: "rgba(255,255,255,0.7)",
-                          boxShadow: "0 8px 20px rgba(0,0,0,0.1)"
+                          boxShadow: "0 8px 20px rgba(0,0,0,0.1)",
                         }}
                         transition={{ duration: 0.3 }}
                         viewport={{ once: true }}
@@ -573,67 +781,6 @@ export default function App() {
               </div>
             );
           })}
-        </div>
-      </section>
-
-      {/* Manifiesto artístico */}
-      <section className="relative max-w-6xl mx-auto px-6 py-20">
-        <div className="absolute inset-0 bg-white/40 backdrop-blur-md rounded-3xl shadow-xl -z-10" />
-
-        <motion.h3
-          initial={{ opacity: 0, y: -20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="text-4xl font-bold text-center text-[#a16207] mb-12"
-        >
-          Manifiesto artístico
-        </motion.h3>
-
-        <div className="grid md:grid-cols-2 gap-12">
-          {[
-            {
-              titulo: "Investigación e integración",
-              texto:
-                "A favor de la investigación y la integración de nuevas técnicas y manifestaciones artísticas como caminos creativos."
-            },
-            {
-              titulo: "Diálogo con los manifiestos",
-              texto:
-                "Cada cambio tecnológico genera posiciones encontradas, como ocurrió con los futuristas, surrealistas, Black Mountain o la Bauhaus."
-            },
-            {
-              titulo: "Búsqueda de belleza",
-              texto:
-                "La meta es alcanzar la belleza en un cuadro: que la técnica o el material conduzcan a una experiencia estética plena."
-            },
-            {
-              titulo: "Contra la inmediatez catastrófica",
-              texto:
-                "Frente a la oleada de mensajes catastróficos, el arte abre un espacio de contemplación, reflexión y calma."
-            },
-            {
-              titulo: "Aspiración al público",
-              texto:
-                "Crear objetos que den respiro de tranquilidad al espacio y a quien los mira: paisajes, objetos o personas que invitan a contemplar."
-            },
-            {
-              titulo: "Herramientas de su tiempo",
-              texto:
-                "Un artista debe ser capaz de tomar las herramientas de su tiempo para expandir sus posibilidades creativas."
-            }
-          ].map((item, idx) => (
-            <motion.div
-              key={idx}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: idx * 0.1 }}
-              viewport={{ once: true }}
-              className="bg-white/70 backdrop-blur-md border border-gray-200 rounded-xl shadow-md p-6 hover:shadow-lg transition-all"
-            >
-              <h4 className="text-xl font-semibold text-[#854d06] mb-2">{item.titulo}</h4>
-              <p className="text-gray-800 text-base leading-relaxed">{item.texto}</p>
-            </motion.div>
-          ))}
         </div>
       </section>
 
