@@ -1,5 +1,5 @@
 // src/pages/AdminProductos.jsx
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useNavigate } from "react-router-dom";
 import {
@@ -17,6 +17,10 @@ import {
   ArrowLeft,
   Layers,
   Star,
+  RotateCcw,
+  RotateCw,
+  Scissors,
+  X as CloseIcon,
 } from "lucide-react";
 
 /* =========================
@@ -65,6 +69,13 @@ function genClientId() {
   } catch {}
   const s4 = () => Math.floor((1 + Math.random()) * 0x10000).toString(16).slice(-4);
   return `${s4()}${s4()}-${s4()}-${s4()}-${s4()}-${s4()}${s4()}${s4()}`;
+}
+
+// dataURL -> File
+async function dataURLtoFile(dataUrl, filename = "editado.png") {
+  const res = await fetch(dataUrl);
+  const blob = await res.blob();
+  return new File([blob], filename, { type: blob.type || "image/png" });
 }
 
 /* =========================
@@ -191,6 +202,19 @@ function ProductosAdminUI() {
   const [imgUrls, setImgUrls] = useState([]); // existentes
   const [filesNew, setFilesNew] = useState([]); // nuevas (se suben al guardar)
   const fileInputRef = useRef(null);
+
+  /* ===== Editor de imagen (estado) ===== */
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editorSrc, setEditorSrc] = useState("");          // string (URL / objectURL)
+  const [editorIsExisting, setEditorIsExisting] = useState(false); // true si viene de imgUrls
+  const [editorIndex, setEditorIndex] = useState(-1);      // índice en su arreglo
+  const [editorNatural, setEditorNatural] = useState({ w: 0, h: 0 });
+  const [editorAngle, setEditorAngle] = useState(0);       // grados acumulados
+  const [cropX, setCropX] = useState(0);                   // px sobre canvas rotado
+  const [cropY, setCropY] = useState(0);
+  const [cropSize, setCropSize] = useState(0);             // lado del cuadrado
+  const previewCanvasRef = useRef(null);
+  const hiddenImageRef = useRef(null); // para cargar y medir
 
   /* ===== Data ===== */
   useEffect(() => {
@@ -354,6 +378,177 @@ function ProductosAdminUI() {
     setFilesNew((prev) => prev.filter((_, i) => i !== idx));
   };
   const canAddMore = imgUrls.length + filesNew.length < 5;
+
+  /* ===== Abrir editor para url existente o file nuevo ===== */
+  const openEditorForExisting = (idx) => {
+    const url = imgUrls[idx];
+    if (!url) return;
+    setEditorIsExisting(true);
+    setEditorIndex(idx);
+    setEditorSrc(url);
+    setEditorAngle(0);
+    setEditorOpen(true);
+  };
+
+  const openEditorForNew = (idx) => {
+    const f = filesNew[idx];
+    if (!f) return;
+    const url = URL.createObjectURL(f);
+    setEditorIsExisting(false);
+    setEditorIndex(idx);
+    setEditorSrc(url);
+    setEditorAngle(0);
+    setEditorOpen(true);
+  };
+
+  // cargar imagen oculta para obtener dimensiones naturales y setear crop centrado
+  useEffect(() => {
+    if (!editorOpen || !editorSrc) return;
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      setEditorNatural({ w: img.naturalWidth || img.width, h: img.naturalHeight || img.height });
+      // Inicial crop cuadrado centrado sobre el canvas rotado (lo recalculamos cuando se dibuje)
+      // Inicialmente usa el menor lado original
+      const minSide = Math.min(img.naturalWidth || img.width, img.naturalHeight || img.height);
+      setCropSize(Math.floor(minSide * 0.8)); // 80% del lado menor
+      setCropX(0);
+      setCropY(0);
+      requestAnimationFrame(drawPreview);
+    };
+    img.src = editorSrc;
+    // guardamos también en ref para draw
+    hiddenImageRef.current = img;
+    // cleanup objectURL si venía de file
+    return () => {
+      if (!editorIsExisting && editorSrc?.startsWith("blob:")) {
+        URL.revokeObjectURL(editorSrc);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editorOpen, editorSrc]);
+
+  // redibujar preview cuando cambien parámetros
+  useEffect(() => {
+    if (editorOpen) drawPreview();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editorAngle, cropX, cropY, cropSize]);
+
+  function getRotatedBounds(w, h, radians) {
+    // bounding box del rectángulo w x h tras rotarlo por 'radians'
+    const cos = Math.abs(Math.cos(radians));
+    const sin = Math.abs(Math.sin(radians));
+    return {
+      w: w * cos + h * sin,
+      h: w * sin + h * cos,
+    };
+  }
+
+  function drawPreview() {
+    const img = hiddenImageRef.current;
+    const canvas = previewCanvasRef.current;
+    if (!img || !canvas) return;
+
+    const angleRad = (editorAngle * Math.PI) / 180;
+    const rotBounds = getRotatedBounds(img.width, img.height, angleRad);
+
+    // 1) canvas intermedio: dibujar imagen rotada con su bounding box
+    const temp = document.createElement("canvas");
+    temp.width = Math.ceil(rotBounds.w);
+    temp.height = Math.ceil(rotBounds.h);
+    const tctx = temp.getContext("2d");
+    tctx.save();
+    tctx.translate(temp.width / 2, temp.height / 2);
+    tctx.rotate(angleRad);
+    tctx.drawImage(img, -img.width / 2, -img.height / 2);
+    tctx.restore();
+
+    // 2) asegurar crop dentro del canvas rotado
+    const maxX = Math.max(0, temp.width - cropSize);
+    const maxY = Math.max(0, temp.height - cropSize);
+    const sx = Math.min(Math.max(0, cropX), maxX);
+    const sy = Math.min(Math.max(0, cropY), maxY);
+
+    // 3) dibujar recorte en canvas preview (300x300)
+    const PREV = 300;
+    canvas.width = PREV;
+    canvas.height = PREV;
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, PREV, PREV);
+    // Fondo ajedrez suave para ver límites
+    ctx.fillStyle = "#f3f3f3";
+    ctx.fillRect(0, 0, PREV, PREV);
+
+    // extraer la zona recortada y escalar a 300x300
+    ctx.drawImage(temp, sx, sy, cropSize, cropSize, 0, 0, PREV, PREV);
+
+    // 4) dibujar borde
+    ctx.strokeStyle = "#3b4d63";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(1, 1, PREV - 2, PREV - 2);
+  }
+
+  async function applyEdit() {
+    const img = hiddenImageRef.current;
+    if (!img) return;
+
+    const angleRad = (editorAngle * Math.PI) / 180;
+    const rotBounds = getRotatedBounds(img.width, img.height, angleRad);
+
+    // 1) canvas rotado completo
+    const temp = document.createElement("canvas");
+    temp.width = Math.ceil(rotBounds.w);
+    temp.height = Math.ceil(rotBounds.h);
+    const tctx = temp.getContext("2d");
+    tctx.save();
+    tctx.translate(temp.width / 2, temp.height / 2);
+    tctx.rotate(angleRad);
+    tctx.drawImage(img, -img.width / 2, -img.height / 2);
+    tctx.restore();
+
+    // clamp del recorte
+    const maxX = Math.max(0, temp.width - cropSize);
+    const maxY = Math.max(0, temp.height - cropSize);
+    const sx = Math.min(Math.max(0, cropX), maxX);
+    const sy = Math.min(Math.max(0, cropY), maxY);
+
+    // 2) canvas final con el recorte exacto
+    const out = document.createElement("canvas");
+    out.width = cropSize;
+    out.height = cropSize;
+    const octx = out.getContext("2d");
+    octx.drawImage(temp, sx, sy, cropSize, cropSize, 0, 0, cropSize, cropSize);
+
+    const dataUrl = out.toDataURL("image/png", 0.95);
+    const newFile = await dataURLtoFile(dataUrl, "editado.png");
+
+    if (editorIsExisting) {
+      // quitar url original y agregar archivo editado como "nuevo"
+      setImgUrls((prev) => prev.filter((_, i) => i !== editorIndex));
+      setFilesNew((prev) => [...prev, newFile]);
+    } else {
+      // reemplazar el file en filesNew
+      setFilesNew((prev) => prev.map((f, i) => (i === editorIndex ? newFile : f)));
+    }
+
+    setEditorOpen(false);
+    setEditorSrc("");
+    setEditorIndex(-1);
+  }
+
+  function centerCropDefaults() {
+    // Recalcula crop centrado usando el canvas rotado actual
+    const img = hiddenImageRef.current;
+    if (!img) return;
+    const angleRad = (editorAngle * Math.PI) / 180;
+    const rotBounds = getRotatedBounds(img.width, img.height, angleRad);
+    const side = Math.floor(Math.min(rotBounds.w, rotBounds.h) * 0.8);
+    const cx = Math.floor((rotBounds.w - side) / 2);
+    const cy = Math.floor((rotBounds.h - side) / 2);
+    setCropSize(side);
+    setCropX(cx);
+    setCropY(cy);
+  }
 
   /* ===== Guardar (crear/editar) ===== */
   const saveProduct = async () => {
@@ -734,13 +929,22 @@ function ProductosAdminUI() {
                 {imgUrls.map((u, idx) => (
                   <div key={`u-${idx}`} className="relative rounded-2xl overflow-hidden border">
                     <img src={u} alt={`img-${idx}`} className="h-32 w-full object-cover" />
-                    <button
-                      onClick={() => removeExistingUrl(idx)}
-                      className="absolute top-1 right-1 rounded-full bg-white/90 p-1 shadow hover:bg-white"
-                      title="Quitar"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    <div className="absolute top-1 right-1 flex gap-1">
+                      <button
+                        onClick={() => openEditorForExisting(idx)}
+                        className="rounded-full bg-white/90 p-1 shadow hover:bg-white"
+                        title="Editar imagen"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <button
+                        onClick={() => removeExistingUrl(idx)}
+                        className="rounded-full bg-white/90 p-1 shadow hover:bg-white"
+                        title="Quitar"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
                 ))}
 
@@ -755,13 +959,22 @@ function ProductosAdminUI() {
                         className="h-32 w-full object-cover"
                         onLoad={() => URL.revokeObjectURL(url)}
                       />
-                      <button
-                        onClick={() => removeNewFile(idx)}
-                        className="absolute top-1 right-1 rounded-full bg-white/90 p-1 shadow hover:bg-white"
-                        title="Quitar"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      <div className="absolute top-1 right-1 flex gap-1">
+                        <button
+                          onClick={() => openEditorForNew(idx)}
+                          className="rounded-full bg-white/90 p-1 shadow hover:bg-white"
+                          title="Editar imagen"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <button
+                          onClick={() => removeNewFile(idx)}
+                          className="rounded-full bg-white/90 p-1 shadow hover:bg-white"
+                          title="Quitar"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
@@ -908,6 +1121,147 @@ function ProductosAdminUI() {
           )}
         </div>
       </div>
+
+      {/* ===== Modal editor de imagen ===== */}
+      {editorOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-3xl rounded-3xl bg-white shadow-xl border overflow-hidden">
+            {/* Header modal */}
+            <div className="px-4 py-3 border-b flex items-center justify-between">
+              <div className="flex items-center gap-2 text-[#3b4d63] font-semibold">
+                <Scissors size={18} />
+                Editor de imagen
+              </div>
+              <button
+                onClick={() => setEditorOpen(false)}
+                className="rounded-full p-1 hover:bg-gray-100"
+                title="Cerrar"
+              >
+                <CloseIcon size={18} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Preview */}
+              <div className="rounded-2xl border grid place-items-center p-3 bg-gray-50">
+                <canvas ref={previewCanvasRef} className="max-w-full rounded-xl" />
+                {/* imagen oculta para mediciones */}
+                <img
+                  src={editorSrc}
+                  alt="hidden"
+                  className="hidden"
+                  ref={hiddenImageRef}
+                />
+              </div>
+
+              {/* Controles */}
+              <div className="space-y-4">
+                <div>
+                  <div className="text-sm font-medium text-gray-700 mb-1">Rotación</div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setEditorAngle((a) => a - 45)}
+                      className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold bg-white hover:bg-gray-50"
+                    >
+                      <RotateCcw size={16} /> -45°
+                    </button>
+                    <button
+                      onClick={() => setEditorAngle((a) => a + 45)}
+                      className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold bg-white hover:bg-gray-50"
+                    >
+                      <RotateCw size={16} /> +45°
+                    </button>
+                    <button
+                      onClick={() => setEditorAngle(0)}
+                      className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold bg-white hover:bg-gray-50"
+                      title="Restablecer"
+                    >
+                      0°
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="text-sm font-medium text-gray-700">Recorte (cuadrado)</div>
+
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-gray-500 w-10">X</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={Math.max(0, Math.ceil(getRotatedBounds(editorNatural.w, editorNatural.h, (editorAngle*Math.PI)/180).w) - cropSize)}
+                      value={cropX}
+                      onChange={(e) => setCropX(Number(e.target.value))}
+                      className="flex-1"
+                    />
+                    <span className="text-xs w-10 text-right">{cropX}</span>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-gray-500 w-10">Y</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={Math.max(0, Math.ceil(getRotatedBounds(editorNatural.w, editorNatural.h, (editorAngle*Math.PI)/180).h) - cropSize)}
+                      value={cropY}
+                      onChange={(e) => setCropY(Number(e.target.value))}
+                      className="flex-1"
+                    />
+                    <span className="text-xs w-10 text-right">{cropY}</span>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-gray-500 w-10">Tamaño</span>
+                    <input
+                      type="range"
+                      min={50}
+                      max={Math.floor(Math.min(
+                        Math.ceil(getRotatedBounds(editorNatural.w, editorNatural.h, (editorAngle*Math.PI)/180).w),
+                        Math.ceil(getRotatedBounds(editorNatural.w, editorNatural.h, (editorAngle*Math.PI)/180).h)
+                      ))}
+                      value={cropSize}
+                      onChange={(e) => setCropSize(Number(e.target.value))}
+                      className="flex-1"
+                    />
+                    <span className="text-xs w-12 text-right">{cropSize}px</span>
+                  </div>
+
+                  <div>
+                    <button
+                      onClick={centerCropDefaults}
+                      className="mt-1 inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold bg-white hover:bg-gray-50"
+                    >
+                      Centrar recorte
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer acciones */}
+            <div className="px-4 py-3 border-t flex items-center justify-between">
+              <div className="text-xs text-gray-500">
+                Tip: puedes aplicar varias rotaciones de 45° y ajustar el cuadro con los controles.
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setEditorOpen(false)}
+                  className="rounded-full border px-4 py-2 text-sm font-semibold bg-white hover:bg-gray-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={applyEdit}
+                  className="rounded-full bg-[#3b4d63] text-white px-4 py-2 text-sm font-semibold shadow hover:shadow-md"
+                >
+                  Aplicar y reemplazar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
