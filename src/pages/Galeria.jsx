@@ -19,20 +19,16 @@ function parseImagenes(v) {
   try {
     if (!v) return [];
     if (Array.isArray(v)) return v;
-    // en tu tabla viene como string JSON
     const arr = JSON.parse(v);
     return Array.isArray(arr) ? arr : [];
   } catch {
-    // si no es JSON, intenta split por coma
     return String(v).split(",").map(s => s.trim()).filter(Boolean);
   }
 }
 
 function normalizeImg(pathLike) {
   if (!pathLike) return "/placeholder.jpg";
-  // si ya es http(s), respétalo
   if (/^https?:\/\//i.test(pathLike)) return pathLike;
-  // limpia "public/" y fuerza prefijo "obras/"
   let cleaned = String(pathLike).replace(/^public\//, "");
   if (!/^obras\//.test(cleaned)) cleaned = `obras/${cleaned}`;
   return `/${cleaned}`;
@@ -55,7 +51,7 @@ export default function Galeria() {
   const containerRef = useRef(null);
   const navigate = useNavigate();
 
-  // Carga de productos
+  // Carga de productos (solo los visibles en galería)
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -63,7 +59,8 @@ export default function Galeria() {
       try {
         const { data, error } = await supabase
           .from("productos")
-          .select("id, titulo, descripcion, imagenes")
+          .select("id, titulo, descripcion, imagenes, visible_galeria")
+          .eq("visible_galeria", true)
           .order("id", { ascending: true });
 
         if (error) throw error;
@@ -82,7 +79,7 @@ export default function Galeria() {
         setIndex(0);
       } catch (e) {
         setError("No se pudieron cargar las obras.");
-        setObras([]); // sin fallback si prefieres
+        setObras([]);
       } finally {
         setLoading(false);
       }
