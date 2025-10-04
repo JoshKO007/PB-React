@@ -735,8 +735,9 @@ export default function Tienda() {
       try {
         const { data, error } = await supabase
           .from("productos")
-          .select("id,titulo,descripcion,descripcion_detallada,precio,moneda,descuento,etiquetas,imagenes,destacado,bajo_pedido,disponible,tiempo_entrega,serie")
+          .select("id,titulo,descripcion,descripcion_detallada,precio,moneda,descuento,etiquetas,imagenes,destacado,bajo_pedido,disponible,tiempo_entrega,serie,visible_tienda")
           .is("disponible", true)
+          .eq("visible_tienda", true) // ⬅️ solo productos visibles en TIENDA
           .order("destacado", { ascending: false });
         if (error) throw error;
         const mapped = (data || []).map(rowToProductUI);
