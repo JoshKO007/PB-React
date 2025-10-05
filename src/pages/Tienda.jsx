@@ -1375,7 +1375,7 @@ export default function Tienda() {
           <SeccionGridLimitada
             titulo="Obras bajo pedido"
             icon={<Brush className="text-indigo-600" />}
-            descripcion="Piezas personalizables hechas especialmente para ti."
+            descripcion="Copias de clasicos y retratos."
             productos={bajoPedido}
             onVerTodo={() => aplicarFiltroTipo("bajo_pedido")}
             onOpen={(p) => { setQuickProducto(p); setQuickOpen(true); }}
