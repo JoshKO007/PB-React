@@ -17,7 +17,6 @@ import {
   KeyRound,
   // Carrito
   Trash2,
-  Heart,
   Plus,
   Minus,
   Package,
@@ -33,12 +32,9 @@ import {
   CreditCard,
   Landmark,
   Wallet,
-  HeartIcon
 } from "lucide-react";
 
-
-
-// === Supabase para direcciones (y FAVORITOS ahora) ===
+// === Supabase para productos/direcciones ===
 import { createClient } from "@supabase/supabase-js";
 const supabase = createClient(
   "https://ousgktyljynqzrnafoqd.supabase.co",
@@ -96,7 +92,7 @@ function QtyControl({ value, onChange, min = 1, max = 99 }) {
   );
 }
 
-function CartRow({ p, qty, onQty, onRemove, onToggleFav, isFav }) {
+function CartRow({ p, qty, onQty, onRemove }) {
   const tieneDescuento = (p.descuento || 0) > 0;
   const precioUnit = getPrecioFinal(p.precio, p.descuento);
   const subtotal = Math.max(1, qty) * precioUnit;
@@ -127,14 +123,7 @@ function CartRow({ p, qty, onQty, onRemove, onToggleFav, isFav }) {
             {p.etiquetas.slice(0, 3).map((e) => <Etiqueta key={e}>{e}</Etiqueta>)}
           </div>
         )}
-        <div className="mt-2 flex items-center gap-2">
-          <button
-            onClick={onToggleFav}
-            className={`rounded-full p-1.5 border ${isFav ? "border-rose-300 text-rose-600" : "border-gray-200 text-gray-600"} bg-white/90`}
-            title={isFav ? "Quitar de favoritos" : "Guardar en favoritos"}
-          >
-            <Heart size={14} className={isFav ? "fill-rose-500" : ""} />
-          </button>
+        <div className="mt-2">
           <button
             onClick={onRemove}
             className="rounded-full p-1.5 border border-gray-200 bg-white/90 text-gray-700 hover:text-red-600"
@@ -388,45 +377,13 @@ export default function Carrito() {
         console.error("Error cargando productos:", e);
         setProductos([]);
       } finally {
-               setProdLoading(false);
+        setProdLoading(false);
       }
     };
     loadProductos();
   }, []);
 
-  // ===== Favoritos: ahora en Supabase =====
-  const [favs, setFavs] = useState([]); // array de strings (ids)
-  useEffect(() => {
-    const fetchFavs = async (uid) => {
-      try {
-        const { data, error } = await supabase
-          .from("favoritos")
-          .select("producto_id")
-          .eq("usuario_id", uid);
-        if (error) throw error;
-        setFavs((data || []).map(r => String(r.producto_id)));
-      } catch (e) {
-        console.error("Error cargando favoritos:", e);
-        setFavs([]);
-      }
-    };
-    if (usuarioActivo?.id) {
-      fetchFavs(usuarioActivo.id);
-      const ch = supabase
-        .channel("rt-favoritos-carrito")
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "favoritos", filter: `usuario_id=eq.${usuarioActivo.id}` },
-          () => fetchFavs(usuarioActivo.id)
-        )
-        .subscribe();
-      return () => { try { supabase.removeChannel(ch); } catch {} };
-    } else {
-      setFavs([]);
-    }
-  }, [usuarioActivo]);
-
-  // Datos de contacto
+  // Datos de contacto (sin favoritos)
   const [telefono, setTelefono] = useState("");
   const [email, setEmail] = useState("");
 
@@ -440,7 +397,7 @@ export default function Carrito() {
   const [metodoPago, setMetodoPago] = useState(null); // 'stripe' | 'paypal' | 'spei'
   const [isMexico, setIsMexico] = useState(true);
 
-  // Cargar sesión + contacto (sin favoritos locales)
+  // Cargar sesión + contacto
   useEffect(() => {
     try {
       const sesion = JSON.parse(localStorage.getItem("sesionActiva"));
@@ -476,7 +433,7 @@ export default function Carrito() {
           .eq("id_usuario", usuarioActivo.id);
         setDirecciones(dirs || []);
 
-        // Nuevo: preferir predeterminada; si no, última seleccionada
+        // Preferir predeterminada; si no, última seleccionada
         try {
           const defId = localStorage.getItem(`direccionPredeterminada:${usuarioActivo.id}`);
           if (defId) {
@@ -614,31 +571,6 @@ export default function Carrito() {
   };
   const clearCart = () => writeCart([]);
 
-  // Favoritos (Supabase)
-  const toggleFav = async (id) => {
-    if (!usuarioActivo?.id) return;
-    const isFav = favs.includes(String(id));
-    setFavs((prev) => isFav ? prev.filter(fid => fid !== String(id)) : [...prev, String(id)]);
-    try {
-      if (isFav) {
-        const { error } = await supabase
-          .from("favoritos")
-          .delete()
-          .eq("usuario_id", usuarioActivo.id)
-          .eq("producto_id", id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from("favoritos")
-          .insert({ usuario_id: usuarioActivo.id, producto_id: id });
-        if (error) throw error;
-      }
-    } catch (e) {
-      console.error("Error al alternar favorito:", e);
-      setFavs((prev) => isFav ? [...prev, String(id)] : prev.filter(fid => fid !== String(id)));
-    }
-  };
-
   // Manejo selección de dirección
   const openSelectDireccion = async () => {
     if (!usuarioActivo?.id) return;
@@ -659,15 +591,14 @@ export default function Carrito() {
     setDirModalOpen(false);
   };
 
-  // Cupón (ejemplos cliente)
+  // Cupón (placeholder)
   const applyCoupon = () => {
     const code = cupon.trim().toUpperCase();
     if (!code) { setCuponAplicado(null); return; }
-
     else setCuponAplicado({ type: "none", value: 0, code });
   };
 
-  // >>> Guardar envío en localStorage cada vez que se elige
+  // Guardar envío
   const setEnvioAndPersist = (value) => {
     setEnvio(value);
     try { if (usuarioActivo?.id) localStorage.setItem(`envio:${usuarioActivo.id}`, value); } catch {}
@@ -684,7 +615,6 @@ export default function Carrito() {
       }
       return;
     }
-    // >>> Persistir envío por si no se guardó antes
     try { if (usuarioActivo?.id) localStorage.setItem(`envio:${usuarioActivo.id}`, envio); } catch {}
     setPagoModalOpen(true);
   };
@@ -731,25 +661,25 @@ export default function Carrito() {
       >
         <div className="max-w-7xl mx-auto w-full flex flex-col gap-2 relative z-40">
 
-        <div className="flex flex-col sm:flex-row justify-between items-center w-full relative gap-2 sm:gap-0">
-          <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4">
-            {/* Logo cuadrado más grande */}
-            <div className="h-20 sm:h-24 aspect-square overflow-hidden flex items-center justify-center">
-              <img
-                src="/intro.gif"
-                alt="Logo animado"
-                className="h-full w-full object-cover"
-                onError={(e) => { e.currentTarget.src = "/logo.png"; }}
-              />
-            </div>
+          <div className="flex flex-col sm:flex-row justify-between items-center w-full relative gap-2 sm:gap-0">
+            <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4">
+              {/* Logo cuadrado más grande */}
+              <div className="h-20 sm:h-24 aspect-square overflow-hidden flex items-center justify-center">
+                <img
+                  src="/intro.gif"
+                  alt="Logo animado"
+                  className="h-full w-full object-cover"
+                  onError={(e) => { e.currentTarget.src = "/logo.png"; }}
+                />
+              </div>
 
-            {/* Texto alineado con el logo */}
-            <div className="flex gap-2 sm:gap-6 text-lg sm:text-2xl font-semibold font-serif italic text-[#3b4d63] tracking-wide">
-              <span>ARTE</span>
-              <span>RESTAURACIÓN</span>
-              <span>VISUALES</span>
+              {/* Texto alineado con el logo */}
+              <div className="flex gap-2 sm:gap-6 text-lg sm:text-2xl font-semibold font-serif italic text-[#3b4d63] tracking-wide">
+                <span>ARTE</span>
+                <span>RESTAURACIÓN</span>
+                <span>VISUALES</span>
+              </div>
             </div>
-          </div>
 
             {/* User / carrito */}
             <div className="flex items-center gap-2 mt-2 sm:mt-0 pr-1 sm:pr-2">
@@ -783,9 +713,7 @@ export default function Carrito() {
                           <button onClick={() => navigate("/direccion")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <Mail size={16} className="mr-2" /> Direcciones
                           </button>
-                          <button onClick={() => navigate("/favoritos")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
-                            <HeartIcon size={16} className="mr-2" /> Favoritos
-                          </button>
+                          {/* Eliminado botón Favoritos */}
                           <button onClick={() => navigate("/contrasena")} className="flex items-center w-full px-5 py-2 text-sm hover:bg-gray-100">
                             <KeyRound size={16} className="mr-2" /> Cambiar contraseña
                           </button>
@@ -906,8 +834,6 @@ export default function Carrito() {
                         qty={cantidad}
                         onQty={(q) => updateQty(id, q)}
                         onRemove={() => removeItem(id)}
-                        onToggleFav={() => toggleFav(id)}
-                        isFav={favs.includes(String(id))}
                       />
                     ))}
                   </AnimatePresence>
