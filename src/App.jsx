@@ -788,7 +788,7 @@ export default function App() {
       <section className="max-w-6xl mx-auto px-6 py-20">
         <h3 className="text-3xl font-bold text-center text-[#a16207] mb-10">Técnicas y materiales</h3>
         <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6 text-center">
-          {["Óleo", "Acrílico", "Cera", "Tintas mixtas", "Fotografía digital", "Composición digital"].map(
+          {["Óleo", "Acrílico", "Cera", "Tintas mixtas", "Fotografía digital", "Ambientación de Negocios"].map(
             (item, idx) => (
               <div key={idx} className="bg-white/70 p-6 rounded-xl shadow-md hover:shadow-lg transition">
                 <p className="text-lg font-medium text-gray-800">{item}</p>
