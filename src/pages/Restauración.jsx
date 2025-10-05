@@ -90,7 +90,7 @@ export default function App() {
   const [cartCount, setCartCount] = useState(0);
 
   const TELEGRAM_BOT_TOKEN = "8434892736:AAFGF8N1zff5yge2rj0eEyZXadZ7twq3F9s";
-  const TELEGRAM_CHAT_ID = "8400979896";
+  const TELEGRAM_CHAT_ID = "5462316160";
 
   useEffect(() => {
     const interval = setInterval(() => setIndex((prev) => (prev + 1) % productos.length), 4000);
