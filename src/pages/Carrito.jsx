@@ -287,7 +287,7 @@ function PagoModal({ open, onClose, isMexico, totalMXN, onChoose }) {
 
   return (
     <AnimatePresence>
-      <motion.div className="fixed inset-0 z=[10020] flex items-center justify-center" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+      <motion.div className="fixed inset-0 z-[10020] flex items-center justify-center" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
         <div className="absolute inset-0 bg-black/50" onClick={onClose} />
         <motion.div
           initial={{ scale: 0.95, y: 10, opacity: 0 }}
@@ -687,6 +687,65 @@ export default function Carrito() {
     // >>> Persistir envío por si no se guardó antes
     try { if (usuarioActivo?.id) localStorage.setItem(`envio:${usuarioActivo.id}`, envio); } catch {}
     setPagoModalOpen(true);
+  };
+
+  // === Crear sesión de Stripe Checkout e ir a la URL ===
+  const iniciarPagoTarjeta = async () => {
+    try {
+      if (detailedItems.length === 0) return;
+
+      // Construir ítems como espera tu Edge Function
+      const items = detailedItems.map(({ prod, cantidad, precioUnit }) => ({
+        id: String(prod.id),
+        title: prod.titulo,
+        unit_amount: Number(precioUnit), // MXN (tu función en el edge lo convierte a cents)
+        quantity: Number(cantidad),
+      }));
+
+      // Shipping seleccionado
+      const shipping = envio === "express" ? "express" : envio === "retiro" ? "retiro" : "estandar";
+
+      // URLs de retorno
+      const success_url = `${window.location.origin}/gracias?session_id={CHECKOUT_SESSION_ID}`;
+      const cancel_url  = `${window.location.origin}/carrito`;
+
+      // Invocar tu Edge Function en Supabase
+      const { data, error } = await supabase.functions.invoke("create-checkout", {
+        body: {
+          items,
+          shipping,
+          customer_email: email || undefined,
+          success_url,
+          cancel_url,
+          provider: "stripe",
+          meta: {
+            direccion_id: direccionSel?.id || null,
+            usuario_id: usuarioActivo?.id || null,
+            cupon: cuponAplicado?.code || null,
+            envio,
+          },
+        },
+      });
+
+      if (error) {
+        console.error("Stripe Checkout error:", error);
+        alert("No se pudo iniciar el pago con tarjeta. Inténtalo de nuevo.");
+        return;
+      }
+
+      const sessionUrl = data?.url || data?.session_url;
+      if (!sessionUrl) {
+        console.error("Respuesta inesperada de create-checkout:", data);
+        alert("No se obtuvo la URL de pago. Reintenta en unos segundos.");
+        return;
+      }
+
+      // Redirige a Stripe (no uses navigate aquí)
+      window.location.href = sessionUrl;
+    } catch (e) {
+      console.error(e);
+      alert("Ocurrió un problema al iniciar el pago.");
+    }
   };
 
   // Si no hay sesión: bloquear acceso
@@ -1128,8 +1187,8 @@ export default function Carrito() {
             navigate("/pago/spei");
           } else if (metodo === "paypal") {
             navigate("/pago/paypal");
-          } else {
-            navigate("/pago/stripe");
+          } else if (metodo === "stripe") {
+            iniciarPagoTarjeta();
           }
         }}
       />
