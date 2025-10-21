@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Film, Youtube, Eye, EyeOff, Save, Trash2, LogOut, Search,
-  CornerUpLeft, Loader2, Link as LinkIcon, BadgeCheck, PencilLine
+  CornerUpLeft, Loader2, Link as LinkIcon, BadgeCheck, PencilLine, Sparkles
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 import { useNavigate } from "react-router-dom";
@@ -353,7 +353,27 @@ export default function AdminVideos() {
               </div>
 
               <div>
-                <label className="text-xs text-gray-600">Categoría</label>
+                <label className="text-xs text-gray-600 flex items-center gap-2">
+                  Categoría
+                  <button
+                    onClick={async () => {
+                      const prompt = `${form.titulo} ${form.descripcion}`.toLowerCase();
+                      let sugerida = "Pintura";
+                      if (prompt.includes("restaur")) sugerida = "Restauración";
+                      else if (prompt.includes("performance") || prompt.includes("cuerpo") || prompt.includes("acción"))
+                        sugerida = "Arte Performance";
+                      else if (prompt.includes("óleo") || prompt.includes("acrílico") || prompt.includes("pincel"))
+                        sugerida = "Pintura";
+                      alert(`Categoría sugerida: ${sugerida}`);
+                      setForm((f) => ({ ...f, categoria: sugerida }));
+                    }}
+                    className="ml-1 p-1 rounded-full bg-[#f0eae2] hover:bg-[#a16207]/10 transition"
+                    title="Sugerir con IA"
+                  >
+                    <Sparkles className="text-[#a16207]" size={16} />
+                  </button>
+                </label>
+
                 <select
                   value={form.categoria}
                   onChange={(e) => setForm((f) => ({ ...f, categoria: e.target.value }))}
