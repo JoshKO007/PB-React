@@ -59,6 +59,7 @@ export default function AdminVideos() {
     video_id: "",
     titulo: "",
     descripcion: "",
+    categoria: "Pintura",
     publicado: true,
   });
 
@@ -115,6 +116,7 @@ export default function AdminVideos() {
       video_id: "",
       titulo: "",
       descripcion: "",
+      categoria: "Pintura",
       publicado: true,
     });
   };
@@ -126,6 +128,7 @@ export default function AdminVideos() {
       video_id: row.video_id || "",
       titulo: row.titulo || "",
       descripcion: row.descripcion || "",
+      categoria: row.categoria || "Pintura",
       publicado: !!row.publicado,
     });
     // El editor es sticky, no hace falta scrollTo
@@ -159,6 +162,7 @@ export default function AdminVideos() {
         video_id: id,
         titulo: (form.titulo || "").trim() || null,
         descripcion: (form.descripcion || "").trim() || null,
+        categoria: form.categoria || "Pintura",
         publicado: !!form.publicado,
       };
 
@@ -349,6 +353,19 @@ export default function AdminVideos() {
               </div>
 
               <div>
+                <label className="text-xs text-gray-600">Categoría</label>
+                <select
+                  value={form.categoria}
+                  onChange={(e) => setForm((f) => ({ ...f, categoria: e.target.value }))}
+                  className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-200"
+                >
+                  <option value="Pintura">Pintura</option>
+                  <option value="Restauración">Restauración</option>
+                  <option value="Arte Performance">Arte Performance</option>
+                </select>
+              </div>
+
+              <div>
                 <label className="text-xs text-gray-600">Descripción</label>
                 <textarea
                   value={form.descripcion}
@@ -462,7 +479,14 @@ export default function AdminVideos() {
                         )}
                       </div>
                       <div className="p-3 flex-1 flex flex-col min-h-0">
-                        <div className="text-sm text-gray-500">YouTube</div>
+                        <div className="flex items-center gap-2 text-sm text-gray-500">
+                          <span>YouTube</span>
+                          {v.categoria ? (
+                            <span className="inline-flex items-center rounded-full bg-[#f0eae2] px-2 py-[2px] text-[11px] text-gray-700">
+                              {v.categoria}
+                            </span>
+                          ) : null}
+                        </div>
                         <div className="font-semibold line-clamp-2">{v.titulo || v.video_id}</div>
                         {v.descripcion && (
                           <div className="mt-1 text-sm text-gray-700 line-clamp-3">
