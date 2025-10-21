@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import MarqueeProductos from "@/components/MarqueeProductos"; 
 import {
   Home,
   Image as ImageIcon,
@@ -454,106 +455,13 @@ export default function App() {
         </div>
       </motion.section>
 
-      {/* Publicaciones de la tienda (3 productos, SIN carrusel) */}
-      <section className="w-full py-16 border-t border-gray-300">
-        <div className="max-w-7xl mx-auto px-6 sm:px-12">
-          <div className="text-center max-w-2xl mx-auto mb-12">
-            <h3 className="text-4xl font-extrabold text-[#a16207]">Últimas publicaciones de la tienda</h3>
-            <p className="mt-3 text-lg text-gray-700">Tres piezas recientes seleccionadas para ti.</p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {(cargandoDest ? Array.from({ length: 3 }) : destacados).map((item, idx) => {
-              const img =
-                item?.imagenes?.[0] ??
-                (item?.imagen ? buildImgUrl(item.imagen) : "/placeholder.jpg");
-
-              return (
-                <motion.div
-                  key={item?.id || `skeleton-${idx}`}
-                  initial={{ opacity: 0, y: 16 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.35, delay: idx * 0.05 }}
-                  className="group bg-white/60 backdrop-blur-md border border-gray-200 rounded-2xl overflow-hidden shadow-md hover:shadow-xl transition-all"
-                >
-                  <div className="relative aspect-[4/3] overflow-hidden">
-                    {cargandoDest ? (
-                      <div className="w-full h-full animate-pulse bg-gray-200" />
-                    ) : (
-                      <motion.img
-                        src={img}
-                        alt={item?.titulo || "Publicación"}
-                        className="w-full h-full object-cover"
-                        onError={(e) => (e.currentTarget.src = "/placeholder.jpg")}
-                        whileHover={{ scale: 1.04 }}
-                        transition={{ duration: 0.4 }}
-                      />
-                    )}
-                    {!cargandoDest && item?.destacado && (
-                      <span className="absolute top-3 left-3 text-xs font-semibold bg-[#a16207] text-white px-2 py-1 rounded-full shadow">
-                        Destacado
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="p-4">
-                    {cargandoDest ? (
-                      <>
-                        <div className="h-5 w-2/3 bg-gray-200 rounded animate-pulse mb-2" />
-                        <div className="h-4 w-full bg-gray-200 rounded animate-pulse mb-2" />
-                        <div className="h-4 w-5/6 bg-gray-200 rounded animate-pulse mb-4" />
-                        <div className="h-6 w-24 bg-gray-200 rounded animate-pulse" />
-                      </>
-                    ) : (
-                      <>
-                        <h4 className="text-lg font-semibold text-gray-900 line-clamp-1">
-                          {item?.titulo}
-                        </h4>
-                        <p className="text-sm text-gray-700 line-clamp-3 mt-1">
-                          {item?.descripcion}
-                        </p>
-
-                        {Number.isFinite(item?.precio) && (
-                          <p className="mt-3 text-base font-semibold text-[#a16207]">
-                            ${item.precio} {item.moneda || "MXN"}
-                          </p>
-                        )}
-
-                        <div className="mt-4 flex items-center gap-3">
-                          <button
-                            onClick={() => navigate("/tienda")}
-                            className="px-4 py-2 rounded-full bg-[#a16207] text-white text-sm font-medium shadow hover:bg-[#854d06] transition"
-                          >
-                            Ver en tienda
-                          </button>
-                          <button
-                            onClick={() => navigate("/tienda")}
-                            className="px-4 py-2 rounded-full border border-gray-300 text-sm font-medium text-gray-700 hover:bg-white transition"
-                          >
-                            Más detalles
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </motion.div>
-              );
-            })}
-          </div>
-
-          <div className="text-center mt-10">
-            <motion.button
-              whileHover={{ scale: 1.06 }}
-              whileTap={{ scale: 0.97 }}
-              onClick={() => navigate("/tienda")}
-              className="px-6 py-3 bg-[#a16207] text-white border border-[#a16207] rounded-full shadow-md hover:bg-[#854d06] transition-all"
-            >
-              Ver todo el catálogo
-            </motion.button>
-          </div>
-        </div>
-      </section>
+      {/* Previsualización de productos con MagicUI Marquee */}
+      <MarqueeProductos
+        title="Explora más piezas"
+        direction="horizontal"   // cambia a "vertical" si quieres el estilo de columnas
+        reverseSecond={true}     // segundo riel en reversa para efecto “tejido”
+        limit={14}               // cuántos productos traer desde Supabase
+      />
 
       {/* Lo que ofrecemos */}
       <section className="w-full py-20 px-6 max-w-6xl mx-auto">
