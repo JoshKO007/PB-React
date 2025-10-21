@@ -737,16 +737,16 @@ export default function App() {
                 { año: "2005–2010 / 2011–2013", evento: "Antropología y Guion Cinematográfico." },
                 { año: "2007", evento: "Taller–Diplomado de Estética con el Dr. Moisés Ladrón de Guevara." },
                 { año: "2007", evento: "Técnica de materiales con el Dr. Moisés Ladrón de Guevara." },
-                { año: "2020–2022", evento: "Estudio independiente de Restauración." },
+                { año: "2020–2022", evento: "Estudio de Restauración de 2020 a 2022." },
               ],
             },
             {
               titulo: "Premios y reconocimientos",
               eventos: [
-                { año: "2010", evento: "Premio de Investigación CONACYT – Excelencia en investigación académica." },
-                { año: "s/f", evento: "Reconocimiento del Coloquio Internacional “El espejo simbolista”." },
-                { año: "s/f", evento: "Reconocimiento en el Simposio Internacional de Teoría sobre Arte." },
-                { año: "s/f", evento: "Reconocimiento en SITAC – Simposio Internacional de Teoría sobre Arte Contemporáneo." },
+                { año: "2006", evento: "Gandora del FONCA en arte objeto." },
+                { año: "2005", evento: "Reconocimiento del Coloquio Internacional “El espejo simbolista”." },
+                { año: "2008", evento: "Reconocimiento en el Simposio Internacional de Teoría sobre Arte." },
+                { año: "2019", evento: "Reconocimiento en SITAC – Simposio Internacional de Teoría sobre Arte Contemporáneo." },
               ],
             },
           ].map((seccion, i) => {
@@ -786,9 +786,9 @@ export default function App() {
 
       {/* Técnicas y materiales */}
       <section className="max-w-6xl mx-auto px-6 py-20">
-        <h3 className="text-3xl font-bold text-center text-[#a16207] mb-10">Técnicas y materiales</h3>
+        <h3 className="text-3xl font-bold text-center text-[#a16207] mb-10">SOLUCIONES ESTÉTICAS PARA EMBELLECER TU ESPACIO</h3>
         <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6 text-center">
-          {["Óleo", "Acrílico", "Cera", "Tintas mixtas", "Fotografía digital", "Ambientación de Negocios"].map(
+          {["Venta de obras", "Restauración de obras", "Ambientación de negocios", "Reproducción de obras", "Fotografía digital temática", "Reproducción de pintura en técnica de óleo y acrílico"].map(
             (item, idx) => (
               <div key={idx} className="bg-white/70 p-6 rounded-xl shadow-md hover:shadow-lg transition">
                 <p className="text-lg font-medium text-gray-800">{item}</p>
