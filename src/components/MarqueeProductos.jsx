@@ -132,7 +132,7 @@ export default function MarqueeProductos({
 
         <div
           className={cn(
-            "relative flex w-full items-center justify-center overflow-hidden",
+            "relative flex flex-col gap-3 w-full items-center justify-center overflow-hidden",
             direction === "vertical" ? "h-[500px]" : "h-auto py-2"
           )}
         >
@@ -148,7 +148,7 @@ export default function MarqueeProductos({
                 <ProductCard
                   key={p.id}
                   p={p}
-                  onClick={() => navigate(`/producto/${p.id}`)} // ajusta si tu ruta es diferente
+                  onClick={() => navigate("/tienda")}
                 />
               )
             )}
@@ -158,7 +158,7 @@ export default function MarqueeProductos({
           <Marquee
             {...trackProps}
             reverse={reverseSecond}
-            className={cn("[--duration:24s]", direction === "vertical" ? "" : "-mt-3")}
+            className="[--duration:24s]"
           >
             {second.map((p, i) =>
               loading ? (
@@ -170,7 +170,7 @@ export default function MarqueeProductos({
                 <ProductCard
                   key={p.id}
                   p={p}
-                  onClick={() => navigate(`/producto/${p.id}`)}
+                  onClick={() => navigate("/tienda")}
                 />
               )
             )}
