@@ -18,6 +18,8 @@
     "@tsparticles/all": "^3.8.1",
     "@tsparticles/engine": "^3.8.1",
     "@tsparticles/react": "^3.0.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "countries-states-cities": "^1.0.6",
     "country-region-data": "^3.1.0",
     "country-state-city": "^2.1.0",
@@ -36,6 +38,8 @@
     "react-router-dom": "^7.6.3",
     "react-text-transition": "^3.1.0",
     "react-wrap-balancer": "^1.1.1",
+    "tailwind-merge": "^3.3.1",
+    "tailwindcss-animate": "^1.0.7",
     "uuid": "^11.1.0",
     "world-countries": "^5.1.0"
   },
