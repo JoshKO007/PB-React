@@ -1,4 +1,4 @@
-/** @type {import('tailwindcss').Config} */
+/ ** @type {import('tailwindcss').Config} */
 export default {
     darkMode: ["class"],
     content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
@@ -50,7 +50,21 @@ export default {
   				'4': 'hsl(var(--chart-4))',
   				'5': 'hsl(var(--chart-5))'
   			}
-  		}
+  		},
+      keyframes: {
+        'marquee-x': {
+          '0%': { transform: 'translateX(0)' },
+          '100%': { transform: 'translateX(calc(-50% - var(--gap, 1rem) / 2))' },
+        },
+        'marquee-y': {
+          '0%': { transform: 'translateY(0)' },
+          '100%': { transform: 'translateY(calc(-50% - var(--gap, 1rem) / 2))' },
+        },
+      },
+      animation: {
+        marquee: 'marquee-x var(--duration,25s) linear infinite',
+        'marquee-vertical': 'marquee-y var(--duration,25s) linear infinite',
+      },
   	}
   },
   plugins: [require("tailwindcss-animate")],
