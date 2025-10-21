@@ -42,6 +42,232 @@ function thumbUrl(id) {
 /* =========================
    Componente
    ========================= */
+/* =========================
+   Custom YouTube Player (controles propios con “liquid glass”)
+   ========================= */
+function CustomYTPlayer({ videoId }) {
+  const containerRef = useRef(null);
+  const playerRef = useRef(null);
+
+  const [ready, setReady] = useState(false);
+  const [playing, setPlaying] = useState(true);
+  const [muted, setMuted] = useState(true);
+  const [duration, setDuration] = useState(0);
+  const [current, setCurrent] = useState(0);
+  const [volume, setVolume] = useState(25); // 0..100
+
+  // Cargar IFrame API una sola vez
+  useEffect(() => {
+    if (window.YT && window.YT.Player) return;
+    const s = document.createElement("script");
+    s.src = "https://www.youtube.com/iframe_api";
+    document.body.appendChild(s);
+  }, []);
+
+  // Inicializar y reciclar el player cuando cambia el videoId
+  useEffect(() => {
+    let interval;
+    function create() {
+      if (!containerRef.current || !window.YT || !window.YT.Player || !videoId) return;
+
+      // Destruye anterior si existe (evita players huérfanos)
+      if (playerRef.current?.destroy) playerRef.current.destroy();
+
+      playerRef.current = new window.YT.Player(containerRef.current, {
+        width: "100%",
+        height: "100%",
+        videoId,
+        playerVars: {
+          autoplay: 1,
+          controls: 0,        // ocultamos controles nativos
+          rel: 0,
+          modestbranding: 1,
+          playsinline: 1,
+          iv_load_policy: 3,
+          mute: 1,
+          disablekb: 1,       // nosotros manejamos atajos si queremos
+          color: "white",
+        },
+        events: {
+          onReady: (e) => {
+            setReady(true);
+            e.target.mute();
+            e.target.playVideo();
+            setMuted(true);
+            setPlaying(true);
+            setDuration(e.target.getDuration() || 0);
+            interval = setInterval(() => {
+              const t = e.target.getCurrentTime() || 0;
+              setCurrent(t);
+              setDuration(e.target.getDuration() || 0);
+            }, 250);
+          },
+          onStateChange: (e) => {
+            if (e.data === window.YT.PlayerState.PLAYING) setPlaying(true);
+            if (e.data === window.YT.PlayerState.PAUSED) setPlaying(false);
+          },
+        },
+      });
+    }
+
+    if (!window.YT || !window.YT.Player) {
+      window.onYouTubeIframeAPIReady = () => create();
+    } else {
+      create();
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+      if (playerRef.current?.destroy) playerRef.current.destroy();
+    };
+  }, [videoId]);
+
+  // helpers
+  const fmt = (s) => {
+    const v = Math.max(0, Math.floor(s || 0));
+    const m = String(Math.floor(v / 60)).padStart(2, "0");
+    const ss = String(v % 60).padStart(2, "0");
+    return `${m}:${ss}`;
+  };
+
+  const togglePlay = () => {
+    const p = playerRef.current;
+    if (!p) return;
+    if (playing) p.pauseVideo();
+    else p.playVideo();
+  };
+
+  const toggleMute = () => {
+    const p = playerRef.current;
+    if (!p) return;
+    if (muted) {
+      p.unMute();
+      p.setVolume(volume);
+      setMuted(false);
+    } else {
+      p.mute();
+      setMuted(true);
+    }
+  };
+
+  const onSeek = (e) => {
+    const p = playerRef.current;
+    if (!p || !duration) return;
+    const val = Number(e.target.value); // 0..100
+    const t = (val / 100) * duration;
+    p.seekTo(t, true);
+    setCurrent(t);
+  };
+
+  const onVol = (e) => {
+    const p = playerRef.current;
+    if (!p) return;
+    const v = Math.max(0, Math.min(100, Number(e.target.value)));
+    setVolume(v);
+    p.setVolume(v);
+    if (v === 0 && !muted) {
+      p.mute();
+      setMuted(true);
+    } else if (v > 0 && muted) {
+      p.unMute();
+      setMuted(false);
+    }
+  };
+
+  const goFullscreen = () => {
+    // usamos el contenedor visible del player para fullscreen
+    const el = containerRef.current?.parentElement;
+    if (!el) return;
+    if (el.requestFullscreen) el.requestFullscreen();
+  };
+
+  const progress = duration ? Math.min(100, (current / duration) * 100) : 0;
+
+  return (
+    <div className="relative w-full h-full">
+      {/* player mount point */}
+      <div ref={containerRef} className="absolute inset-0" />
+
+      {/* Liquid glass overlay */}
+      <div className="absolute inset-x-0 bottom-0 z-10 p-3">
+        <div
+          className="rounded-2xl border border-white/15 bg-white/10 backdrop-blur-xl px-3 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.45)]"
+          style={{
+            WebkitBackdropFilter: "blur(16px)",
+            backgroundImage:
+              "radial-gradient(120% 120% at 10% 10%, rgba(255,255,255,0.12), rgba(255,255,255,0.06) 40%, rgba(255,255,255,0.03) 70%, rgba(255,255,255,0.02) 100%)",
+          }}
+        >
+          {/* progreso */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-white/85 w-12 tabular-nums">{fmt(current)}</span>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="0.1"
+              value={progress}
+              onChange={onSeek}
+              className="w-full h-1.5 accent-yellow-400"
+              aria-label="Progreso"
+            />
+            <span className="text-xs text-white/85 w-12 tabular-nums text-right">{fmt(duration)}</span>
+          </div>
+
+          {/* controles */}
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={togglePlay}
+                className="px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-sm border border-white/10"
+                aria-label={playing ? "Pausar" : "Reproducir"}
+              >
+                {playing ? "Pausa" : "Reproducir"}
+              </button>
+
+              <button
+                onClick={toggleMute}
+                className="px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-sm border border-white/10"
+                aria-label={muted ? "Activar sonido" : "Silenciar"}
+              >
+                {muted ? "Unmute" : "Mute"}
+              </button>
+
+              <div className="hidden sm:flex items-center gap-2">
+                <span className="text-xs text-white/80">Vol</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={volume}
+                  onChange={onVol}
+                  className="w-28 accent-yellow-400"
+                  aria-label="Volumen"
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={goFullscreen}
+              className="px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-sm border border-white/10"
+              aria-label="Pantalla completa"
+            >
+              Pantalla completa
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Estado de carga */}
+      {!ready && (
+        <div className="absolute inset-0 grid place-items-center text-sm text-gray-300">
+          Cargando reproductor…
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Videos() {
   const navigate = useNavigate();
 
@@ -264,15 +490,7 @@ export default function Videos() {
           ) : rows.length === 0 ? (
             <div className="text-sm text-gray-300">No hay videos publicados aún.</div>
           ) : (
-            <iframe
-              key={current.id}
-              src={embedUrl(current._vid)}
-              title={current.titulo || current._vid}
-              className="w-full h-full"
-              loading="lazy"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
-            />
+            <CustomYTPlayer key={current.id} videoId={current._vid} />
           )}
         </div>
 
