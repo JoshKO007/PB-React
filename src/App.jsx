@@ -419,6 +419,7 @@ export default function App() {
           </nav>
         </div>
       </motion.header>
+      
 
       {/* Hero con video de fondo */}
       <motion.section
