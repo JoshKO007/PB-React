@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import MarqueeProductos from "@/components/MarqueeProductos"; 
+import MarqueeProductos from "./components/MarqueeProductos";
 import {
   Home,
   Image as ImageIcon,
@@ -419,7 +419,7 @@ export default function App() {
           </nav>
         </div>
       </motion.header>
-      
+
 
       {/* Hero con video de fondo */}
       <motion.section

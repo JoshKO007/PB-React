@@ -1,8 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Marquee } from "@/registry/magicui/marquee"; // ⬅️ ajusta esta ruta si quedó diferente
-// Si tu CLI lo dejó en "@/components/magicui/marquee", usa esa ruta.
+import { Marquee } from "@/components/ui/marquee";// Si tu CLI lo dejó en "@/components/magicui/marquee", usa esa ruta.
 
 // Supabase: usa tu cliente ya creado.
 import { supabase } from "@/supabaseClient"; 
