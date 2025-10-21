@@ -1,7 +1,7 @@
 // src/pages/Videos.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronLeft, ChevronRight, LogOut } from "lucide-react";
+import { ChevronLeft, ChevronRight, LogOut, Play, Pause, Volume2, VolumeX, Maximize } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { createClient } from "@supabase/supabase-js";
 
@@ -55,8 +55,9 @@ function CustomYTPlayer({ videoId }) {
   const [duration, setDuration] = useState(0);
   const [current, setCurrent] = useState(0);
   const [volume, setVolume] = useState(25); // 0..100
+
+  const [showUI, setShowUI] = useState(true);
   const [isTouch, setIsTouch] = useState(false);
-  const [showHint, setShowHint] = useState(false);
 
   // Cargar IFrame API una sola vez
   useEffect(() => {
@@ -64,6 +65,12 @@ function CustomYTPlayer({ videoId }) {
     const s = document.createElement("script");
     s.src = "https://www.youtube.com/iframe_api";
     document.body.appendChild(s);
+  }, []);
+
+  useEffect(() => {
+    const touch = ("ontouchstart" in window) || (navigator.maxTouchPoints > 0);
+    setIsTouch(touch);
+    if (touch) setShowUI(true);
   }, []);
 
   // Inicializar y reciclar el player cuando cambia el videoId
@@ -97,10 +104,6 @@ function CustomYTPlayer({ videoId }) {
             e.target.playVideo();
             setMuted(true);
             setPlaying(true);
-            setTimeout(() => {
-              setShowHint(true);
-              setTimeout(() => setShowHint(false), 6000);
-            }, 3000);
             setDuration(e.target.getDuration() || 0);
             interval = setInterval(() => {
               const t = e.target.getCurrentTime() || 0;
@@ -190,12 +193,16 @@ function CustomYTPlayer({ videoId }) {
   const progress = duration ? Math.min(100, (current / duration) * 100) : 0;
 
   return (
-    <div className="relative w-full h-full">
+    <div
+      className="relative w-full h-full"
+      onMouseEnter={() => !isTouch && setShowUI(true)}
+      onMouseLeave={() => !isTouch && setShowUI(false)}
+    >
       {/* player mount point */}
       <div ref={containerRef} className="absolute inset-0" />
 
       {/* Liquid glass overlay */}
-      <div className="absolute inset-x-0 bottom-0 z-10 p-3">
+      <div className={`absolute inset-x-0 bottom-0 z-10 p-3 transition-opacity duration-300 ${showUI ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
         <div
           className="rounded-2xl border border-white/15 bg-white/10 backdrop-blur-xl px-3 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.45)]"
           style={{
@@ -214,7 +221,7 @@ function CustomYTPlayer({ videoId }) {
               step="0.1"
               value={progress}
               onChange={onSeek}
-              className="w-full h-1.5 accent-yellow-400"
+              className="w-full h-1.5 accent-[#a16207]"
               aria-label="Progreso"
             />
             <span className="text-xs text-white/85 w-12 tabular-nums text-right">{fmt(duration)}</span>
@@ -228,7 +235,7 @@ function CustomYTPlayer({ videoId }) {
                 className="px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-sm border border-white/10"
                 aria-label={playing ? "Pausar" : "Reproducir"}
               >
-                {playing ? "Pausa" : "Reproducir"}
+                {playing ? <Pause size={16} /> : <Play size={16} />}
               </button>
 
               <button
@@ -236,7 +243,7 @@ function CustomYTPlayer({ videoId }) {
                 className="px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-sm border border-white/10"
                 aria-label={muted ? "Activar sonido" : "Silenciar"}
               >
-                {muted ? "Unmute" : "Mute"}
+                {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
               </button>
 
               <div className="hidden sm:flex items-center gap-2">
@@ -247,7 +254,7 @@ function CustomYTPlayer({ videoId }) {
                   max="100"
                   value={volume}
                   onChange={onVol}
-                  className="w-28 accent-yellow-400"
+                  className="w-28 accent-[#a16207]"
                   aria-label="Volumen"
                 />
               </div>
@@ -258,7 +265,7 @@ function CustomYTPlayer({ videoId }) {
               className="px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-sm border border-white/10"
               aria-label="Pantalla completa"
             >
-              Pantalla completa
+              <Maximize size={16} />
             </button>
           </div>
         </div>
@@ -268,11 +275,6 @@ function CustomYTPlayer({ videoId }) {
       {!ready && (
         <div className="absolute inset-0 grid place-items-center text-sm text-gray-300">
           Cargando reproductor…
-        </div>
-      )}
-      {showHint && (
-        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 bg-[#a16207]/90 text-white text-sm font-medium px-4 py-2 rounded-full shadow-lg backdrop-blur-md transition-all duration-500 animate-pulse z-50">
-          🔊 Activa el sonido para disfrutar mejor el video
         </div>
       )}
     </div>
