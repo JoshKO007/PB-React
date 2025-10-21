@@ -50,6 +50,8 @@ export default function Videos() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [index, setIndex] = useState(0);
+  // Filtro de categoría ("" = todas)
+  const [filterCategoria, setFilterCategoria] = useState("");
 
   // Datos
   const [rows, setRows] = useState([]); // [{id, video_id, url, titulo, descripcion, publicado}]
@@ -111,11 +113,15 @@ export default function Videos() {
       setLoading(true);
       setError("");
       try {
-        const { data, error } = await supabase
+        let qv = supabase
           .from("videos")
-          .select("id, video_id, url, titulo, descripcion, publicado, created_at")
+          .select("id, video_id, url, titulo, descripcion, categoria, publicado, created_at")
           .eq("publicado", true)
           .order("created_at", { ascending: false });
+        if (filterCategoria) {
+          qv = qv.eq("categoria", filterCategoria);
+        }
+        const { data, error } = await qv;
 
         if (error) throw error;
 
@@ -134,7 +140,7 @@ export default function Videos() {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [filterCategoria]);
 
   // Navegación por teclado
   useEffect(() => {
@@ -214,6 +220,38 @@ export default function Videos() {
           </button>
         </div>
       )}
+
+      {/* Botones de categorías */}
+      <div className="absolute top-20 left-1/2 -translate-x-1/2 z-30 w-full px-6 md:px-10">
+        <div className="mx-auto max-w-6xl">
+          <div className="flex flex-wrap justify-center md:justify-start gap-2">
+            {[
+              { label: "Todas", value: "" },
+              { label: "Pintura", value: "Pintura" },
+              { label: "Restauración", value: "Restauración" },
+              { label: "Arte Performance", value: "Arte Performance" },
+            ].map((opt) => {
+              const active = filterCategoria === opt.value;
+              return (
+                <button
+                  key={opt.label}
+                  onClick={() => setFilterCategoria(opt.value)}
+                  className={[
+                    "inline-flex items-center rounded-full px-4 py-1.5 text-sm font-semibold border backdrop-blur transition",
+                    active
+                      ? "bg-[#a16207] text-white border-[#a16207]"
+                      : "bg-white/10 text-white border-white/20 hover:bg-white/20"
+                  ].join(" ")}
+                  title={opt.value ? `Ver ${opt.value}` : "Ver todas"}
+                >
+                  {opt.label}
+                  {active && <span className="ml-2 h-1.5 w-1.5 rounded-full bg-white/90 inline-block" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
 
       {/* Contenido */}
       <div className="flex flex-col md:flex-row items-center justify-center gap-10 w-full max-w-6xl px-6 md:px-10 py-20 relative z-20">
