@@ -322,8 +322,13 @@ export default function Galeria() {
                   />
                   <div className="md:w-1/2 space-y-4 text-center md:text-left">
                     <h2 className="text-3xl font-semibold text-white">{obraActual.titulo}</h2>
-                    <div className="text-lg text-gray-300 whitespace-pre-line">
-                      {obraActual.descripcion}
+                    <div className="text-lg text-gray-300">
+                      {obraActual.descripcion.split(/\r?\n/).map((linea, i) => (
+                        <span key={i}>
+                          {linea}
+                          <br />
+                        </span>
+                      ))}
                     </div>
                   </div>
                 </motion.div>
