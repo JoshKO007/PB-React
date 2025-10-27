@@ -437,7 +437,7 @@ export default function Videos() {
       {showAudioTip && (
         <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50">
           <div className="flex items-center gap-3 rounded-full bg-black/70 text-white border border-white/20 px-4 py-2 shadow-lg backdrop-blur">
-            <span className="text-sm">Consejo: activa el audio con el ícono 🔊 para escuchar el video.</span>
+            <span className="text-sm">Consejo: el audio está desactivado.</span>
             <button
               onClick={() => setShowAudioTip(false)}
               className="text-xs bg-white/10 hover:bg-white/20 rounded-full px-2 py-1"
