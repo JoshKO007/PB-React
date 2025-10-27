@@ -171,6 +171,10 @@ function ProductosAdminUI() {
   const [titulo, setTitulo] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [descripcionDetallada, setDescripcionDetallada] = useState("");
+  const [artista, setArtista] = useState("");
+  const [tecnica, setTecnica] = useState("");
+  const [medidas, setMedidas] = useState("");
+  const [detallesExtra, setDetallesExtra] = useState("");
   const [precio, setPrecio] = useState("");
   const [moneda, setMoneda] = useState("MXN");
   const [descuento, setDescuento] = useState(0);
@@ -238,6 +242,46 @@ function ProductosAdminUI() {
     }
   }, [stock]);
 
+  /* ===== Description segmented helpers ===== */
+  function parseDescription(desc = "") {
+    const lines = String(desc)
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const out = { artista: "", tecnica: "", medidas: "", detalles: "" };
+
+    for (const line of lines) {
+      const m = line.match(/^(\w+):\s*(.+)$/i);
+      if (m) {
+        const key = m[1].toLowerCase();
+        const val = m[2];
+        if (key.startsWith("art")) out.artista = val;
+        else if (key.startsWith("téc") || key.startsWith("tec")) out.tecnica = val;
+        else if (key.startsWith("med")) out.medidas = val;
+        else if (key.startsWith("det")) out.detalles = val;
+        else if (!out.detalles) out.detalles = line;
+        continue;
+      }
+    }
+
+    if (!out.artista && lines[0]) out.artista = lines[0];
+    if (!out.tecnica && lines[1]) out.tecnica = lines[1];
+    if (!out.medidas && lines[2]) out.medidas = lines[2];
+    if (!out.detalles && lines[3]) out.detalles = lines.slice(3).join("\n");
+
+    return out;
+  }
+
+  function buildDescription(art, tec, med, det) {
+    const parts = [];
+    if (art && art.trim()) parts.push(`Artista: ${art.trim()}`);
+    if (tec && tec.trim()) parts.push(`Técnica: ${tec.trim()}`);
+    if (med && med.trim()) parts.push(`Medidas: ${med.trim()}`);
+    if (det && det.trim()) parts.push(`Detalles: ${det.trim()}`);
+    return parts.join("\n");
+  }
+
   /* ===== Form helpers ===== */
   const resetForm = () => {
     setEditingId(null);
@@ -257,6 +301,10 @@ function ProductosAdminUI() {
     setDestacado(false);
     setVisibleTienda(true);
     setVisibleGaleria(true);
+    setArtista("");
+    setTecnica("");
+    setMedidas("");
+    setDetallesExtra("");
   };
 
   const loadForEdit = async (id) => {
@@ -269,6 +317,12 @@ function ProductosAdminUI() {
       setEditingId(data.id);
       setTitulo(data.titulo || "");
       setDescripcion(data.descripcion || "");
+      // Parse description into fields
+      const parsed = parseDescription(data.descripcion || "");
+      setArtista(parsed.artista || "");
+      setTecnica(parsed.tecnica || "");
+      setMedidas(parsed.medidas || "");
+      setDetallesExtra(parsed.detalles || "");
       setDescripcionDetallada(data.descripcion_detallada || "");
       setPrecio(String(data.precio ?? ""));
       setMoneda((data.moneda || "MXN").toUpperCase());
@@ -385,7 +439,10 @@ function ProductosAdminUI() {
       // 3) Payload
       const payload = {
         titulo: titulo.trim(),
-        descripcion: (descripcion || "").trim() || null,
+        descripcion: (() => {
+          const composed = buildDescription(artista, tecnica, medidas, detallesExtra);
+          return composed.trim() || null;
+        })(),
         descripcion_detallada: (descripcionDetallada || "").trim() || null,
         precio: Number(precio),
         moneda: (moneda || "MXN").toUpperCase(),
@@ -650,25 +707,52 @@ function ProductosAdminUI() {
               </Field>
             </section>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Field label="Descripción breve">
-                <textarea
-                  className="w-full rounded-xl border px-3 py-2 text-sm outline-none min-h-[80px]"
-                  value={descripcion}
-                  onChange={(e) => setDescripcion(e.target.value)}
-                  placeholder="Mixta sobre papel, 50x70 cm."
+            <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Field label="Nombre del artista">
+                <input
+                  className="w-full rounded-xl border px-3 py-2 text-sm outline-none"
+                  value={artista}
+                  onChange={(e) => setArtista(e.target.value)}
+                  placeholder="Ej. Frida Kahlo"
                 />
               </Field>
 
-              <Field label="Descripción detallada">
-                <textarea
-                  className="w-full rounded-xl border px-3 py-2 text-sm outline-none min-h-[80px]"
-                  value={descripcionDetallada}
-                  onChange={(e) => setDescripcionDetallada(e.target.value)}
-                  placeholder="Obra que explora la relación entre..."
+              <Field label="Técnica">
+                <input
+                  className="w-full rounded-xl border px-3 py-2 text-sm outline-none"
+                  value={tecnica}
+                  onChange={(e) => setTecnica(e.target.value)}
+                  placeholder="Óleo sobre lienzo"
                 />
               </Field>
-            </div>
+
+              <Field label="Medidas">
+                <input
+                  className="w-full rounded-xl border px-3 py-2 text-sm outline-none"
+                  value={medidas}
+                  onChange={(e) => setMedidas(e.target.value)}
+                  placeholder="Ej. 50 × 70 cm"
+                />
+              </Field>
+
+              <Field label="Detalles adicionales">
+                <textarea
+                  className="w-full rounded-xl border px-3 py-2 text-sm outline-none min-h-[80px]"
+                  value={detallesExtra}
+                  onChange={(e) => setDetallesExtra(e.target.value)}
+                  placeholder="Notas, edición, enmarcado, año, etc."
+                />
+              </Field>
+            </section>
+
+            <Field label="Descripción detallada">
+              <textarea
+                className="w-full rounded-xl border px-3 py-2 text-sm outline-none min-h-[80px]"
+                value={descripcionDetallada}
+                onChange={(e) => setDescripcionDetallada(e.target.value)}
+                placeholder="Obra que explora la relación entre..."
+              />
+            </Field>
 
             {/* Etiquetas */}
             <section>

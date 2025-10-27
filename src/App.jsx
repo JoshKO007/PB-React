@@ -697,7 +697,7 @@ export default function App() {
       <section className="max-w-6xl mx-auto px-6 py-20">
         <h3 className="text-3xl font-bold text-center text-[#a16207] mb-10">SOLUCIONES ESTÉTICAS PARA EMBELLECER TU ESPACIO</h3>
         <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6 text-center">
-          {["Venta de obras", "Restauración de obras", "Ambientación de negocios", "Reproducción de obras", "Fotografía digital temática", "Reproducción de pintura en técnica de óleo y acrílico"].map(
+          {["Venta de obras", "Restauración de obras", "Ambientación de negocios", "Reproducción de obras", "Fotografía digital temática", "Reproducción obra clásica"].map(
             (item, idx) => (
               <div key={idx} className="bg-white/70 p-6 rounded-xl shadow-md hover:shadow-lg transition">
                 <p className="text-lg font-medium text-gray-800">{item}</p>
