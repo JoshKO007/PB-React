@@ -323,12 +323,21 @@ export default function Galeria() {
                   <div className="md:w-1/2 space-y-4 text-center md:text-left">
                     <h2 className="text-3xl font-semibold text-white">{obraActual.titulo}</h2>
                     <div className="text-lg text-gray-300">
-                      {obraActual.descripcion.split(/\r?\n/).map((linea, i) => (
-                        <span key={i}>
-                          {linea}
-                          <br />
-                        </span>
-                      ))}
+                      {obraActual.descripcion.split(/\r?\n/).map((linea, i) => {
+                        const isDetalles = /^\s*Detalles\s*:?/i.test(linea);
+                        if (isDetalles) {
+                          return (
+                            <span key={i} className="block font-semibold text-white mt-2">
+                              {linea.trim()}
+                            </span>
+                          );
+                        }
+                        return (
+                          <span key={i} className="block">
+                            {linea.trim()}
+                          </span>
+                        );
+                      })}
                     </div>
                   </div>
                 </motion.div>
