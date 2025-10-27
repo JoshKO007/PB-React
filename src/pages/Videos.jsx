@@ -48,6 +48,7 @@ function thumbUrl(id) {
 function CustomYTPlayer({ videoId, onUnmute = () => {} }) {
   const containerRef = useRef(null);
   const playerRef = useRef(null);
+  const hideTimerRef = useRef(null);
 
   const [ready, setReady] = useState(false);
   const [playing, setPlaying] = useState(true);
@@ -58,6 +59,18 @@ function CustomYTPlayer({ videoId, onUnmute = () => {} }) {
 
   const [showUI, setShowUI] = useState(true);
   const [isTouch, setIsTouch] = useState(false);
+
+  const scheduleHide = () => {
+    if (isTouch) return; // solo aplica en mouse
+    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    hideTimerRef.current = setTimeout(() => setShowUI(false), 5000);
+  };
+  const cancelHide = () => {
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+  };
 
   // Cargar IFrame API una sola vez
   useEffect(() => {
@@ -110,6 +123,7 @@ function CustomYTPlayer({ videoId, onUnmute = () => {} }) {
               setCurrent(t);
               setDuration(e.target.getDuration() || 0);
             }, 250);
+            scheduleHide();
           },
           onStateChange: (e) => {
             if (e.data === window.YT.PlayerState.PLAYING) setPlaying(true);
@@ -127,6 +141,7 @@ function CustomYTPlayer({ videoId, onUnmute = () => {} }) {
 
     return () => {
       if (interval) clearInterval(interval);
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
       if (playerRef.current?.destroy) playerRef.current.destroy();
     };
   }, [videoId]);
@@ -196,8 +211,9 @@ function CustomYTPlayer({ videoId, onUnmute = () => {} }) {
   return (
     <div
       className="relative w-full h-full"
-      onMouseEnter={() => !isTouch && setShowUI(true)}
-      onMouseLeave={() => !isTouch && setShowUI(false)}
+      onMouseEnter={() => { if (!isTouch) { cancelHide(); setShowUI(true); } }}
+      onMouseLeave={() => { if (!isTouch) { scheduleHide(); } }}
+      onMouseMove={() => { if (!isTouch) { cancelHide(); scheduleHide(); setShowUI(true); } }}
       onDragStart={(e) => e.preventDefault()}
     >
       {/* player mount point */}
