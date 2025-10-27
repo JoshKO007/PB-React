@@ -170,7 +170,6 @@ function ProductosAdminUI() {
   // campos
   const [titulo, setTitulo] = useState("");
   const [descripcion, setDescripcion] = useState("");
-  const [descripcionDetallada, setDescripcionDetallada] = useState("");
   const [artista, setArtista] = useState("");
   const [tecnica, setTecnica] = useState("");
   const [medidas, setMedidas] = useState("");
@@ -287,7 +286,6 @@ function ProductosAdminUI() {
     setEditingId(null);
     setTitulo("");
     setDescripcion("");
-    setDescripcionDetallada("");
     setPrecio("");
     setMoneda("MXN");
     setDescuento(0);
@@ -323,7 +321,6 @@ function ProductosAdminUI() {
       setTecnica(parsed.tecnica || "");
       setMedidas(parsed.medidas || "");
       setDetallesExtra(parsed.detalles || "");
-      setDescripcionDetallada(data.descripcion_detallada || "");
       setPrecio(String(data.precio ?? ""));
       setMoneda((data.moneda || "MXN").toUpperCase());
       setDescuento(Number(data.descuento || 0));
@@ -443,7 +440,6 @@ function ProductosAdminUI() {
           const composed = buildDescription(artista, tecnica, medidas, detallesExtra);
           return composed.trim() || null;
         })(),
-        descripcion_detallada: (descripcionDetallada || "").trim() || null,
         precio: Number(precio),
         moneda: (moneda || "MXN").toUpperCase(),
         descuento: Number.isFinite(Number(descuento)) ? Number(descuento) : 0,
@@ -745,14 +741,6 @@ function ProductosAdminUI() {
               </Field>
             </section>
 
-            <Field label="Descripción detallada">
-              <textarea
-                className="w-full rounded-xl border px-3 py-2 text-sm outline-none min-h-[80px]"
-                value={descripcionDetallada}
-                onChange={(e) => setDescripcionDetallada(e.target.value)}
-                placeholder="Obra que explora la relación entre..."
-              />
-            </Field>
 
             {/* Etiquetas */}
             <section>
