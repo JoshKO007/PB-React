@@ -323,21 +323,39 @@ export default function Galeria() {
                   <div className="md:w-1/2 space-y-4 text-center md:text-left">
                     <h2 className="text-3xl font-semibold text-white">{obraActual.titulo}</h2>
                     <div className="text-lg text-gray-300">
-                      {obraActual.descripcion.split(/\r?\n/).map((linea, i) => {
-                        const isDetalles = /^\s*Detalles\s*:?/i.test(linea);
-                        if (isDetalles) {
-                          return (
-                            <span key={i} className="block font-semibold text-white mt-2">
-                              {linea.trim()}
-                            </span>
-                          );
+                      {(() => {
+                        const out = [];
+                        const lines = (obraActual.descripcion || "").split(/\r?\n/);
+                        for (let i = 0; i < lines.length; i++) {
+                          const raw = lines[i] ?? "";
+
+                          // Case 1: "Detalles: contenido" en la misma línea
+                          const m = raw.match(/^\s*Detalles\s*:(.*)$/i);
+                          if (m) {
+                            const after = (m[1] || "").trim();
+                            out.push(<span key={`${i}-label`} className="block">Detalles:</span>);
+                            if (after) {
+                              out.push(<span key={`${i}-content`} className="block">{after}</span>);
+                            } else {
+                              // si no hay contenido en la misma línea, saltar opcional línea en blanco siguiente
+                              if (i + 1 < lines.length && lines[i + 1].trim() === "") i++;
+                            }
+                            continue;
+                          }
+
+                          // Case 2: línea que es solo "Detalles:" (con o sin espacios y dos puntos)
+                          if (/^\s*Detalles\s*:?\s*$/i.test(raw)) {
+                            out.push(<span key={`${i}-label`} className="block">Detalles:</span>);
+                            // si la próxima es vacía, la omitimos para que el contenido empiece inmediatamente debajo
+                            if (i + 1 < lines.length && lines[i + 1].trim() === "") i++;
+                            continue;
+                          }
+
+                          // Cualquier otra línea normal
+                          out.push(<span key={i} className="block">{raw.trim()}</span>);
                         }
-                        return (
-                          <span key={i} className="block">
-                            {linea.trim()}
-                          </span>
-                        );
-                      })}
+                        return out;
+                      })()}
                     </div>
                   </div>
                 </motion.div>
