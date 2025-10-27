@@ -45,7 +45,7 @@ function thumbUrl(id) {
 /* =========================
    Custom YouTube Player (controles propios con “liquid glass”)
    ========================= */
-function CustomYTPlayer({ videoId }) {
+function CustomYTPlayer({ videoId, onUnmute = () => {} }) {
   const containerRef = useRef(null);
   const playerRef = useRef(null);
 
@@ -153,6 +153,7 @@ function CustomYTPlayer({ videoId }) {
       p.unMute();
       p.setVolume(volume);
       setMuted(false);
+      try { onUnmute(); } catch {}
     } else {
       p.mute();
       setMuted(true);
@@ -197,6 +198,7 @@ function CustomYTPlayer({ videoId }) {
       className="relative w-full h-full"
       onMouseEnter={() => !isTouch && setShowUI(true)}
       onMouseLeave={() => !isTouch && setShowUI(false)}
+      onDragStart={(e) => e.preventDefault()}
     >
       {/* player mount point */}
       <div ref={containerRef} className="absolute inset-0" />
@@ -289,6 +291,7 @@ export default function Videos() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [index, setIndex] = useState(0);
+  const [showAudioTip, setShowAudioTip] = useState(true);
   // Filtro de categoría ("" = todas)
   const [filterCategoria, setFilterCategoria] = useState("");
 
@@ -396,9 +399,10 @@ export default function Videos() {
 
   return (
     <div
-      className={`relative w-full min-h-screen flex items-center justify-center overflow-hidden transition-colors duration-500 ${
+      className={`relative w-full min-h-screen flex items-center justify-center overflow-hidden transition-colors duration-500 select-none ${
         darkMode ? "bg-black text-white" : "bg-white text-black"
       }`}
+      onDragStart={(e) => e.preventDefault()}
     >
       {/* Canvas partículas */}
       <canvas ref={canvasRef} className="fixed top-0 left-0 w-full h-full z-0 pointer-events-none" />
@@ -429,6 +433,21 @@ export default function Videos() {
       {/* Gradientes laterales */}
       <div className="absolute left-0 top-0 h-full w-[15vw] bg-gradient-to-r from-black via-transparent to-transparent opacity-30 pointer-events-none z-10" />
       <div className="absolute right-0 top-0 h-full w-[15vw] bg-gradient-to-l from-black via-transparent to-transparent opacity-30 pointer-events-none z-10" />
+
+      {showAudioTip && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50">
+          <div className="flex items-center gap-3 rounded-full bg-black/70 text-white border border-white/20 px-4 py-2 shadow-lg backdrop-blur">
+            <span className="text-sm">Consejo: activa el audio con el ícono 🔊 para escuchar el video.</span>
+            <button
+              onClick={() => setShowAudioTip(false)}
+              className="text-xs bg-white/10 hover:bg-white/20 rounded-full px-2 py-1"
+              aria-label="Cerrar aviso"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Flechas desktop */}
       {rows.length > 1 && (
@@ -495,7 +514,10 @@ export default function Videos() {
       {/* Contenido */}
       <div className="flex flex-col md:flex-row items-center justify-center gap-10 w-full max-w-6xl px-6 md:px-10 py-20 relative z-20">
         {/* Player / Loader / Empty / Error */}
-        <div className="relative w-full md:w-2/3 aspect-video shadow-2xl rounded-lg overflow-hidden border-2 border-white/20 bg-black grid place-items-center">
+        <div
+          className="relative w-full md:w-2/3 aspect-video shadow-2xl rounded-lg overflow-hidden border-2 border-white/20 bg-black grid place-items-center"
+          onDragStart={(e) => e.preventDefault()}
+        >
           {loading ? (
             <div className="text-sm text-gray-300">Cargando videos…</div>
           ) : error ? (
@@ -503,7 +525,7 @@ export default function Videos() {
           ) : rows.length === 0 ? (
             <div className="text-sm text-gray-300">No hay videos publicados aún.</div>
           ) : (
-            <CustomYTPlayer key={current.id} videoId={current._vid} />
+            <CustomYTPlayer key={current.id} videoId={current._vid} onUnmute={() => setShowAudioTip(false)} />
           )}
         </div>
 
@@ -522,7 +544,7 @@ export default function Videos() {
                 <h2 className="text-3xl font-bold text-yellow-400">
                   {current.titulo || "Video"}
                 </h2>
-                <p className="text-lg text-gray-300">
+                <p className="text-lg text-gray-300 select-text">
                   {current.descripcion || "Sin descripción."}
                 </p>
 
@@ -543,6 +565,8 @@ export default function Videos() {
                           alt={v.titulo || v._vid}
                           className="w-full h-full object-cover"
                           loading="lazy"
+                          draggable={false}
+                          onDragStart={(e) => e.preventDefault()}
                         />
                         {i === index && (
                           <span className="absolute inset-0 ring-2 ring-yellow-400 rounded-lg pointer-events-none" />
