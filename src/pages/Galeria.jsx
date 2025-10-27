@@ -333,7 +333,7 @@ export default function Galeria() {
                           const m = raw.match(/^\s*Detalles\s*:(.*)$/i);
                           if (m) {
                             const after = (m[1] || "").trim();
-                            out.push(<span key={`${i}-label`} className="block">Detalles:</span>);
+                            out.push(<span key={`${i}-label`} className="block"></span>);
                             if (after) {
                               out.push(<span key={`${i}-content`} className="block">{after}</span>);
                             } else {
