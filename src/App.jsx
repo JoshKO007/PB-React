@@ -442,10 +442,10 @@ export default function App() {
           <h2 className="text-4xl sm:text-5xl font-bold mb-4 text-white rounded-lg px-4 py-2">
             Bienvenido a la nueva experiencia visual
           </h2>
-          <p className="text-xl text-white/90 max-w-2xl mx-auto mb-4 text-center">
+          <p className="text-2xl sm:text-3xl font-semibold text-white drop-shadow max-w-3xl mx-auto mb-4 text-center">
             Abre tu puerta a la belleza, gracias por tu buen gusto
           </p>
-          <p className="text-lg text-white max-w-xl mx-auto px-6 py-3 rounded-lg leading-relaxed">
+          <p className="text-base sm:text-lg text-white/90 max-w-xl mx-auto px-6 py-3 rounded-lg leading-relaxed">
             Sumérgete en una galería donde cada trazo cuenta una historia. Todas las obras están hechas a mano, con alma, y ahora puedes llevarlas contigo.
           </p>
           <motion.button
