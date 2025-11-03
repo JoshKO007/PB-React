@@ -442,6 +442,9 @@ export default function App() {
           <h2 className="text-4xl sm:text-5xl font-bold mb-4 text-white rounded-lg px-4 py-2">
             Bienvenido a la nueva experiencia visual
           </h2>
+          <p className="text-xl text-white/90 max-w-2xl mx-auto mb-4 text-center">
+            Abre tu puerta a la belleza, gracias por tu buen gusto
+          </p>
           <p className="text-lg text-white max-w-xl mx-auto px-6 py-3 rounded-lg leading-relaxed">
             Sumérgete en una galería donde cada trazo cuenta una historia. Todas las obras están hechas a mano, con alma, y ahora puedes llevarlas contigo.
           </p>
@@ -646,7 +649,7 @@ export default function App() {
                 { año: "2005–2010 / 2011–2013", evento: "Antropología y Guion Cinematográfico." },
                 { año: "2007", evento: "Taller–Diplomado de Estética con el Dr. Moisés Ladrón de Guevara." },
                 { año: "2007", evento: "Técnica de materiales con el Dr. Moisés Ladrón de Guevara." },
-                { año: "2020–2022", evento: "Estudio de Restauración de 2020 a 2022." },
+                { año: "2020–2022", evento: "Conservación y restauración de pintura." },
               ],
             },
             {
