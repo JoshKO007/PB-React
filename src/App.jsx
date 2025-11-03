@@ -445,9 +445,6 @@ export default function App() {
           <p className="text-2xl sm:text-3xl font-semibold text-white drop-shadow max-w-3xl mx-auto mb-4 text-center">
             Abre tu puerta a la belleza, gracias por tu buen gusto
           </p>
-          <p className="text-base sm:text-lg text-white/90 max-w-xl mx-auto px-6 py-3 rounded-lg leading-relaxed">
-            Sumérgete en una galería donde cada trazo cuenta una historia. Todas las obras están hechas a mano, con alma, y ahora puedes llevarlas contigo.
-          </p>
           <motion.button
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.97 }}
@@ -456,6 +453,9 @@ export default function App() {
           >
             Ver colección destacada
           </motion.button>
+          <p className="text-base sm:text-lg text-white/90 max-w-xl mx-auto px-6 py-3 rounded-lg leading-relaxed mt-6">
+            Sumérgete en una galería donde cada trazo cuenta una historia. Todas las obras están hechas a mano, con alma, y ahora puedes llevarlas contigo.
+          </p>
         </div>
       </motion.section>
 
